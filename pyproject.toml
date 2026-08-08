@@ -1,0 +1,39 @@
+[project]
+name = "scriptdeck"
+version = "0.1.0"
+description = "Single-host scheduled script runner: upload a script, give it a cron or interval, watch runs + logs land in one SQLite file plus a storage tree."
+requires-python = ">=3.11"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Ali Adil", email = "aliaadil@example.com"},
+]
+keywords = ["scheduler", "cron", "scripts", "self-hosted", "sqlite", "stdlib"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Scheduling",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/aliaadil/scriptdeck"
+Issues = "https://github.com/aliaadil/scriptdeck/issues"
+
+[project.scripts]
+scriptdeck = "scriptrunner.__main__:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]

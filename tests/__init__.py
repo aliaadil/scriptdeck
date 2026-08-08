@@ -1,0 +1,1 @@
+"""Make tests/ a package; lets pytest collect from any cwd."""
