@@ -1,6 +1,6 @@
 [project]
 name = "scriptdeck"
-version = "0.1.0"
+version = "0.7.0"
 description = "Single-host scheduled script runner: upload a script, give it a cron or interval, watch runs + logs land in one SQLite file plus a storage tree."
 requires-python = ">=3.11"
 readme = "README.md"
@@ -10,15 +10,18 @@ authors = [
 ]
 keywords = ["scheduler", "cron", "scripts", "self-hosted", "sqlite", "stdlib"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: System Administrators",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: System :: Scheduling",
 ]
-dependencies = []
+dependencies = [
+    "requests>=2.30",
+]
 
 [project.urls]
 Homepage = "https://github.com/aliaadil/scriptdeck"
@@ -26,6 +29,7 @@ Issues = "https://github.com/aliaadil/scriptdeck/issues"
 
 [project.scripts]
 scriptdeck = "scriptrunner.__main__:main"
+scriptdeck-doctor = "scriptrunner.doctor:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
