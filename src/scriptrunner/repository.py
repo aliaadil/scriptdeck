@@ -30,14 +30,25 @@ def create_script(
     language: str,
     source_path: str,
     env_path: str | None = None,
+    requirements_path: str | None = None,
+    interpreter_path: str | None = None,
 ) -> dict[str, Any]:
     _required(name, "name")
     _required(language, "language")
     _required(source_path, "source_path")
     cursor = connection.execute(
-        "INSERT INTO scripts(name, language, source_path, env_path, created_at) "
-        "VALUES (?, ?, ?, ?, ?)",
-        (name, language, source_path, env_path, utc_now()),
+        "INSERT INTO scripts(name, language, source_path, env_path, created_at, "
+        "requirements_path, interpreter_path) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (
+            name,
+            language,
+            source_path,
+            env_path,
+            utc_now(),
+            requirements_path,
+            interpreter_path,
+        ),
     )
     connection.commit()
     return get_script(connection, cursor.lastrowid)  # type: ignore[arg-type]
@@ -45,6 +56,17 @@ def create_script(
 
 def get_script(connection: sqlite3.Connection, script_id: int) -> dict[str, Any] | None:
     return _dict(connection.execute("SELECT * FROM scripts WHERE id = ?", (script_id,)).fetchone())
+
+
+def update_script_interpreter(
+    connection: sqlite3.Connection, script_id: int, interpreter_path: str
+) -> None:
+    """Cache the resolved interpreter on the script row (v0.4)."""
+    connection.execute(
+        "UPDATE scripts SET interpreter_path = ? WHERE id = ?",
+        (interpreter_path, script_id),
+    )
+    connection.commit()
 
 
 def list_scripts(connection: sqlite3.Connection) -> list[dict[str, Any]]:

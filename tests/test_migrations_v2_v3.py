@@ -14,7 +14,7 @@ def test_fresh_db_has_all_migrations_applied(tmp_db_path: Path) -> None:
             r[0]
             for r in conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()
         ]
-        assert versions == [1, 2, 3]
+        assert versions == [1, 2, 3, 4]
     finally:
         conn.close()
 
@@ -49,7 +49,7 @@ def test_migrations_are_idempotent(tmp_db_path: Path) -> None:
             r[0]
             for r in conn2.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()
         ]
-        assert versions == [1, 2, 3]
+        assert versions == [1, 2, 3, 4]
     finally:
         conn2.close()
 

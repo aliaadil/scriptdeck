@@ -63,6 +63,15 @@ MIGRATIONS = {
     -- Alerting webhook URL on a schedule. NULL means no alert.
     ALTER TABLE schedules ADD COLUMN alert_webhook_url TEXT;
     """,
+    4: """
+    -- Per-script isolation (v0.4): surface the uploaded requirements file path
+    -- alongside source_path so the runner can find it without rediscovering.
+    ALTER TABLE scripts ADD COLUMN requirements_path TEXT;
+    -- interpreter_path is a derived/cached value: it points at the resolved
+    -- executable for the script (venv python, node binary, or bash itself).
+    -- NULL until first run provisions it.
+    ALTER TABLE scripts ADD COLUMN interpreter_path TEXT;
+    """,
 }
 
 
