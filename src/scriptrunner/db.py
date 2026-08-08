@@ -50,7 +50,19 @@ MIGRATIONS = {
         size_bytes INTEGER NOT NULL DEFAULT 0,
         FOREIGN KEY (run_id) REFERENCES runs(id) ON DELETE CASCADE
     );
-    """
+    """,
+    2: """
+    -- Retry policy on schedules + per-run tracking of which retry cycle a run belongs to.
+    ALTER TABLE schedules ADD COLUMN retry_max INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE schedules ADD COLUMN retry_backoff_seconds INTEGER NOT NULL DEFAULT 60;
+    ALTER TABLE runs ADD COLUMN retry_attempt INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE runs ADD COLUMN retry_group_id TEXT;
+    CREATE INDEX IF NOT EXISTS idx_runs_retry_group ON runs(retry_group_id);
+    """,
+    3: """
+    -- Alerting webhook URL on a schedule. NULL means no alert.
+    ALTER TABLE schedules ADD COLUMN alert_webhook_url TEXT;
+    """,
 }
 
 
