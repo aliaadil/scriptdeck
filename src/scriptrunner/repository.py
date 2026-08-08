@@ -9,7 +9,9 @@ from typing import Any
 from .db import utc_now
 
 SCHEDULE_KINDS = {"cron", "interval"}
-RUN_STATUSES = {"success", "failure", "error"}
+RUN_STATUSES = {"running", "success", "failure", "error", "cancelled"}
+# Statuses that mean a run has finished — the live log stream should close.
+TERMINAL_RUN_STATUSES = {"success", "failure", "error", "cancelled"}
 # Statuses that count as fail for retry policy and alerting.
 RETRYABLE_STATUSES = {"failure", "error"}
 
@@ -118,7 +120,9 @@ def create_run(
     retry_group_id: str | None = None,
 ) -> dict[str, Any]:
     if status not in RUN_STATUSES:
-        raise ValueError("status must be success, failure, or error")
+        raise ValueError(
+            "status must be running, success, failure, error, or cancelled"
+        )
     if retry_attempt < 0:
         raise ValueError("retry_attempt must not be negative")
     if get_script(connection, script_id) is None:
@@ -154,6 +158,23 @@ def get_run(connection: sqlite3.Connection, run_id: int) -> dict[str, Any] | Non
 
 def list_runs(connection: sqlite3.Connection) -> list[dict[str, Any]]:
     return [_dict(row) for row in connection.execute("SELECT * FROM runs ORDER BY id")]
+
+
+def list_recent_runs_with_script(
+    connection: sqlite3.Connection, limit: int = 50
+) -> list[dict[str, Any]]:
+    """Return the newest ``limit`` runs joined to their script name.
+
+    Used by the ``/logs`` index page so each row can render the script label
+    without a follow-up query per row.
+    """
+    rows = connection.execute(
+        "SELECT runs.*, scripts.name AS script_name "
+        "FROM runs LEFT JOIN scripts ON scripts.id = runs.script_id "
+        "ORDER BY runs.id DESC LIMIT ?",
+        (limit,),
+    )
+    return [_dict(row) for row in rows]
 
 
 def list_runs_for_schedule(

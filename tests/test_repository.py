@@ -8,6 +8,7 @@ from scriptrunner.db import initialize_database
 from scriptrunner.repository import (
     RUN_STATUSES,
     SCHEDULE_KINDS,
+    TERMINAL_RUN_STATUSES,
     create_log,
     create_run,
     create_schedule,
@@ -68,10 +69,18 @@ def test_create_schedule_requires_existing_script(conn) -> None:
 
 
 def test_create_run_validates_status(conn) -> None:
-    assert RUN_STATUSES == {"success", "failure", "error"}
+    assert RUN_STATUSES == {"running", "success", "failure", "error", "cancelled"}
+    assert TERMINAL_RUN_STATUSES == {"success", "failure", "error", "cancelled"}
+    assert "running" not in TERMINAL_RUN_STATUSES
     script = create_script(conn, name="x", language="python", source_path="/x.py")
     with pytest.raises(ValueError):
         create_run(conn, script["id"], status="crashed")
+    # Cancelled is a valid status added in v0.5 for cancellation flows.
+    cancelled = create_run(conn, script["id"], status="cancelled")
+    assert cancelled["status"] == "cancelled"
+    # Running is the in-flight placeholder the SSE stream relies on.
+    running = create_run(conn, script["id"], status="running")
+    assert running["status"] == "running"
 
 
 def test_create_run_requires_existing_script(conn) -> None:
