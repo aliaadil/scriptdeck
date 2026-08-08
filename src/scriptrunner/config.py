@@ -10,6 +10,8 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from .auth import BasicAuth, parse_basic_auth
+
 
 def _positive_int(value: str, name: str) -> int:
     try:
@@ -27,6 +29,7 @@ class Settings:
     storage_dir: Path = Path("storage")
     host: str = "127.0.0.1"
     port: int = 8765
+    basic_auth: BasicAuth | None = None
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -35,4 +38,5 @@ class Settings:
             storage_dir=Path(os.getenv("SCRIPTRUNNER_STORAGE_DIR", "storage")),
             host=os.getenv("SCRIPTRUNNER_HOST", "127.0.0.1"),
             port=_positive_int(os.getenv("SCRIPTRUNNER_PORT", "8765"), "SCRIPTRUNNER_PORT"),
+            basic_auth=parse_basic_auth(os.getenv("SCRIPTDECK_BASIC_AUTH")),
         )
