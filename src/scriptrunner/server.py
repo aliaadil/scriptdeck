@@ -53,6 +53,19 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _require_auth(self) -> bool:
+        configured = self.server.settings.basic_auth
+        if configured is None or configured.check(self.headers.get("Authorization")):
+            return True
+        body = json.dumps({"error": "authentication required"}).encode("utf-8")
+        self.send_response(HTTPStatus.UNAUTHORIZED)
+        self.send_header("WWW-Authenticate", 'Basic realm="scriptdeck"')
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+        return False
+
     def _body(self) -> dict[str, Any]:
         length = int(self.headers.get("Content-Length", "0"))
         if length <= 0:
@@ -64,6 +77,8 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802
         path = urlparse(self.path).path.rstrip("/") or "/"
+        if not self._require_auth():
+            return
         if path == "/health":
             self._send_json(HTTPStatus.OK, {"status": "ok"})
             return
@@ -89,6 +104,8 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         path = urlparse(self.path).path.rstrip("/") or "/"
+        if not self._require_auth():
+            return
         try:
             body = self._body()
             if path == "/api/scripts":

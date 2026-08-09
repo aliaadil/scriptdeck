@@ -1,6 +1,6 @@
 # ScriptDeck
 
-> **Single-host scheduled script runner.** Upload a script, give it a cron or interval, watch runs and their logs land in one SQLite file plus a `storage/` tree. Stdlib only. No runtime dependencies. No Docker required.
+> **Single-host scheduled script runner.** Upload a script, give it a cron or interval, watch runs and their logs land in one SQLite file plus a `storage/` tree. The core service uses the standard library; bcrypt is an optional dependency for HTTP Basic auth. No Docker required.
 
 [![CI](https://github.com/aliaadil/scriptdeck/actions/workflows/ci.yml/badge.svg)](https://github.com/aliaadil/scriptdeck/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
@@ -14,7 +14,7 @@ Cron + logrotate + ad-hoc shell wrappers work — until you have a dozen jobs th
 
 - **SQLite-backed persistence** — one file, four tables (`scripts`, `schedules`, `runs`, `logs`), versioned migrations.
 - **Stdlib HTTP JSON API** — manage scripts, schedules, runs, and read log metadata over a single port.
-- **Zero runtime dependencies** — `pip install scriptdeck` and you're done. No FastAPI, no Pydantic, no SQLAlchemy.
+- **Small dependency surface** — `pip install scriptdeck` and you're done. No FastAPI, no Pydantic, no SQLAlchemy. Install the optional `auth` extra when enabling Basic auth.
 - **Environment-variable config** — `SCRIPTDECK_DB_PATH`, `SCRIPTDECK_STORAGE_DIR`, `SCRIPTDECK_HOST`, `SCRIPTDECK_PORT`. Coolify, systemd, plain shell — all the same.
 
 ## What's tracked but not yet built
@@ -74,6 +74,34 @@ curl -s http://127.0.0.1:8765/api/schedules
 | `SCRIPTDECK_STORAGE_DIR` | `storage` | Per-script source + per-run logs live here. |
 | `SCRIPTDECK_HOST` | `127.0.0.1` | Bind address. Set to `0.0.0.0` if fronted by a reverse proxy. |
 | `SCRIPTDECK_PORT` | `8765` | TCP port. |
+| `SCRIPTDECK_BASIC_AUTH` | unset | Optional single-user Basic auth in `username:bcrypt_hash` format. |
+
+### HTTP Basic auth
+
+Authentication is disabled when `SCRIPTDECK_BASIC_AUTH` is unset. When it is
+set, `/health`, `/`, `/logs`, and every `/api/*` route require HTTP Basic auth.
+The configured password must be a bcrypt hash; plaintext passwords are not
+accepted. Install the optional dependency with:
+
+```bash
+pip install -e '.[auth]'
+```
+
+Generate a bcrypt hash locally (the command below uses Apache's `htpasswd`):
+
+```bash
+htpasswd -nbBC 12 "" "password" | tr -d ':\n' | sed 's/\$2y\$/\$2a\$/'
+```
+
+Set the resulting value in Coolify as an environment variable. For example,
+if the generated hash is `$2a$12$...`, set:
+
+```text
+SCRIPTDECK_BASIC_AUTH=scriptdeck:$2a$12$...
+```
+
+Keep the value in Coolify's secret/environment-variable store and do not put
+it in the repository. Restart or redeploy the service after changing it.
 
 ## Storage layout
 
