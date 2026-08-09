@@ -1,6 +1,6 @@
 [project]
 name = "scriptdeck"
-version = "0.7.0"
+version = "0.5.0"
 description = "Single-host scheduled script runner: upload a script, give it a cron or interval, watch runs + logs land in one SQLite file plus a storage tree."
 requires-python = ">=3.11"
 readme = "README.md"

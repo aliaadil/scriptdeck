@@ -1,6 +1,6 @@
 # ScriptDeck Roadmap
 
-The path from "scaffold on a laptop" to "polished self-hosted product." Each milestone is sized to ship as a single Kanban card, with the worker branching off `main` and opening a PR per card.
+The path from "scaffold on a laptop" to "polished self-hosted product." Each milestone is sized to ship as a single Kanban card, with the worker branching off the current `main` and opening a PR per card. As cards land, the merge target moves: v0.7 was developed and merged first on its own branch because the dependency chain (`runs.log_path`, the runner status field) was needed by v0.5; subsequent cards stack on top.
 
 ## v0.1 — Scaffold (shipped)
 
@@ -14,7 +14,7 @@ The path from "scaffold on a laptop" to "polished self-hosted product." Each mil
 
 - Subprocess runner that executes `scripts.source_path` with the right interpreter (`python3`, `node`, `bash`)
 - Captures stdout + stderr to `storage/logs/<run_id>.log`
-- Writes `runs` row with `started_at`, `ended_at`, `exit_code`, `status`
+- Writes `runs` row with `started_at`, `ended_at`, `exit_code`, `status` (start with `status='running'`, transition to a terminal status on exit; see v0.5 for the full enum)
 - Writes `logs` row with `path` + `size_bytes` on completion
 - Idempotent: re-running a failed run does not duplicate state
 - Concurrency-safe: at most one runner per script at a time (file-lock per `script_id`)
@@ -35,12 +35,11 @@ The path from "scaffold on a laptop" to "polished self-hosted product." Each mil
 - Lock file per script dir prevents two runners from racing on the same venv bootstrap
 - API surfaces the resolved interpreter path on `GET /api/scripts/<id>`
 
-## v0.5 — Log viewer
+## v0.5 — Log viewer (shipped)
 
-- Server-sent events over `GET /api/logs/<run_id>/stream`
-- Tails the log file as it grows
-- Closes when the runner reports the run finished
-- Static HTML page at `/logs` that lists runs and embeds the viewer (no SPA, no JS framework)
+- Server-sent events over `GET /api/logs/<run_id>/stream` — tails `<storage>/logs/<run_id>.log`, one `data:` event per new line, heartbeat every 15s.
+- Closes with a final `event: end` frame when `runs.status` reaches a terminal value (`success`, `failure`, `error`, `cancelled`).
+- Static HTML index at `/logs` (last 50 runs) and viewer at `/logs/<run_id>` — vanilla-JS EventSource client, no SPA, no framework.
 
 ## v0.6 — Auth
 
