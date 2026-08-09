@@ -1,0 +1,20 @@
+site_name: ScriptDeck
+site_description: Self-hosted scheduled script runner
+repo_url: https://github.com/aliaadil/scriptdeck
+theme:
+  name: material
+nav:
+  - Quickstart: index.md
+  - Install: install.md
+  - API reference: api.md
+  - Operations: operations.md
+  - Troubleshooting: troubleshooting.md
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+markdown_extensions:
+  - admonition
+  - pymdownx.superfences

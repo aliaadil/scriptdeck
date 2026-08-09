@@ -38,6 +38,10 @@ coverage.xml
 # Editors
 .idea/
 .vscode/
+
+# mkdocs build output
+site/
+
 *.swp
 *.swo
 
