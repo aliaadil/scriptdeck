@@ -34,9 +34,16 @@ class Settings:
     @classmethod
     def from_env(cls) -> Settings:
         return cls(
-            db_path=Path(os.getenv("SCRIPTRUNNER_DB_PATH", "scriptrunner.db")),
-            storage_dir=Path(os.getenv("SCRIPTRUNNER_STORAGE_DIR", "storage")),
-            host=os.getenv("SCRIPTRUNNER_HOST", "127.0.0.1"),
-            port=_positive_int(os.getenv("SCRIPTRUNNER_PORT", "8765"), "SCRIPTRUNNER_PORT"),
+            db_path=Path(os.getenv("SCRIPTDECK_DB_PATH")
+                         or os.getenv("SCRIPTRUNNER_DB_PATH", "scriptrunner.db")),
+            storage_dir=Path(os.getenv("SCRIPTDECK_STORAGE_DIR")
+                             or os.getenv("SCRIPTRUNNER_STORAGE_DIR", "storage")),
+            host=os.getenv("SCRIPTDECK_HOST")
+                  or os.getenv("SCRIPTRUNNER_HOST", "127.0.0.1"),
+            port=_positive_int(
+                os.getenv("SCRIPTDECK_PORT")
+                or os.getenv("SCRIPTRUNNER_PORT", "8765"),
+                "SCRIPTDECK_PORT",
+            ),
             basic_auth=parse_basic_auth(os.getenv("SCRIPTDECK_BASIC_AUTH")),
         )
