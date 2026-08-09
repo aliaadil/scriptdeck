@@ -1,4 +1,4 @@
-"""Tests for the migration chain (v2 + v3 + v4)."""
+"""Tests for the migration chain (v2 + v3 + v4 + v5)."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ def test_fresh_db_has_all_migrations_applied(tmp_db_path: Path) -> None:
             r[0]
             for r in conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()
         ]
-        assert versions == [1, 2, 3, 4]
+        assert versions == [1, 2, 3, 4, 5]
     finally:
         conn.close()
 
@@ -49,13 +49,13 @@ def test_migrations_are_idempotent(tmp_db_path: Path) -> None:
             r[0]
             for r in conn2.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()
         ]
-        assert versions == [1, 2, 3, 4]
+        assert versions == [1, 2, 3, 4, 5]
     finally:
         conn2.close()
 
 
-def test_v4_allows_cancelled_status(tmp_db_path: Path) -> None:
-    """v4 rebuilds the runs table to accept ``status='cancelled'``."""
+def test_v5_allows_cancelled_status(tmp_db_path: Path) -> None:
+    """v5 rebuilds the runs table to accept ``status='cancelled'``."""
     conn = initialize_database(tmp_db_path)
     try:
         conn.execute(
@@ -73,8 +73,8 @@ def test_v4_allows_cancelled_status(tmp_db_path: Path) -> None:
         conn.close()
 
 
-def test_v4_preserves_existing_rows(tmp_db_path: Path) -> None:
-    """Upgrading a v0.7 DB (migrations v1..v3 already applied) to v4 must keep
+def test_v5_preserves_existing_rows(tmp_db_path: Path) -> None:
+    """Upgrading a v0.4 DB (migrations v1..v4 already applied) to v5 must keep
     every existing run and the v2 retry columns."""
     conn = initialize_database(tmp_db_path)
     try:
