@@ -24,7 +24,7 @@ jobs:
       - name: Install package
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
+          pip install -e '.[auth]'
 
       - name: Install test deps
         run: |
