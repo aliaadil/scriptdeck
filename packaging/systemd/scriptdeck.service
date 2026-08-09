@@ -1,0 +1,39 @@
+[Unit]
+Description=ScriptDeck — single-host scheduled script runner
+Documentation=https://github.com/aliaadil/scriptdeck
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=scriptdeck
+Group=scriptdeck
+WorkingDirectory=/opt/scriptdeck
+EnvironmentFile=-/etc/scriptdeck/scriptdeck.env
+ExecStart=/opt/scriptdeck/.venv/bin/scriptdeck
+Restart=on-failure
+RestartSec=5s
+
+# Hardening — scriptrunner only needs network + its own data dirs.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/scriptdeck /var/log/scriptdeck
+PrivateDevices=true
+
+# Resource limits. Adjust upward for a busy instance.
+LimitNOFILE=8192
+MemoryMax=512M
+
+# Give the scheduler + any in-flight run a chance to flush.
+TimeoutStopSec=30s
+KillMode=mixed
+KillSignal=SIGTERM
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=scriptdeck
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,59 @@
+# Docker Compose for ScriptDeck — local dev or single-host production.
+#
+# Usage:
+#   docker compose up -d
+#   docker compose logs -f
+#   docker compose exec scriptdeck scriptdeck-doctor
+#
+# The named volumes survive container restarts. Backup `/data/scriptdeck.db`
+# regularly — that's the entire state (scripts, schedules, run history).
+#
+# For Coolify, see `coolify/docker-compose.yml` which wraps this with the
+# resource definition Coolify expects.
+
+name: scriptdeck
+
+services:
+  scriptdeck:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        PYTHON_VERSION: "3.12"
+    image: ghcr.io/aliaadil/scriptdeck:1.0.0
+    container_name: scriptdeck
+    restart: unless-stopped
+    ports:
+      - "8765:8765"
+    environment:
+      # Canonical env-var names — these are the ones the README documents.
+      SCRIPTDECK_DB_PATH: /data/scriptdeck.db
+      SCRIPTDECK_STORAGE_DIR: /storage
+      SCRIPTDECK_HOST: 0.0.0.0
+      SCRIPTDECK_PORT: "8765"
+      # Optional. Format: "username:bcrypt-hash". When unset, no auth is
+      # required (local-only binding is the v0.7 default; for v0.6+ auth
+      # this env var activates basic auth on every endpoint).
+      # Generate a hash with:
+      #   htpasswd -nbBC 12 "" "your-password" | tr -d ':\n' | sed 's/\$2y\$/\$2a\$/'
+      SCRIPTDECK_BASIC_AUTH: ${SCRIPTDECK_BASIC_AUTH:-}
+    volumes:
+      - scriptdeck-data:/data
+      - scriptdeck-storage:/storage
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request, sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8765/health', timeout=3).status == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  scriptdeck-data:
+    name: scriptdeck-data
+  scriptdeck-storage:
+    name: scriptdeck-storage

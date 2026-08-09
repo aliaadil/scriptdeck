@@ -1,0 +1,29 @@
+# Patterns to ignore when building — these add noise without value to a
+# containerised deploy. Production builds run from a clean git checkout
+# anyway, so this is mostly belt-and-suspenders for `docker build .`.
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/.pytest_cache
+**/.ruff_cache
+**/.venv
+**/venv
+.git
+.github
+.coverage
+.coverage.*
+htmlcov
+.idea
+.vscode
+*.egg-info
+build
+dist
+docs
+tests
+.pytest_cache
+.ruff_cache
+.tox
+.nox
+.mypy_cache
+.DS_Store
+*.swp

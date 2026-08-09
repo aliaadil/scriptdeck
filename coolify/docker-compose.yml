@@ -1,0 +1,53 @@
+# Coolify one-click resource definition for ScriptDeck.
+#
+# Coolify reads this file when you add a new "Docker Compose" resource
+# from a git repository. It wraps the top-level `docker-compose.yml` with
+# the env-var prompts + volume mounts Coolify exposes in its UI.
+#
+# Deploy path:
+#   1. Coolify → Add New Resource → "Docker Compose" → paste this repo URL
+#   2. Coolify auto-detects `coolify/docker-compose.yml`
+#   3. Set `SCRIPTDECK_BASIC_AUTH` env var in Coolify's UI (or leave blank)
+#   4. Deploy. Coolify builds the image and starts the container.
+#   5. Tail logs from Coolify; `scriptdeck-doctor` is reachable via
+#      `docker exec scriptdeck scriptdeck-doctor` if you shell in.
+#
+# This file delegates to the top-level docker-compose.yml so dev and prod
+# stay in lockstep — change one, change both.
+
+name: scriptdeck-coolify
+
+services:
+  scriptdeck:
+    build:
+      context: ..
+      dockerfile: ../Dockerfile
+      args:
+        PYTHON_VERSION: "3.12"
+    image: ghcr.io/aliaadil/scriptdeck:1.0.0
+    container_name: scriptdeck-${COOLIFY_RESOURCE_UUID:-local}
+    restart: unless-stopped
+    ports:
+      - "${SCRIPTDECK_PORT:-8765}:8765"
+    environment:
+      SCRIPTDECK_DB_PATH: /data/scriptdeck.db
+      SCRIPTDECK_STORAGE_DIR: /storage
+      SCRIPTDECK_HOST: 0.0.0.0
+      SCRIPTDECK_PORT: "8765"
+      # Coolify prompts for this in the UI. Leave blank to skip auth.
+      SCRIPTDECK_BASIC_AUTH: ${SCRIPTDECK_BASIC_AUTH}
+    volumes:
+      - scriptdeck-data:/data
+      - scriptdeck-storage:/storage
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request, sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8765/health', timeout=3).status == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  scriptdeck-data:
+    name: scriptdeck-data
+  scriptdeck-storage:
+    name: scriptdeck-storage
