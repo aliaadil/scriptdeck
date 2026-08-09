@@ -19,14 +19,27 @@ Cron + logrotate + ad-hoc shell wrappers work — until you have a dozen jobs th
 
 ## What's tracked but not yet built
 
-These are the next Kanban tasks the steward will pick up. None are shipped in this scaffold:
+These are the next Kanban tasks the steward will pick up. None are shipped yet:
 
 - [ ] Subprocess runner (execute `source_path` against the right interpreter, capture stdout/stderr to `storage/`)
 - [ ] Scheduler tick (poll `schedules.next_run_at`, fire the runner, advance the cursor)
 - [ ] Per-script isolation (`uv venv` for Python, `node_modules/` for Node)
-- [ ] Live log viewer (server-sent events over `/api/logs/<run_id>/stream`)
 - [ ] Authentication (single-user basic auth for v1, multi-tenant later)
 - [ ] Retry policy + alerting webhooks on `status='failure'`
+
+## Live log viewer (v0.5)
+
+The runner still doesn't exist, but the viewer is shipped ahead of it so the
+interface is in place. Once a runner writes lines to
+`storage/logs/<run_id>.log` and transitions the row's `status` to a terminal
+value (`success`, `failure`, `error`, `cancelled`), you can tail it in a
+browser:
+
+- `GET /logs` — last 50 runs (id, script, status badge, duration, started).
+- `GET /logs/<run_id>` — vanilla-JS EventSource viewer that streams lines in
+  real time and updates a status badge when the run ends.
+- `GET /api/logs/<run_id>/stream` — the raw SSE endpoint, also usable from
+  `curl -N` or any EventSource client.
 
 See [`ROADMAP.md`](ROADMAP.md) and the [Operator Runbook](https://github.com/aliaadil/scriptdeck/wiki) for detail.
 

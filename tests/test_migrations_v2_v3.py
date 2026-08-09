@@ -1,4 +1,4 @@
-"""Tests for the v0.7 migration chain (v2 + v3)."""
+"""Tests for the migration chain (v2 + v3 + v4 + v5)."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ def test_fresh_db_has_all_migrations_applied(tmp_db_path: Path) -> None:
             r[0]
             for r in conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()
         ]
-        assert versions == [1, 2, 3, 4]
+        assert versions == [1, 2, 3, 4, 5]
     finally:
         conn.close()
 
@@ -49,9 +49,65 @@ def test_migrations_are_idempotent(tmp_db_path: Path) -> None:
             r[0]
             for r in conn2.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()
         ]
-        assert versions == [1, 2, 3, 4]
+        assert versions == [1, 2, 3, 4, 5]
     finally:
         conn2.close()
+
+
+def test_v5_allows_cancelled_status(tmp_db_path: Path) -> None:
+    """v5 rebuilds the runs table to accept ``status='cancelled'``."""
+    conn = initialize_database(tmp_db_path)
+    try:
+        conn.execute(
+            "INSERT INTO scripts(name, language, source_path, created_at) VALUES (?, ?, ?, ?)",
+            ("demo", "python", "/demo.py", "2026-01-01T00:00:00+00:00"),
+        )
+        conn.execute(
+            "INSERT INTO runs(script_id, started_at, status) VALUES (?, ?, ?)",
+            (1, "2026-01-01T00:00:01+00:00", "cancelled"),
+        )
+        conn.commit()
+        row = conn.execute("SELECT status FROM runs WHERE id = 1").fetchone()
+        assert row[0] == "cancelled"
+    finally:
+        conn.close()
+
+
+def test_v5_preserves_existing_rows(tmp_db_path: Path) -> None:
+    """Upgrading a v0.4 DB (migrations v1..v4 already applied) to v5 must keep
+    every existing run and the v2 retry columns."""
+    conn = initialize_database(tmp_db_path)
+    try:
+        conn.execute(
+            "INSERT INTO scripts(name, language, source_path, created_at) VALUES (?, ?, ?, ?)",
+            ("legacy", "python", "/x.py", "2026-01-01T00:00:00+00:00"),
+        )
+        conn.execute(
+            "INSERT INTO runs(script_id, started_at, status, retry_attempt, retry_group_id) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (1, "2026-01-01T00:00:01+00:00", "success", 2, "abc-123"),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    conn = initialize_database(tmp_db_path)
+    try:
+        row = conn.execute("SELECT * FROM runs WHERE id = 1").fetchone()
+        assert row is not None
+        assert row["status"] == "success"
+        assert row["retry_attempt"] == 2
+        assert row["retry_group_id"] == "abc-123"
+        # The v2 index must still exist after the rebuild.
+        idx = [
+            r[0]
+            for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='runs'"
+            ).fetchall()
+        ]
+        assert "idx_runs_retry_group" in idx
+    finally:
+        conn.close()
 
 
 def test_upgrade_from_v1_db_preserves_existing_rows(tmp_db_path: Path) -> None:
