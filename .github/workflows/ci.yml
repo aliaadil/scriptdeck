@@ -28,7 +28,7 @@ jobs:
 
       - name: Install test deps
         run: |
-          pip install pytest ruff
+          pip install pytest ruff uv
 
       - name: Lint
         run: ruff check src/ tests/

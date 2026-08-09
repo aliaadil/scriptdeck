@@ -4,6 +4,25 @@ All notable changes to ScriptDeck are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] — 2026-08-08
+
+### Added
+- Per-script language isolation (v0.4).
+- `scripts` table now stores `requirements_path` and `interpreter_path`
+  (migration v4).
+- `scriptrunner.isolation` module: per-script `uv venv` for python,
+  `node_modules/` for node, clean env (`PATH=/usr/bin:/bin`) for bash.
+- `provision_lock()` plus a shareable `open_lock()` class for tests, both
+  using `fcntl.flock` so the lock survives process crashes.
+- `POST /api/scripts` now accepts inline `source` and `requirements` fields
+  and persists them under `<storage>/scripts/<id>/`.
+- `POST /api/scripts/<id>/run` triggers the runner and returns the run row
+  + retry decision.
+- `scriptrunner.runner` module: minimal subprocess runner that uses
+  isolation, captures stdout+stderr to `<storage>/logs/<run_id>.log`, and
+  hands off to `scheduler.record_run_result` for retry/alert policy.
+- 10 new tests in `tests/test_isolation.py` (67 total now passing).
+
 ## [0.1.0] — 2026-08-08
 
 ### Added
