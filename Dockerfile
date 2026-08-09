@@ -28,7 +28,9 @@ RUN apt-get update \
 # Install the package into an isolated prefix we can copy across stages.
 COPY pyproject.toml README.md LICENSE ./
 COPY src ./src
-RUN pip install --no-cache-dir --prefix=/install --no-build-isolation .
+# --no-build-isolation requires the PEP 517 backend in the builder environment.
+RUN pip install --no-cache-dir "setuptools>=68" wheel \
+ && pip install --no-cache-dir --prefix=/install --no-build-isolation .
 
 # ---- runtime --------------------------------------------------------------
 FROM python:${PYTHON_VERSION}-slim AS runtime

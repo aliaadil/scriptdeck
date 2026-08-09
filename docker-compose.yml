@@ -32,9 +32,7 @@ services:
       SCRIPTDECK_HOST: 0.0.0.0
       SCRIPTDECK_PORT: "8765"
       # Optional. Format: "username:bcrypt-hash". When unset, no auth is
-      # required (local-only binding is the v0.7 default; for v0.6+ auth
-      # this env var activates basic auth on every endpoint).
-      # Generate a hash with:
+      # required. Generate a hash with:
       #   htpasswd -nbBC 12 "" "your-password" | tr -d ':\n' | sed 's/\$2y\$/\$2a\$/'
       SCRIPTDECK_BASIC_AUTH: ${SCRIPTDECK_BASIC_AUTH:-}
     volumes:
