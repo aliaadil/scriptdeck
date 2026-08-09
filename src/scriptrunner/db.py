@@ -63,6 +63,38 @@ MIGRATIONS = {
     -- Alerting webhook URL on a schedule. NULL means no alert.
     ALTER TABLE schedules ADD COLUMN alert_webhook_url TEXT;
     """,
+    4: """
+    -- Add ``status='running'`` for in-flight runs and ``'cancelled'`` for
+    -- cancelled runs. SQLite CHECK constraints cannot be altered in place, so
+    -- we rebuild the runs table preserving all columns and data. Foreign keys
+    -- are temporarily disabled because ``logs.run_id`` references ``runs.id``;
+    -- they are re-enabled after the rebuild.
+    PRAGMA foreign_keys = OFF;
+    CREATE TABLE runs_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        script_id INTEGER NOT NULL,
+        schedule_id INTEGER,
+        started_at TEXT NOT NULL,
+        ended_at TEXT,
+        exit_code INTEGER,
+        status TEXT NOT NULL CHECK (status IN ('running', 'success', 'failure', 'error', 'cancelled')),
+        log_path TEXT,
+        log_size_bytes INTEGER NOT NULL DEFAULT 0,
+        retry_attempt INTEGER NOT NULL DEFAULT 0,
+        retry_group_id TEXT,
+        FOREIGN KEY (script_id) REFERENCES scripts(id) ON DELETE CASCADE,
+        FOREIGN KEY (schedule_id) REFERENCES schedules(id) ON DELETE SET NULL
+    );
+    INSERT INTO runs_new (id, script_id, schedule_id, started_at, ended_at, exit_code,
+                          status, log_path, log_size_bytes, retry_attempt, retry_group_id)
+    SELECT id, script_id, schedule_id, started_at, ended_at, exit_code,
+           status, log_path, log_size_bytes, retry_attempt, retry_group_id
+    FROM runs;
+    DROP TABLE runs;
+    ALTER TABLE runs_new RENAME TO runs;
+    CREATE INDEX IF NOT EXISTS idx_runs_retry_group ON runs(retry_group_id);
+    PRAGMA foreign_keys = ON;
+    """,
 }
 
 
