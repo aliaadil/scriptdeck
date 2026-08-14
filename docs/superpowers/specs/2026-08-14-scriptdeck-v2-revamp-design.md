@@ -56,18 +56,18 @@ subscribers.
 
 ```
 Browser (React/Vite SPA)
-        | JSON over HTTP (JWT bearer)  | SSE /api/runs/<id>/logs/stream
-        v                              v
+        │  JSON over HTTP (JWT bearer)   │  SSE /api/runs/<id>/logs/stream
+        ▼                                ▼
 FastAPI process
-  |-- API routers (api/*.py)
-  |-- Services (services/*)   <- pure async, no FastAPI imports
-  |-- Repo (db/*)             <- SQLAlchemy 2.0 async + aiosqlite
-  |-- LanguageRunner registry <- PythonRunner, NodeRunner
-  |-- Scheduler tick (5s loop)
-  |-- Runner (asyncio subprocess, isolation dirs)
-  |-- LogBroker (in-memory pub/sub for SSE)
-                |
-   SQLite (scriptdeck.db)   storage/ on volume
+  ├── API routers (api/*.py)
+  ├── Services (services/*)        pure async, no FastAPI imports
+  ├── Repo (db/*)                  SQLAlchemy 2.0 async + aiosqlite
+  ├── LanguageRunner registry      PythonRunner, NodeRunner
+  ├── Scheduler tick (5s loop)
+  ├── Runner (asyncio subprocess, isolation dirs)
+  └── LogBroker (in-memory pub/sub for SSE)
+                │
+   SQLite (scriptdeck.db)       storage/ on volume
 ```
 
 ## 5. Component Contracts
@@ -144,6 +144,9 @@ invites        (id, email, token UNIQUE, role, expires_at, used_at NULL)
 script_envs    (script_id PK, ciphertext BLOB, nonce BLOB, updated_at)
 script_deps    (script_id PK, deps_json TEXT, source TEXT, updated_at)
                 source IN ('auto', 'manual')
+                -- 'auto' = last set via /deps/detect; 'manual' = last set via /deps.
+                -- Field is informational only (audit + UI badge); it does
+                -- not affect provision() behavior.
 audit_log      (id, user_id, action, resource_type, resource_id, at, meta_json)
 ```
 
@@ -234,8 +237,9 @@ async def run_script(run_id: int, script: Script) -> RunResult:
 - One `asyncio.create_task(scheduler_loop())` started on FastAPI `startup`.
 - Poll interval: `SCRIPTDECK_SCHEDULER_INTERVAL` seconds (default 5).
 - Query: `schedules WHERE enabled=1 AND next_run_at <= now()`.
-- Advance: `croniter` for `kind='cron'`; `last_run_at + interval` for
-  `kind='interval'`.
+- Advance: `croniter` for `kind='cron'`; previous `next_run_at + interval`
+  for `kind='interval'` (matches v1 behavior; interval is relative to the
+  scheduled time, not to actual run completion).
 - Skip-on-overlap: if `script.id` already has a `status='running'` run, mark
   new run `status='error'` with `reason='overlap'` and advance cursor.
 - Self-heal on clock drift: every past-due row picked up in one tick;
@@ -398,7 +402,7 @@ frontend/
 ├── index.html
 └── src/
     ├── main.tsx
-    ├── router.tsx            # React Router, 6 routes + role guards
+    ├── router.tsx            # React Router, 9 routes + role guards (Login, Setup, Dashboard, Scripts, ScriptEdit, Schedules, Runs, RunView, Settings)
     ├── api/                  # typed fetchers per resource
     ├── auth/
     │   ├── AuthProvider.tsx
@@ -547,8 +551,12 @@ New migration files in v2.0:
 db/migrations/
 ├── 001_init.sql              (existing v1)
 ├── ...                       (existing v1)
-├── 005_logs_v5.sql           (existing v1)
-├── 007_from_v1.sql           NEW -- copies v1 rows + adds users/invites/script_envs/script_deps/audit_log
+├── 005_logs_v5.sql           (existing v1; carried into v2.0 verbatim)
+├── 007_from_v1.sql           NEW -- adds ONLY the five new tables (users,
+│                              invites, script_envs, script_deps, audit_log).
+│                              The four original tables (scripts, schedules,
+│                              runs, logs) are inherited from v1 migrations
+│                              001-006 unchanged. No row copy needed.
 └── 008_indexes.sql           NEW -- adds idx_runs_script_started, idx_schedules_due, idx_runs_status, idx_audit_user_at
 ```
 
