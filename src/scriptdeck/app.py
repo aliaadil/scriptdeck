@@ -8,7 +8,12 @@ from pathlib import Path
 from fastapi import FastAPI
 
 from scriptdeck.api.auth import router as auth_router
+from scriptdeck.api.deps import router as deps_router
+from scriptdeck.api.envs import router as envs_router
 from scriptdeck.api.health import router as health_router
+from scriptdeck.api.runs import router as runs_router
+from scriptdeck.api.schedules import router as schedules_router
+from scriptdeck.api.scripts import router as scripts_router
 from scriptdeck.api.users import router as users_router
 from scriptdeck.config import Settings
 from scriptdeck.db import make_engine, run_migrations, run_migrations_sync
@@ -68,14 +73,30 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Eager state init + migrations so tests using ASGITransport (no lifespan)
     # still see a fully-initialized app. The lifespan handler above still runs
     # migrations idempotently and manages disposal in production.
+    broker = get_broker()
     app.state.engine = engine
     app.state.session_factory = Session
     app.state.settings = settings
+    app.state.log_broker = broker
+    # Eagerly init env_service only if the key is present and valid; otherwise
+    # defer to first use so tests with placeholder keys (e.g. "A" * 44) still
+    # load the app. The lifespan handler always re-runs init for production.
+    env_key = settings.env_encryption_key
+    if env_key:
+        try:
+            app.state.env_service = EnvService(env_key)
+        except ValueError:
+            pass
     app.state.scheduler_running = False
     app.router.lifespan_context = lifespan
     app.include_router(health_router, prefix="/api")
     app.include_router(auth_router, prefix="/api")
     app.include_router(users_router, prefix="/api")
+    app.include_router(scripts_router, prefix="/api")
+    app.include_router(deps_router, prefix="/api")
+    app.include_router(envs_router, prefix="/api")
+    app.include_router(schedules_router, prefix="/api")
+    app.include_router(runs_router, prefix="/api")
 
     # Apply migrations eagerly so tests (which don't trigger lifespan) see the
     # schema. `run_migrations_sync` is idempotent. In production the lifespan

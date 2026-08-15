@@ -52,7 +52,7 @@ async def _tick(*, settings, session_factory, log_broker, env_service, concurren
         for row in due:
             sid = row["script_id"]
             if await has_active_run(s, sid):
-                run_id = await create_run(
+                run_id, _started_at = await create_run(
                     s, script_id=sid, schedule_id=row["id"], status="error"
                 )
                 new_next = advance_next_run(row["kind"], row["expression"], row["next_run_at"])
@@ -63,7 +63,7 @@ async def _tick(*, settings, session_factory, log_broker, env_service, concurren
                 continue
 
             new_next = advance_next_run(row["kind"], row["expression"], row["next_run_at"])
-            run_id = await create_run(s, script_id=sid, schedule_id=row["id"])
+            run_id, _started_at = await create_run(s, script_id=sid, schedule_id=row["id"])
             await advance(s, row["id"], new_next)
             await s.commit()
 

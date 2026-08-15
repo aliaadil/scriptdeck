@@ -13,14 +13,16 @@ def _table():
 
 async def create_run(
     session: AsyncSession, *, script_id: int, schedule_id: int | None, status: str = "running"
-) -> int:
+) -> tuple[int, str]:
+    """Insert a new run row and return (run_id, started_at)."""
     t = _table()
     stmt = (
         insert(t)
         .values(script_id=script_id, schedule_id=schedule_id, status=status)
-        .returning(t.c.id)
+        .returning(t.c.id, t.c.started_at)
     )
-    return int((await session.execute(stmt)).scalar_one())
+    row = (await session.execute(stmt)).one()
+    return int(row[0]), row[1]
 
 
 async def has_active_run(session: AsyncSession, script_id: int) -> bool:

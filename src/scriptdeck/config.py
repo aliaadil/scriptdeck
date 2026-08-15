@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -22,3 +24,7 @@ class Settings(BaseSettings):
     # Required on real boot; nullable here so tests can construct Settings()
     jwt_secret: str | None = None
     env_encryption_key: str | None = None  # base64, 32 bytes
+
+    @property
+    def storage_dir_path(self) -> Path:
+        return Path(self.storage_dir)
