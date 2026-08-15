@@ -4,7 +4,7 @@ import asyncio
 import json
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select, update
@@ -127,8 +127,12 @@ async def log_text(run_id: int, request: Request,
 
 
 @router.get("/{run_id}/log/stream")
-async def log_stream(run_id: int, request: Request,
-                     user: User = Depends(current_user)) -> StreamingResponse:
+async def log_stream(
+    run_id: int,
+    request: Request,
+    token: str | None = Query(default=None),
+    user: User = Depends(current_user),
+) -> StreamingResponse:
     broker = request.app.state.log_broker
 
     async def event_gen():

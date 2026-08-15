@@ -9,9 +9,17 @@ async def current_user(
     request: Request,
     authorization: str | None = Header(default=None),
 ) -> User:
-    if not authorization or not authorization.lower().startswith("bearer "):
+    # Prefer Authorization header (preserves existing behavior). Fall back to
+    # ?token=... query param so EventSource (which cannot set custom headers)
+    # can authenticate for SSE endpoints like /api/runs/:id/log/stream.
+    # NOTE: tokens in URLs may end up in reverse-proxy access logs. Acceptable
+    # for ScriptDeck because it's an internal/self-hosted tool.
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization.split(" ", 1)[1].strip()
+    else:
+        token = request.query_params.get("token")
+    if not token:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="missing bearer")
-    token = authorization.split(" ", 1)[1].strip()
     from scriptdeck.auth.jwt import decode_jwt
 
     try:
