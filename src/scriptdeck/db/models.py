@@ -91,7 +91,7 @@ scripts = Table(
     Column("created_at", Text, nullable=False),
     Column("updated_at", Text, nullable=False),
     Column("description", Text),
-    CheckConstraint("language IN ('python', 'node', 'bash')", name="scripts_language_check"),
+    CheckConstraint("language IN ('python', 'node')", name="scripts_language_check"),
     Index("idx_scripts_name", "name"),
 )
 

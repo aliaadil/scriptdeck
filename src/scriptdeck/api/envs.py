@@ -42,7 +42,17 @@ async def get_env(script_id: int, request: Request,
     env: EnvService = request.app.state.env_service
     try:
         lines = env.decrypt_lines(row["ciphertext"], row["nonce"])
-    except Exception:
+    except (ValueError, Exception) as exc:
+        # cryptography raises InvalidTag (subclass of ValueError) when the
+        # ciphertext was encrypted with a different key. Surface a 503 so the
+        # admin knows to rotate.
+        from cryptography.exceptions import InvalidTag
+
+        if isinstance(exc, InvalidTag):
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="decrypt failed — key may have been rotated, run admin/rotate-env-key",
+            )
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="decrypt failed")
     return EnvOut(has_env=True, line_count=len(lines), updated_at=row["updated_at"])
 

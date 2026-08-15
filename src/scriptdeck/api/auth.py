@@ -87,6 +87,9 @@ async def refresh(
     token = authorization.split(" ", 1)[1]
     settings = request.app.state.settings
     payload = decode_jwt(token, secret=settings.jwt_secret or "")
+    # I3: revoke the old token before issuing a new one
+    if "jti" in payload and "exp" in payload:
+        revoke(payload["jti"], int(payload["exp"]))
     new_token, _, _ = encode_jwt(int(payload["sub"]), payload["role"], settings.jwt_secret or "")
     return {"token": new_token}
 

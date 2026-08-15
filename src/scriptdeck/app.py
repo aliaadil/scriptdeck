@@ -49,6 +49,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.runner_sem = sem
         app.state.stop_event = stop_event
         app.state.scheduler_running = True
+        app.state.background_tasks: set[asyncio.Task] = set()
+        app.state.active_procs: dict[int, asyncio.subprocess.Process] = {}
 
         task = asyncio.create_task(
             scheduler_loop(
@@ -59,6 +61,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 concurrency=sem,
                 stop_event=stop_event,
                 storage_dir=Path(settings.storage_dir),
+                app=app,
             )
         )
         app.state.scheduler_task = task
@@ -91,6 +94,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         except ValueError:
             pass
     app.state.scheduler_running = False
+    app.state.background_tasks = set()
+    app.state.active_procs = {}
     app.router.lifespan_context = lifespan
     app.include_router(health_router, prefix="/api")
     app.include_router(auth_router, prefix="/api")
