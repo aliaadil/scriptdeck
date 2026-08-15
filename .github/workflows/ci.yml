@@ -50,6 +50,19 @@ jobs:
         run: |
           KEY=$(uv run python -c 'import os, base64; print(base64.b64encode(os.urandom(32)).decode())')
           echo "key=$KEY" >> $GITHUB_OUTPUT
+      - working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+          npx playwright install --with-deps chromium
+      # Build the dist → dashboard_static BEFORE the backend boots. The
+      # FastAPI app reads dashboard_dir.exists() at import time and only
+      # registers the SPA catch-all when the directory is present.
+      - name: Copy frontend dist into dashboard_static
+        run: |
+          mkdir -p src/scriptdeck/dashboard_static
+          cp -r frontend/dist/. src/scriptdeck/dashboard_static/
+          ls -la src/scriptdeck/dashboard_static/
       - name: Start backend
         env:
           SCRIPTDECK_JWT_SECRET: test-secret
@@ -57,15 +70,6 @@ jobs:
         run: |
           uv run python -m scriptdeck serve &
           curl --retry 10 --retry-delay 2 --retry-connrefused -sf http://127.0.0.1:8765/api/health
-      - working-directory: frontend
-        run: |
-          npm ci
-          npm run build
-          npx playwright install --with-deps chromium
-      - name: Copy frontend dist into dashboard_static
-        run: |
-          mkdir -p src/scriptdeck/dashboard_static
-          cp -r frontend/dist/. src/scriptdeck/dashboard_static/
       - working-directory: frontend
         run: npm run test:e2e
       - name: Stop backend
