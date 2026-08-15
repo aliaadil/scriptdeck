@@ -55,7 +55,7 @@ Thumbs.db
 *.db-wal
 *.db-shm
 storage/
-data/
+/data/
 scriptdeck.db
 scriptdeck.db-journal
 scriptdeck.db-wal
