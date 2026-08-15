@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import asyncio
+import base64
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 
@@ -10,6 +13,9 @@ from scriptdeck.api.users import router as users_router
 from scriptdeck.config import Settings
 from scriptdeck.db import make_engine, run_migrations, run_migrations_sync
 from scriptdeck.db.engine import session_factory as make_session_factory
+from scriptdeck.scheduler.tick import scheduler_loop
+from scriptdeck.services.env_service import EnvService
+from scriptdeck.services.log_broker import get_broker
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -20,13 +26,42 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         await run_migrations(engine)
+        env_service = EnvService(
+            settings.env_encryption_key or base64.b64encode(b"\0" * 32).decode()
+        )
+        broker = get_broker()
+        sem = asyncio.Semaphore(settings.runner_concurrency)
+        stop_event = asyncio.Event()
+
         app.state.engine = engine
         app.state.session_factory = Session
         app.state.settings = settings
-        app.state.scheduler_running = False
+        app.state.env_service = env_service
+        app.state.log_broker = broker
+        app.state.runner_sem = sem
+        app.state.stop_event = stop_event
+        app.state.scheduler_running = True
+
+        task = asyncio.create_task(
+            scheduler_loop(
+                settings=settings,
+                session_factory=Session,
+                log_broker=broker,
+                env_service=env_service,
+                concurrency=sem,
+                stop_event=stop_event,
+                storage_dir=Path(settings.storage_dir),
+            )
+        )
+        app.state.scheduler_task = task
         try:
             yield
         finally:
+            stop_event.set()
+            try:
+                await asyncio.wait_for(task, timeout=5)
+            except asyncio.TimeoutError:
+                task.cancel()
             await engine.dispose()
 
     app = FastAPI(title="ScriptDeck", version="2.0.0")

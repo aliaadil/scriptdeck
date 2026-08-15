@@ -77,3 +77,72 @@ audit_log = Table(
     Column("at", Text, nullable=False),
     Column("meta_json", Text, nullable=False),
 )
+
+scripts = Table(
+    "scripts",
+    mapper_registry.metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("name", String, nullable=False, unique=True),
+    Column("language", String, nullable=False),
+    Column("source_path", String, nullable=False),
+    Column("requirements_path", String),
+    Column("interpreter_path", String),
+    Column("created_at", Text, nullable=False),
+    Column("updated_at", Text, nullable=False),
+    Column("description", Text),
+    CheckConstraint("language IN ('python', 'node', 'bash')", name="scripts_language_check"),
+    Index("idx_scripts_name", "name"),
+)
+
+schedules = Table(
+    "schedules",
+    mapper_registry.metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column(
+        "script_id",
+        Integer,
+        ForeignKey("scripts.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column("kind", String, nullable=False),
+    Column("expression", String, nullable=False),
+    Column("enabled", Integer, nullable=False, default=1),
+    Column("next_run_at", String, nullable=False),
+    Column("retry_max", Integer, nullable=False, default=0),
+    Column("retry_backoff", Integer, nullable=False, default=0),
+    Column("last_status", String),
+    Column("last_error", Text),
+    CheckConstraint("kind IN ('cron', 'interval')", name="schedules_kind_check"),
+    Index("idx_schedules_script", "script_id"),
+    Index("idx_schedules_due", "enabled", "next_run_at"),
+)
+
+runs = Table(
+    "runs",
+    mapper_registry.metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column(
+        "script_id",
+        Integer,
+        ForeignKey("scripts.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column(
+        "schedule_id",
+        Integer,
+        ForeignKey("schedules.id", ondelete="SET NULL"),
+    ),
+    Column("started_at", String, nullable=False),
+    Column("ended_at", String),
+    Column("exit_code", Integer),
+    Column("status", String, nullable=False),
+    Column("retry_group", String),
+    CheckConstraint(
+        "status IN ('running', 'success', 'failure', 'error', 'cancelled')",
+        name="runs_status_check",
+    ),
+    Index("idx_runs_script", "script_id"),
+    Index("idx_runs_started", "started_at"),
+    Index("idx_runs_script_started", "script_id", "started_at"),
+    Index("idx_runs_status", "status"),
+)
