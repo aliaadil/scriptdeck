@@ -1,10 +1,30 @@
-# ScriptDeck
+# ScriptDeck v2.0
 
-> **Single-host scheduled script runner.** Upload a script, give it a cron or interval, watch runs and their logs land in one SQLite file plus a `storage/` tree. The core service uses the standard library; bcrypt is an optional dependency for HTTP Basic auth. No Docker required.
+Self-hosted scheduled script runner. Upload Python or Node scripts, attach a
+cron or interval, watch runs and live logs in the dashboard. Single Docker
+container, single SQLite file, multi-user with roles, per-script isolated
+environments, encrypted `.env` files, auto dependency detection.
 
-[![CI](https://github.com/aliaadil/scriptdeck/actions/workflows/ci.yml/badge.svg)](https://github.com/aliaadil/scriptdeck/actions/workflows/ci.yml)
-[![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+## Quickstart
+
+```bash
+docker compose up -d
+open http://localhost:8765/dashboard/
+```
+
+First boot redirects to `/setup` to create the first admin.
+
+## Migrate from v1
+
+```bash
+scriptdeck migrate-from-v1 \
+  --v1-db-path=./old/scriptdeck.db \
+  --v1-storage-path=./old/storage \
+  --v2-db-path=./data/scriptdeck.db \
+  --v2-storage-path=./storage
+```
+
+v1.x receives security fixes until 2027-02-14, then archived.
 
 ## Why
 
