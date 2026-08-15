@@ -127,19 +127,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # SPA catch-all: serve index.html for any client-side path that did
         # not match /api/* or /dashboard/*. Routes are matched in registration
         # order, so the explicit routes above take precedence.
+        from fastapi import HTTPException
+        from fastapi.responses import FileResponse
+
         @app.get("/{path:path}")
         async def spa_catch_all(path: str):
-            from fastapi.responses import FileResponse
-
             # Exclude any path that begins with api/ or dashboard/ explicitly.
             if path.startswith("api/") or path.startswith("dashboard/"):
-                from fastapi import HTTPException
-
                 raise HTTPException(status_code=404)
+            # Static assets (Vite emits /assets/index-*.js, /assets/index-*.css,
+            # /favicon.ico, etc.) live on disk under dashboard_static/. Serve
+            # them directly if the file exists; otherwise return index.html so
+            # client-side routing can take over.
+            asset_file = dashboard_dir / path
+            if asset_file.is_file():
+                return FileResponse(asset_file)
             index_file = dashboard_dir / "index.html"
             if not index_file.exists():
-                from fastapi import HTTPException
-
                 raise HTTPException(status_code=404)
             return FileResponse(index_file)
     return app

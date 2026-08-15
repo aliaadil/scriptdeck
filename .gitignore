@@ -66,3 +66,4 @@ scriptdeck.db-shm
 # Frontend
 frontend/dist/
 frontend/node_modules/
+src/scriptdeck/dashboard_static/
