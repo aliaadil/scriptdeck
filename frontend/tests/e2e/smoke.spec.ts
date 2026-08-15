@@ -12,7 +12,7 @@ test("setup → create script → trigger run → view log", async ({ page }) =>
   await page.click('button[type="submit"]');
 
   await page.waitForURL("**/dashboard");
-  await expect(page.getByText("Dashboard")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
 
   await page.goto("/scripts");
   await page.getByRole("button", { name: "New script" }).click();

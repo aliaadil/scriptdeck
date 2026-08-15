@@ -118,6 +118,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         async def root_redirect():
             from fastapi.responses import RedirectResponse
             return RedirectResponse(url="/dashboard/")
+
+        # SPA catch-all: serve index.html for any client-side path that did
+        # not match /api/* or /dashboard/*. Routes are matched in registration
+        # order, so the explicit routes above take precedence.
+        @app.get("/{path:path}")
+        async def spa_catch_all(path: str):
+            from fastapi.responses import FileResponse
+
+            # Exclude any path that begins with api/ or dashboard/ explicitly.
+            if path.startswith("api/") or path.startswith("dashboard/"):
+                from fastapi import HTTPException
+
+                raise HTTPException(status_code=404)
+            index_file = dashboard_dir / "index.html"
+            if not index_file.exists():
+                from fastapi import HTTPException
+
+                raise HTTPException(status_code=404)
+            return FileResponse(index_file)
     return app
 
 
