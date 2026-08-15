@@ -104,7 +104,8 @@ async def update(
             row = await script_service.get_script(s, script_id)
             if row is None:
                 raise HTTPException(status.HTTP_404_NOT_FOUND, detail="not found")
-            Path(row.source_path).write_text(body.source, encoding="utf-8")
+            storage: Path = request.app.state.settings.storage_dir_path
+            (storage / row.source_path).write_text(body.source, encoding="utf-8")
         await s.commit()
         new = await script_service.get_script(s, script_id)
     if new is None:
@@ -128,13 +129,13 @@ async def remove(script_id: int, request: Request,
 
 @router.get("/{script_id}/source")
 async def get_source(script_id: int, request: Request, user: User = Depends(current_user)):
-    from pathlib import Path as _P
     sf = request.app.state.session_factory
     async with sf() as s:
         row = await script_service.get_script(s, script_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="not found")
-    path = _P(row.source_path)
+    storage: Path = request.app.state.settings.storage_dir_path
+    path = storage / row.source_path
     if not path.exists():
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="source missing")
     return path.read_text(encoding="utf-8")
