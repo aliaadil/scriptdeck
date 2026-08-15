@@ -7,6 +7,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 
+from scriptdeck.api.admin import router as admin_router
 from scriptdeck.api.auth import router as auth_router
 from scriptdeck.api.deps import router as deps_router
 from scriptdeck.api.envs import router as envs_router
@@ -14,6 +15,7 @@ from scriptdeck.api.health import router as health_router
 from scriptdeck.api.runs import router as runs_router
 from scriptdeck.api.schedules import router as schedules_router
 from scriptdeck.api.scripts import router as scripts_router
+from scriptdeck.api.stats import router as stats_router
 from scriptdeck.api.users import router as users_router
 from scriptdeck.config import Settings
 from scriptdeck.db import make_engine, run_migrations, run_migrations_sync
@@ -97,6 +99,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(envs_router, prefix="/api")
     app.include_router(schedules_router, prefix="/api")
     app.include_router(runs_router, prefix="/api")
+    app.include_router(stats_router, prefix="/api")
+    app.include_router(admin_router, prefix="/api")
 
     # Apply migrations eagerly so tests (which don't trigger lifespan) see the
     # schema. `run_migrations_sync` is idempotent. In production the lifespan
