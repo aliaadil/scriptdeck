@@ -48,6 +48,7 @@ async def run_script(
     scripts_dir.mkdir(parents=True, exist_ok=True)
     venvs_dir.mkdir(parents=True, exist_ok=True)
     node_modules_dir.mkdir(parents=True, exist_ok=True)
+    locks_dir.mkdir(parents=True, exist_ok=True)
 
     log_path = logs_dir / f"{run_id}.log"
     script_work = scripts_dir / str(script.id)
@@ -72,6 +73,7 @@ async def run_script(
 
             log_fh = log_path.open("wb")
             offset = 0
+            exit_code: int = -1
             try:
                 proc = await asyncio.create_subprocess_exec(
                     *runner.build_command(interpreter, script.source_path, merged_env),
