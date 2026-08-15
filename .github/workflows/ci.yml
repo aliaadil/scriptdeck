@@ -17,7 +17,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install uv
         run: pip install uv
-      - run: uv sync
+      - run: uv sync --extra dev
       - run: uv run ruff check src/
       - run: uv run mypy src/
       - run: uv run pytest
@@ -44,16 +44,16 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: "22" }
       - run: pip install uv
-      - run: uv sync
-      - name: Generate Fernet key
-        id: fernet-key
+      - run: uv sync --extra dev
+      - name: Generate AES-GCM key
+        id: aesgcm-key
         run: |
-          KEY=$(uv run python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')
+          KEY=$(uv run python -c 'import os, base64; print(base64.b64encode(os.urandom(32)).decode())')
           echo "key=$KEY" >> $GITHUB_OUTPUT
       - name: Start backend
         env:
           SCRIPTDECK_JWT_SECRET: test-secret
-          SCRIPTDECK_ENV_ENCRYPTION_KEY: ${{ steps.fernet-key.outputs.key }}
+          SCRIPTDECK_ENV_ENCRYPTION_KEY: ${{ steps.aesgcm-key.outputs.key }}
         run: |
           uv run python -m scriptdeck serve &
           curl --retry 10 --retry-delay 2 --retry-connrefused -sf http://127.0.0.1:8765/api/health
