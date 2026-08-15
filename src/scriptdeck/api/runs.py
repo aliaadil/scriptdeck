@@ -228,7 +228,7 @@ async def cancel(run_id: int, request: Request,
     sf = request.app.state.session_factory
     t = _runs_table()
     # I4: terminate the live subprocess, if any, so cancel actually kills work
-    procs: dict[int, "asyncio.subprocess.Process"] = request.app.state.active_procs
+    procs: dict[int, asyncio.subprocess.Process] = request.app.state.active_procs
     proc = procs.get(run_id)
     if proc is not None and proc.returncode is None:
         try:

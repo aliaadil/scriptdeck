@@ -43,7 +43,7 @@ async def run_script(
     storage_dir: Path,
     env_ciphertext: str | None = None,
     env_nonce: str | None = None,
-    active_procs: dict[int, "asyncio.subprocess.Process"] | None = None,
+    active_procs: dict[int, asyncio.subprocess.Process] | None = None,
 ) -> RunResult:
     logs_dir = storage_dir / "logs"
     scripts_dir = storage_dir / "scripts"

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import func, select
@@ -14,7 +14,7 @@ router = APIRouter()
 @router.get("/stats")
 async def stats(request: Request, user: User = Depends(current_user)) -> dict:
     sf = request.app.state.session_factory
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     since = (now - timedelta(hours=24)).isoformat()
     from scriptdeck.db.models import runs, scripts
     async with sf() as s:

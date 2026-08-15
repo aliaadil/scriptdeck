@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import secrets
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,7 +28,7 @@ async def create_invite(
     session: AsyncSession, email: str, role: str, ttl_hours: int = 72
 ) -> Invite:
     token = secrets.token_urlsafe(32)
-    expires = (datetime.now(timezone.utc) + timedelta(hours=ttl_hours)).isoformat()
+    expires = (datetime.now(UTC) + timedelta(hours=ttl_hours)).isoformat()
     stmt = (
         insert(_table())
         .values(email=email, token=token, role=role, expires_at=expires)
@@ -53,11 +53,11 @@ async def accept_invite(
     if row is None or row["used_at"] is not None:
         return None
     inv = Invite(**row)
-    if datetime.fromisoformat(inv.expires_at) < datetime.now(timezone.utc):
+    if datetime.fromisoformat(inv.expires_at) < datetime.now(UTC):
         return None
     await session.execute(
         update(_table())
         .where(_table().c.id == inv.id)
-        .values(used_at=datetime.now(timezone.utc).isoformat())
+        .values(used_at=datetime.now(UTC).isoformat())
     )
     return inv

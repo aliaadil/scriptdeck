@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import AsyncIterator
 
 
 def encode_sse(data: dict, event: str | None = None) -> bytes:
@@ -52,7 +52,7 @@ class LogBroker:
                 try:
                     chunk = await asyncio.wait_for(q.get(), timeout=self._heartbeat)
                     yield chunk
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     yield encode_heartbeat()
         finally:
             async with self._lock:

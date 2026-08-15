@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -65,7 +65,7 @@ async def set_deps(script_id: int, body: DepsIn, request: Request,
     if user.role == "viewer":
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="viewer cannot modify")
     sf = request.app.state.session_factory
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     async with sf() as s:
         t = _table()
         existing = (await s.execute(select(t).where(t.c.script_id == script_id))).first()

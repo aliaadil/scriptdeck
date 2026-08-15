@@ -62,7 +62,12 @@ jobs:
           npm ci
           npm run build
           npx playwright install --with-deps chromium
-          npm run test:e2e
+      - name: Copy frontend dist into dashboard_static
+        run: |
+          mkdir -p src/scriptdeck/dashboard_static
+          cp -r frontend/dist/. src/scriptdeck/dashboard_static/
+      - working-directory: frontend
+        run: npm run test:e2e
       - name: Stop backend
         if: always()
         run: |

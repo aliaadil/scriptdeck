@@ -71,7 +71,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             stop_event.set()
             try:
                 await asyncio.wait_for(task, timeout=5)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 task.cancel()
             await engine.dispose()
 

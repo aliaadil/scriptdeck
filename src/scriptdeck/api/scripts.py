@@ -64,7 +64,7 @@ async def create(
     async with sf() as s:
         row = await script_service.create_script(
             s, name=body.name, language=body.language,
-            source_path=f"scripts/PLACEHOLDER", description=body.description,
+            source_path="scripts/PLACEHOLDER", description=body.description,
         )
         script_dir = storage / "scripts" / str(row.id)
         script_dir.mkdir(parents=True, exist_ok=True)

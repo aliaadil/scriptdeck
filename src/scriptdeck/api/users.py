@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr, Field
 
 from scriptdeck.auth.deps import current_user
-from scriptdeck.auth.invites import create_invite
+from scriptdeck.auth.invites import accept_invite, create_invite
 from scriptdeck.auth.users import (
     User,
     create_user,

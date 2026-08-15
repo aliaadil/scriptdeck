@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -71,7 +71,7 @@ async def count_users(session: AsyncSession) -> int:
 
 
 async def update_last_login(session: AsyncSession, user_id: int) -> None:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     stmt = update(_table()).where(_table().c.id == user_id).values(last_login_at=now)
     await session.execute(stmt)
 

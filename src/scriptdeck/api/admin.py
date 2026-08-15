@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
@@ -66,7 +66,7 @@ async def rotate_env_key(body: RotateKeyIn, request: Request,
                 update(script_envs)
                 .where(script_envs.c.script_id == r["script_id"])
                 .values(ciphertext=new_ct, nonce=new_nonce,
-                        updated_at=datetime.now(timezone.utc).isoformat())
+                        updated_at=datetime.now(UTC).isoformat())
             )
         await s.commit()
     request.app.state.env_service = new_svc

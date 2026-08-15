@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,7 +35,7 @@ async def finalize_run(
     session: AsyncSession, *, run_id: int, exit_code: int, status: str
 ) -> None:
     t = _table()
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     await session.execute(
         update(t)
         .where(t.c.id == run_id)

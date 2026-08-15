@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
@@ -65,7 +65,7 @@ async def set_env(script_id: int, body: EnvIn, request: Request,
     sf = request.app.state.session_factory
     env: EnvService = request.app.state.env_service
     cipher, nonce = env.encrypt(body.content.encode("utf-8"))
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     async with sf() as s:
         t = _table()
         existing = (await s.execute(select(t).where(t.c.script_id == script_id))).first()

@@ -7,7 +7,6 @@ operator must set these env vars before running `scriptdeck backup` or
 """
 from __future__ import annotations
 
-import os
 import shutil
 import tarfile
 import tempfile

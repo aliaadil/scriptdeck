@@ -4,7 +4,6 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr, Field
 
 from scriptdeck.auth.deps import current_user
-from scriptdeck.auth.invites import accept_invite
 from scriptdeck.auth.jwt import decode_jwt, encode_jwt, revoke
 from scriptdeck.auth.passwords import verify_password
 from scriptdeck.auth.users import (

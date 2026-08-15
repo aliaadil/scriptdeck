@@ -9,7 +9,6 @@ the schema; pointing at an up-to-date DB is a no-op.
 from __future__ import annotations
 
 import asyncio
-import sys
 
 from scriptdeck.config import Settings
 from scriptdeck.db import make_engine, run_migrations

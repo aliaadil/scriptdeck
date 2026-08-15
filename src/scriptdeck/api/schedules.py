@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
@@ -71,7 +71,7 @@ async def create(body: ScheduleCreate, request: Request,
     _require(user)
     sf = request.app.state.session_factory
     t = _table()
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     initial_next = advance_next_run(body.kind, body.expression, now)
     async with sf() as s:
         stmt = (
@@ -87,12 +87,12 @@ async def create(body: ScheduleCreate, request: Request,
 
 
 @router.put("/{schedule_id}")
-async def update(schedule_id: int, body: ScheduleCreate, request: Request,
-                 user: User = Depends(current_user)) -> ScheduleOut:
+async def update_schedule(schedule_id: int, body: ScheduleCreate, request: Request,
+                          user: User = Depends(current_user)) -> ScheduleOut:
     _require(user)
     sf = request.app.state.session_factory
     t = _table()
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     new_next = advance_next_run(body.kind, body.expression, now)
     async with sf() as s:
         await s.execute(update(t).where(t.c.id == schedule_id).values(

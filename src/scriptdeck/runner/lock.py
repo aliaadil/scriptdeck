@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import fcntl
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import AsyncIterator
 
 _process_locks: dict[int, asyncio.Lock] = {}
 _process_locks_guard = asyncio.Lock()

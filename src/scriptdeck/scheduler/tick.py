@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from scriptdeck.runner.executor import Script, run_script
@@ -43,7 +43,7 @@ async def scheduler_loop(
             log.exception("scheduler tick failed: %s", exc)
         try:
             await asyncio.wait_for(stop_event.wait(), timeout=settings.scheduler_interval)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             pass
 
 
@@ -57,7 +57,7 @@ async def _tick(
     storage_dir,
     app=None,
 ):
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     async with session_factory() as s:
         due = await list_due(s, now)
         for row in due:
