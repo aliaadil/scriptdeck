@@ -1,47 +1,55 @@
 [project]
 name = "scriptdeck"
-version = "1.0.0"
-description = "Single-host scheduled script runner: upload a script, give it a cron or interval, watch runs + logs land in one SQLite file plus a storage tree."
+version = "2.0.0"
+description = "Self-hosted scheduled script runner"
 requires-python = ">=3.11"
-readme = "README.md"
-license = {text = "MIT"}
-authors = [
-    {name = "Ali Adil", email = "aliaadil@example.com"},
-]
-keywords = ["scheduler", "cron", "scripts", "self-hosted", "sqlite", "stdlib"]
-classifiers = [
-    "Development Status :: 4 - Beta",
-    "Intended Audience :: System Administrators",
-    "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
-    "Topic :: System :: Scheduling",
-]
 dependencies = [
-    "requests>=2.30",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "sqlalchemy[asyncio]>=2.0",
+    "aiosqlite>=0.19",
+    "pydantic>=2.6",
+    "pydantic-settings>=2.2",
+    "argon2-cffi>=23.1",
+    "pyjwt>=2.8",
+    "croniter>=2.0",
+    "structlog>=24.1",
+    "httpx>=0.27",
+    "python-multipart>=0.0.9",
 ]
 
 [project.optional-dependencies]
-auth = ["bcrypt>=4.0"]
-docs = ["mkdocs-material>=9.5", "mkdocstrings[python]>=0.25"]
-
-[project.urls]
-Homepage = "https://github.com/aliaadil/scriptdeck"
-Issues = "https://github.com/aliaadil/scriptdeck/issues"
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=4.1",
+    "ruff>=0.3",
+    "mypy>=1.8",
+    "coverage>=7.4",
+]
 
 [project.scripts]
-scriptdeck = "scriptrunner.__main__:main"
-scriptdeck-doctor = "scriptrunner.doctor:main"
+scriptdeck = "scriptdeck.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/scriptdeck"]
 
 [tool.pytest.ini_options]
+asyncio_mode = "auto"
 testpaths = ["tests"]
-addopts = "-q"
+addopts = "--cov=scriptdeck --cov-report=term-missing --cov-fail-under=85"
+
+[[tool.mypy.overrides]]
+module = ["scriptdeck.*"]
+disallow_untyped_defs = true
 
 [tool.ruff]
-line-length = 120
+line-length = 100
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP"]
+select = ["E", "F", "I", "N", "W", "UP", "B", "ASYNC", "S"]

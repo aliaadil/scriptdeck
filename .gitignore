@@ -55,5 +55,14 @@ Thumbs.db
 *.db-wal
 *.db-shm
 storage/
+data/
+scriptdeck.db
+scriptdeck.db-journal
+scriptdeck.db-wal
+scriptdeck.db-shm
 .env
 .env.local
+
+# Frontend
+frontend/dist/
+frontend/node_modules/

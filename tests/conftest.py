@@ -1,4 +1,4 @@
-"""Test fixtures: in-memory DB + temp storage for ScriptDeck."""
+"""Shared pytest fixtures."""
 
 from __future__ import annotations
 
@@ -11,6 +11,20 @@ import pytest
 SRC = Path(__file__).resolve().parents[1] / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
+
+
+@pytest.fixture
+def tmp_storage(tmp_path):
+    """Per-test storage directory."""
+    storage = tmp_path / "storage"
+    storage.mkdir()
+    return storage
+
+
+@pytest.fixture
+def tmp_db(tmp_path):
+    """Per-test SQLite path."""
+    return tmp_path / "test.db"
 
 
 @pytest.fixture
