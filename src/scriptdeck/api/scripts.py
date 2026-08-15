@@ -124,3 +124,17 @@ async def remove(script_id: int, request: Request,
     if not ok:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="not found")
     return None
+
+
+@router.get("/{script_id}/source")
+async def get_source(script_id: int, request: Request, user: User = Depends(current_user)):
+    from pathlib import Path as _P
+    sf = request.app.state.session_factory
+    async with sf() as s:
+        row = await script_service.get_script(s, script_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="not found")
+    path = _P(row.source_path)
+    if not path.exists():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="source missing")
+    return path.read_text(encoding="utf-8")
