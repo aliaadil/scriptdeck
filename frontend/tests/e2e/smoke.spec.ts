@@ -7,7 +7,7 @@ import { test, expect } from "@playwright/test";
 test("setup → create script → trigger run → view log", async ({ page }) => {
   await page.goto("/setup");
 
-  await page.fill('input[type="email"]', "admin@test.local");
+  await page.fill('input[type="email"]', "admin@example.com");
   await page.fill('input[type="password"]', "hunter22pass");
   await page.click('button[type="submit"]');
 

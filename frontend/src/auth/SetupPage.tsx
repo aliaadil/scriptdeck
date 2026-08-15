@@ -16,7 +16,8 @@ export function SetupPage() {
       await setup(email, password);
       nav("/dashboard");
     } catch (e) {
-      setError((e as Error).message);
+      const msg = e instanceof Error ? e.message : JSON.stringify(e);
+      setError(msg);
     }
   }
 
