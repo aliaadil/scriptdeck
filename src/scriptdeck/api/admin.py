@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -11,6 +12,7 @@ from scriptdeck.auth.users import User
 from scriptdeck.services.env_service import EnvService
 
 router = APIRouter(prefix="/admin")
+log = logging.getLogger(__name__)
 
 
 def _require_admin(user: User) -> None:
@@ -51,10 +53,13 @@ async def rotate_env_key(body: RotateKeyIn, request: Request,
     old_svc: EnvService = request.app.state.env_service
     async with sf() as s:
         rows = (await s.execute(select(script_envs))).mappings().all()
+        failed = 0
         for r in rows:
             try:
                 plain = old_svc.decrypt(r["ciphertext"], r["nonce"])
             except Exception:
+                failed += 1
+                log.exception("rotate_env_key: failed to decrypt script_id=%s", r["script_id"])
                 continue
             new_ct, new_nonce = new_svc.encrypt(plain)
             await s.execute(
@@ -65,4 +70,4 @@ async def rotate_env_key(body: RotateKeyIn, request: Request,
             )
         await s.commit()
     request.app.state.env_service = new_svc
-    return {"ok": True, "rotated": len(rows)}
+    return {"ok": True, "rotated": len(rows) - failed, "failed": failed}
