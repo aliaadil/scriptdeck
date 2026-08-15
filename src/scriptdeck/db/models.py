@@ -9,6 +9,7 @@ from sqlalchemy import (
     String,
     Table,
     Text,
+    text,
 )
 from sqlalchemy.orm import registry
 
@@ -142,7 +143,7 @@ runs = Table(
         name="runs_status_check",
     ),
     Index("idx_runs_script", "script_id"),
-    Index("idx_runs_started", "started_at"),
-    Index("idx_runs_script_started", "script_id", "started_at"),
+    Index("idx_runs_started", text("started_at DESC")),
+    Index("idx_runs_script_started", "script_id", text("started_at DESC")),
     Index("idx_runs_status", "status"),
 )
