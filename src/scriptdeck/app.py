@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from scriptdeck.api.admin import router as admin_router
 from scriptdeck.api.auth import router as auth_router
@@ -106,6 +107,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # schema. `run_migrations_sync` is idempotent. In production the lifespan
     # handler will also call `run_migrations` (idempotent).
     run_migrations_sync(settings.db_path)
+
+    # Mount dashboard static (Vite build output) if it has been produced.
+    # In dev (no build yet) the directory is absent and the mount is skipped.
+    dashboard_dir = Path(__file__).parent / "dashboard_static"
+    if dashboard_dir.exists():
+        app.mount("/dashboard", StaticFiles(directory=str(dashboard_dir), html=True), name="dashboard")
+
+        @app.get("/")
+        async def root_redirect():
+            from fastapi.responses import RedirectResponse
+            return RedirectResponse(url="/dashboard/")
     return app
 
 
