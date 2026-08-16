@@ -16,6 +16,15 @@ import { Save, Play, Trash2 } from "lucide-react";
 
 type Script = { id: string; name: string; language: string; source: string; description?: string };
 
+type RunInfo = {
+  id: number;
+  script_id: number;
+  status: "running" | "success" | "failure" | "error" | "cancelled";
+  exit_code: number | null;
+  started_at: string;
+  ended_at: string | null;
+};
+
 export function ScriptEdit() {
   const { id } = useParams();
   const nav = useNavigate();
@@ -66,11 +75,65 @@ export function ScriptEdit() {
     },
     onError: (e) => toast.error(e.message),
   });
-  const run = useMutation({
-    mutationFn: () => api(`/api/scripts/${id}/run`, { method: "POST" }),
+  const run = useMutation<RunInfo, Error, void>({
+    mutationFn: () => api<RunInfo>(`/api/scripts/${id}/run`, { method: "POST" }),
     onSuccess: () => toast.success("Run started"),
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error(e.message ?? "Run failed to start"),
   });
+
+  const [activeTab, setActiveTab] = useState("editor");
+  const [currentRunId, setCurrentRunId] = useState<number | null>(null);
+  const [runLog, setRunLog] = useState<string>("");
+
+  useEffect(() => {
+    if (!run.data) return;
+    setCurrentRunId(run.data.id);
+    setActiveTab("logs");
+    setRunLog("");
+    toast.info(`Run #${run.data.id} started`);
+  }, [run.data]);
+
+  const runStatus = useQuery<RunInfo>({
+    queryKey: ["run", currentRunId],
+    queryFn: () => api<RunInfo>(`/api/runs/${currentRunId}`),
+    enabled: currentRunId != null,
+    refetchInterval: (q) => {
+      const s = q.state.data;
+      return s && s.status !== "running" ? false : 1000;
+    },
+  });
+
+  useEffect(() => {
+    if (!runStatus.data) return;
+    if (runStatus.data.status === "running") return;
+    const status = runStatus.data.status;
+    const exit = runStatus.data.exit_code;
+    if (status === "success") toast.success(`Run #${runStatus.data.id} finished (exit 0)`);
+    else if (status === "failure") toast.error(`Run #${runStatus.data.id} failed (exit ${exit})`);
+    else if (status === "error") toast.error(`Run #${runStatus.data.id} crashed`);
+    else if (status === "cancelled") toast.warning(`Run #${runStatus.data.id} cancelled`);
+  }, [runStatus.data]);
+
+  // Refresh log content whenever the polled run finishes (and on tab open).
+  useEffect(() => {
+    if (!currentRunId) return;
+    if (runStatus.data?.status === "running") return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = localStorage.getItem("scriptdeck_token");
+        const res = await fetch(`/api/runs/${currentRunId}/log`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!cancelled && res.ok) setRunLog(await res.text());
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentRunId, runStatus.data?.status]);
   const del = useMutation({
     mutationFn: () => api(`/api/scripts/${id}`, { method: "DELETE" }),
     onSuccess: () => {
@@ -157,10 +220,10 @@ export function ScriptEdit() {
               <Button
                 variant="outline"
                 onClick={() => run.mutate()}
-                disabled={isNew || !script}
+                disabled={isNew || !script || run.isPending}
                 title={isNew ? "Save the script first to enable Run" : undefined}
               >
-                <Play className="mr-2 h-4 w-4" /> Run
+                <Play className="mr-2 h-4 w-4" /> {run.isPending ? "Starting…" : "Run"}
               </Button>
               <Button
                 onClick={handleSave}
@@ -191,7 +254,7 @@ export function ScriptEdit() {
           </div>
         </div>
 
-        <Tabs defaultValue="editor">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
             <TabsTrigger value="editor">Editor</TabsTrigger>
             <TabsTrigger value="config">Config</TabsTrigger>
@@ -280,7 +343,22 @@ export function ScriptEdit() {
           <TabsContent value="logs">
             <Card>
               <CardContent className="font-mono text-xs">
-                <pre>Run the script to see logs.</pre>
+                {currentRunId == null ? (
+                  <pre className="text-muted-foreground">Run the script to see logs.</pre>
+                ) : runStatus.data?.status === "running" ? (
+                  <div className="space-y-2">
+                    <p className="text-muted-foreground">Run #{currentRunId} is running…</p>
+                    <pre className="whitespace-pre-wrap break-all">{runLog || ""}</pre>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-muted-foreground">
+                      Run #{currentRunId} {runStatus.data?.status}
+                      {runStatus.data?.exit_code != null && ` (exit ${runStatus.data.exit_code})`}
+                    </p>
+                    <pre className="whitespace-pre-wrap break-all">{runLog || "(no output)"}</pre>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

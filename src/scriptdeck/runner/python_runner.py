@@ -27,12 +27,12 @@ class PythonRunner:
                     "pip",
                     "install",
                     "--python",
-                    str(venv / "bin" / "python"),
+                    str((venv / "bin" / "python").resolve()),
                     "-r",
-                    str(req),
+                    str(req.resolve()),
                 ]
             )
-        return venv / "bin" / "python"
+        return (venv / "bin" / "python").resolve()
 
     def build_command(
         self, interpreter: Path, source_path: Path, env: dict[str, str]
