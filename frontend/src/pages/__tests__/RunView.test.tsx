@@ -1,30 +1,65 @@
 import { render, screen, cleanup } from "@testing-library/react";
-import { afterEach } from "vitest";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { RunView } from "../RunView";
 
-vi.mock("@/lib/api", () => ({
-  api: vi.fn().mockResolvedValue({ id: "abc", script_name: "test", status: "success", output: "" }),
+const run = vi.hoisted(() => ({
+  id: 42,
+  script_id: 7,
+  schedule_id: null,
+  started_at: "2026-01-01T00:00:00Z",
+  ended_at: "2026-01-01T00:00:03Z",
+  exit_code: 0,
+  status: "success",
+}));
+
+vi.mock("@/api/runs", () => ({
+  getRun: vi.fn().mockResolvedValue(run),
+  cancelRun: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("@/api/client", () => ({
+  api: vi.fn().mockResolvedValue("hello from log\n"),
+}));
+
+vi.mock("@/hooks/useLiveLogs", () => ({
+  useLiveLogs: () => ({ events: [], ended: true }),
+}));
+
+vi.mock("@/auth/AuthProvider", () => ({
+  useAuth: () => ({ user: { id: 1, email: "admin@example.com", role: "admin" } }),
 }));
 
 afterEach(() => cleanup());
 
+function renderRunView() {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={["/runs/42"]}>
+        <Routes>
+          <Route path="/runs/:id" element={<RunView />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
 describe("RunView", () => {
   it("renders tabs", async () => {
-    const client = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
-    render(
-      <QueryClientProvider client={client}>
-        <MemoryRouter initialEntries={["/runs/abc"]}>
-          <Routes>
-            <Route path="/runs/:id" element={<RunView />} />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>
-    );
+    renderRunView();
     expect(await screen.findByRole("tab", { name: /output/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /config/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /metadata/i })).toBeInTheDocument();
+  });
+
+  it("renders run header, status and derived duration", async () => {
+    renderRunView();
+    expect(await screen.findByText("Run #42")).toBeInTheDocument();
+    expect(await screen.findByText("success")).toBeInTheDocument();
+    expect(await screen.findByText("3.0s")).toBeInTheDocument();
   });
 });
