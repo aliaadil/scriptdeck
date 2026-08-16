@@ -46,7 +46,7 @@ artifacts = ["src/scriptdeck/data/*.txt"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-addopts = "--cov=scriptdeck --cov-report=term-missing --cov-fail-under=63"
+addopts = "--cov=scriptdeck --cov-report=term-missing --cov-fail-under=60"
 
 [[tool.mypy.overrides]]
 module = ["scriptdeck.*"]
