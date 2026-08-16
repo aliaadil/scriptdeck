@@ -59,7 +59,7 @@ export function ScriptEdit() {
     onError: (e) => toast.error(e.message),
   });
   const run = useMutation({
-    mutationFn: () => api(`/api/scripts/${id}/run`, { method: "POST", body: "{}" }),
+    mutationFn: () => api(`/api/scripts/${id}/run`, { method: "POST" }),
     onSuccess: () => toast.success("Run started"),
     onError: (e: Error) => toast.error(e.message),
   });

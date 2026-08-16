@@ -72,12 +72,17 @@ async def trigger(body: RunTrigger, request: Request,
                   user: User = Depends(current_user)) -> RunOut:
     if user.role == "viewer":
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="viewer cannot trigger")
-    sf = request.app.state.session_factory
-    storage = Path(request.app.state.settings.storage_dir)
+    return await _trigger_run(request.app, body.script_id, user)
+
+
+async def _trigger_run(app, script_id: int, user: User) -> RunOut:
+    """Shared trigger flow used by /runs and /scripts/{id}/run."""
+    sf = app.state.session_factory
+    storage = Path(app.state.settings.storage_dir)
     env_ciphertext: str | None = None
     env_nonce: str | None = None
     async with sf() as s:
-        script = await script_service.get_script(s, body.script_id)
+        script = await script_service.get_script(s, script_id)
         if script is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="script not found")
         # I1: guard against concurrent trigger
@@ -104,7 +109,7 @@ async def trigger(body: RunTrigger, request: Request,
         source_path=storage / script.source_path, requirements=deps,
     )
     _schedule_execution(
-        request.app,
+        app,
         run_id=run_id,
         script=runner_script,
         env_ciphertext=env_ciphertext,

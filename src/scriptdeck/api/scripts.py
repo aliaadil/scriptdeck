@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from scriptdeck.auth.deps import current_user
 from scriptdeck.auth.users import User
 from scriptdeck.services import script_service
+from scriptdeck.api.runs import RunOut, _trigger_run
 
 router = APIRouter(prefix="/scripts")
 
@@ -140,3 +141,11 @@ async def get_source(script_id: int, request: Request, user: User = Depends(curr
     if not path.exists():
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="source missing")
     return Response(content=path.read_text(encoding="utf-8"), media_type="text/plain")
+
+
+@router.post("/{script_id}/run", status_code=201)
+async def run_script(script_id: int, request: Request,
+                    user: User = Depends(current_user)) -> RunOut:
+    if user.role == "viewer":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="viewer cannot trigger")
+    return await _trigger_run(request.app, script_id, user)

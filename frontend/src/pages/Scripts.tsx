@@ -30,7 +30,7 @@ export function Scripts() {
     queryFn: () => api<unknown[]>("/api/scripts"),
   });
   const run = useMutation({
-    mutationFn: (id: string) => api(`/api/scripts/${id}/run`, { method: "POST", body: JSON.stringify({}) }),
+    mutationFn: (id: string) => api(`/api/scripts/${id}/run`, { method: "POST" }),
     onSuccess: () => toast.success("Run started"),
     onError: (e: Error) => toast.error(e.message),
   });

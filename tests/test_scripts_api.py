@@ -152,3 +152,21 @@ async def test_runs_trigger_and_list(app_and_token):
         )
         assert r3.status_code == 200
         assert len(r3.json()) >= 1
+
+
+@pytest.mark.asyncio
+async def test_scripts_run_shim(app_and_token):
+    app, token = app_and_token
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
+        r = await ac.post(
+            "/api/scripts",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"name": "r2", "language": "python", "source": "pass\n"},
+        )
+        sid = r.json()["id"]
+        r2 = await ac.post(
+            f"/api/scripts/{sid}/run",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert r2.status_code == 201, r2.text
+        assert r2.json()["script_id"] == sid
