@@ -25,6 +25,33 @@ type RunInfo = {
   ended_at: string | null;
 };
 
+function RunStatusBadge({ status, exitCode }: { status: string; exitCode: number | null }) {
+  const map: Record<string, string> = {
+    success: "bg-success/15 text-success border-success/30",
+    failure: "bg-destructive/15 text-destructive border-destructive/30",
+    error: "bg-destructive/15 text-destructive border-destructive/30",
+    running: "bg-secondary text-secondary-foreground border-transparent",
+    cancelled: "bg-muted text-muted-foreground border-border",
+  };
+  const label =
+    status === "running"
+      ? "Running…"
+      : status === "success"
+      ? "Success"
+      : status === "failure"
+      ? `Failed (exit ${exitCode ?? "?"})`
+      : status === "error"
+      ? "Error"
+      : "Cancelled";
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${map[status] ?? "border-border text-foreground"}`}
+    >
+      {label}
+    </span>
+  );
+}
+
 export function ScriptEdit() {
   const { id } = useParams();
   const nav = useNavigate();
@@ -342,22 +369,26 @@ export function ScriptEdit() {
 
           <TabsContent value="logs">
             <Card>
-              <CardContent className="font-mono text-xs">
+              <CardContent className="space-y-3 p-4">
                 {currentRunId == null ? (
-                  <pre className="text-muted-foreground">Run the script to see logs.</pre>
-                ) : runStatus.data?.status === "running" ? (
-                  <div className="space-y-2">
-                    <p className="text-muted-foreground">Run #{currentRunId} is running…</p>
-                    <pre className="whitespace-pre-wrap break-all">{runLog || ""}</pre>
-                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Run the script to see logs.
+                  </p>
                 ) : (
-                  <div className="space-y-2">
-                    <p className="text-muted-foreground">
-                      Run #{currentRunId} {runStatus.data?.status}
-                      {runStatus.data?.exit_code != null && ` (exit ${runStatus.data.exit_code})`}
-                    </p>
-                    <pre className="whitespace-pre-wrap break-all">{runLog || "(no output)"}</pre>
-                  </div>
+                  <>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">Run #{currentRunId}</span>
+                      <RunStatusBadge
+                        status={runStatus.data?.status ?? "running"}
+                        exitCode={runStatus.data?.exit_code ?? null}
+                      />
+                    </div>
+                    <pre className="max-h-[60vh] overflow-auto rounded-md border bg-[#1e1e1e] p-3 font-mono text-[13px] leading-relaxed text-zinc-100">
+                      {runStatus.data?.status === "running" && !runLog
+                        ? "Waiting for output…"
+                        : runLog || "(no output)"}
+                    </pre>
+                  </>
                 )}
               </CardContent>
             </Card>
