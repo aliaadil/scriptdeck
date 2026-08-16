@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+import os
 
 # Core env vars passed to every sandboxed script. Add to this list only when
 # the variable is genuinely safe to expose to arbitrary user code.
@@ -75,9 +76,21 @@ def build_bind_plan(user_root: Path, view: SandboxView) -> list[BindMount]:
 
     Also ensures the standard skeleton dirs are present. Returns the view's
     binds unchanged.
+
+    `jail` is expected to be a hardcoded literal supplied by a LanguageRunner,
+    never a per-script or request-supplied value. We still refuse any jail path
+    that escapes `user_root` (e.g. via `..`), because this function is what
+    materialises the isolation boundary: a traversal here would create — and
+    later bind-mount over — directories inside another user's subtree.
     """
+    root_normalised = Path(os.path.normpath(user_root.absolute()))
     for bm in view.binds:
         target = user_root / bm.jail.lstrip("/")
+        normalised = Path(os.path.normpath(target.absolute()))
+        if normalised != root_normalised and not normalised.is_relative_to(root_normalised):
+            raise ValueError(
+                f"bind jail path {bm.jail!r} escapes user_root {user_root}"
+            )
         if bm.host.is_dir():
             target.mkdir(parents=True, exist_ok=True)
         else:

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from scriptdeck.runner.sandbox_view import (
     BindMount,
     SandboxView,
@@ -76,3 +78,13 @@ def test_build_bind_plan_creates_chroot_skeleton(tmp_path):
     build_bind_plan(user_root, view)
     for d in ("bin", "usr", "lib", "etc", "tmp"):
         assert (user_root / d).is_dir()
+
+
+def test_build_bind_plan_rejects_jail_path_escaping_user_root(tmp_path):
+    user_root = tmp_path / "users" / "1"
+    view = SandboxView(binds=[
+        BindMount(host=Path("/usr/lib"), jail="/../2/stolen"),
+    ])
+    with pytest.raises(ValueError, match="escapes user_root"):
+        build_bind_plan(user_root, view)
+    assert not (tmp_path / "users" / "2").exists()
