@@ -17,6 +17,7 @@ async def test_run_script_success(tmp_path):
 
     class FakeScript:
         id = 1
+        user_id = 1
         name = "hi"
         language = "python"
         source_path = src

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, insert, select, update
 
+from scriptdeck.api.deps import require_script_owner
 from scriptdeck.auth.deps import current_user
 from scriptdeck.auth.users import User
 from scriptdeck.services.env_service import EnvService
@@ -35,6 +36,7 @@ async def get_env(script_id: int, request: Request,
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="viewer cannot read env metadata")
     sf = request.app.state.session_factory
     async with sf() as s:
+        await require_script_owner(s, script_id, user)
         t = _table()
         row = (await s.execute(select(t).where(t.c.script_id == script_id))).mappings().one_or_none()
     if row is None:
@@ -67,6 +69,7 @@ async def set_env(script_id: int, body: EnvIn, request: Request,
     cipher, nonce = env.encrypt(body.content.encode("utf-8"))
     now = datetime.now(UTC).isoformat()
     async with sf() as s:
+        await require_script_owner(s, script_id, user)
         t = _table()
         existing = (await s.execute(select(t).where(t.c.script_id == script_id))).first()
         if existing:
@@ -92,6 +95,7 @@ async def delete_env(script_id: int, request: Request,
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="viewer cannot modify env")
     sf = request.app.state.session_factory
     async with sf() as s:
+        await require_script_owner(s, script_id, user)
         t = _table()
         await s.execute(delete(t).where(t.c.script_id == script_id))
         from scriptdeck.services.audit import record as audit

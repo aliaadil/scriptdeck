@@ -4,6 +4,8 @@ import asyncio
 import json
 from pathlib import Path
 
+from scriptdeck.runner.sandbox_view import BindMount, SandboxView
+
 
 class NodeRunner:
     name = "node"
@@ -31,6 +33,15 @@ class NodeRunner:
         self, interpreter: Path, source_path: Path, env: dict[str, str]
     ) -> list[str]:
         return [str(interpreter), str(source_path)]
+
+    def sandbox_view(self) -> SandboxView:
+        return SandboxView(binds=[
+            BindMount(host=Path("/usr/bin/node"), jail="/usr/bin/node"),
+            BindMount(host=Path("/usr/lib/x86_64-linux-gnu"), jail="/usr/lib/x86_64-linux-gnu"),
+            BindMount(host=Path("/etc/ssl"), jail="/etc/ssl"),
+            BindMount(host=Path("/etc/passwd"), jail="/etc/passwd"),
+            BindMount(host=Path("/etc/group"), jail="/etc/group"),
+        ])
 
 
 async def _run(cmd: list[str], cwd: Path | None = None) -> None:

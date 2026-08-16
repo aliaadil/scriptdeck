@@ -7,6 +7,11 @@ services:
     restart: unless-stopped
     ports:
       - "8765:8765"
+    cap_drop:
+      - ALL
+    cap_add:
+      - SYS_CHROOT
+      - SYS_ADMIN
     environment:
       SCRIPTDECK_DB_PATH: /data/scriptdeck.db
       SCRIPTDECK_STORAGE_DIR: /storage

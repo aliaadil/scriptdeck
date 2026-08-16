@@ -17,6 +17,11 @@ def main() -> int:
     mig.add_argument("--v2-db-path", required=True)
     mig.add_argument("--v2-storage-path", required=True)
 
+    mu = sub.add_parser("migrate-users", help="Move flat storage into per-user subtrees")
+    mu.add_argument("--storage-dir", required=True)
+    mu.add_argument("--db-path", required=True)
+    mu.add_argument("--apply", action="store_true", help="Actually move files (default dry-run)")
+
     bak = sub.add_parser("backup", help="Tar db + storage")
     bak.add_argument("--output", required=True)
 
@@ -36,6 +41,13 @@ def main() -> int:
         return mig_run(
             v1_db=args.v1_db_path, v1_storage=args.v1_storage_path,
             v2_db=args.v2_db_path, v2_storage=args.v2_storage_path,
+        )
+    if args.cmd == "migrate-users":
+        from scriptdeck.cli_commands.migrate_users import migrate_users_run
+        return migrate_users_run(
+            storage_dir=args.storage_dir,
+            db_path=args.db_path,
+            dry_run=not args.apply,
         )
     if args.cmd == "backup":
         from scriptdeck.cli_commands.backup import run as bak_run

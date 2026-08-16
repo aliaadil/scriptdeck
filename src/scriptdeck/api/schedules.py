@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, insert, select, update
 
+from scriptdeck.api.deps import require_script_owner
 from scriptdeck.auth.deps import current_user
 from scriptdeck.auth.users import User
 from scriptdeck.services.schedule_service import advance_next_run
@@ -16,6 +17,11 @@ router = APIRouter(prefix="/schedules")
 def _table():
     from scriptdeck.db.models import schedules
     return schedules
+
+
+def _scripts_table():
+    from scriptdeck.db.models import scripts
+    return scripts
 
 
 class ScheduleCreate(BaseModel):
@@ -57,9 +63,25 @@ async def list_endpoint(request: Request, script_id: int | None = None,
                        user: User = Depends(current_user)) -> list[ScheduleOut]:
     sf = request.app.state.session_factory
     t = _table()
-    stmt = select(t).order_by(t.c.id)
     if script_id is not None:
-        stmt = stmt.where(t.c.script_id == script_id)
+        # Filter narrows to one script — verify caller owns it (admins pass).
+        async with sf() as s:
+            await require_script_owner(s, script_id, user)
+        stmt = select(t).where(t.c.script_id == script_id).order_by(t.c.id)
+    else:
+        # No filter — non-admins see only their own scripts' schedules.
+        if user.role != "admin":
+            async with sf() as s:
+                own_script_ids = (
+                    await s.execute(
+                        select(_scripts_table().c.id).where(_scripts_table().c.user_id == user.id)
+                    )
+                ).scalars().all()
+            if not own_script_ids:
+                return []
+            stmt = select(t).where(t.c.script_id.in_(own_script_ids)).order_by(t.c.id)
+        else:
+            stmt = select(t).order_by(t.c.id)
     async with sf() as s:
         rows = (await s.execute(stmt)).mappings().all()
     return [_row_to_out(r) for r in rows]
@@ -74,6 +96,7 @@ async def create(body: ScheduleCreate, request: Request,
     now = datetime.now(UTC).isoformat()
     initial_next = advance_next_run(body.kind, body.expression, now)
     async with sf() as s:
+        await require_script_owner(s, body.script_id, user)
         stmt = (
             insert(t).values(
                 script_id=body.script_id, kind=body.kind, expression=body.expression,
@@ -95,6 +118,16 @@ async def update_schedule(schedule_id: int, body: ScheduleCreate, request: Reque
     now = datetime.now(UTC).isoformat()
     new_next = advance_next_run(body.kind, body.expression, now)
     async with sf() as s:
+        # Load the existing schedule to find its script_id before mutating;
+        # verify ownership before we change any data.
+        existing = (
+            await s.execute(
+                select(t.c.script_id).where(t.c.id == schedule_id)
+            )
+        ).mappings().one_or_none()
+        if existing is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="schedule not found")
+        await require_script_owner(s, int(existing["script_id"]), user)
         await s.execute(update(t).where(t.c.id == schedule_id).values(
             kind=body.kind, expression=body.expression,
             enabled=1 if body.enabled else 0, next_run_at=new_next,
@@ -111,6 +144,14 @@ async def remove(schedule_id: int, request: Request, user: User = Depends(curren
     sf = request.app.state.session_factory
     t = _table()
     async with sf() as s:
+        existing = (
+            await s.execute(
+                select(t.c.script_id).where(t.c.id == schedule_id)
+            )
+        ).mappings().one_or_none()
+        if existing is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="schedule not found")
+        await require_script_owner(s, int(existing["script_id"]), user)
         await s.execute(delete(t).where(t.c.id == schedule_id))
         await s.commit()
     return None
@@ -120,20 +161,28 @@ async def remove(schedule_id: int, request: Request, user: User = Depends(curren
 async def enable(schedule_id: int, request: Request,
                  user: User = Depends(current_user)) -> dict:
     _require(user)
-    return await _set_enabled(schedule_id, True, request)
+    return await _set_enabled(schedule_id, True, request, user)
 
 
 @router.post("/{schedule_id}/disable")
 async def disable(schedule_id: int, request: Request,
                   user: User = Depends(current_user)) -> dict:
     _require(user)
-    return await _set_enabled(schedule_id, False, request)
+    return await _set_enabled(schedule_id, False, request, user)
 
 
-async def _set_enabled(schedule_id: int, enabled: bool, request: Request) -> dict:
+async def _set_enabled(schedule_id: int, enabled: bool, request: Request, user: User) -> dict:
     sf = request.app.state.session_factory
     t = _table()
     async with sf() as s:
+        existing = (
+            await s.execute(
+                select(t.c.script_id).where(t.c.id == schedule_id)
+            )
+        ).mappings().one_or_none()
+        if existing is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="schedule not found")
+        await require_script_owner(s, int(existing["script_id"]), user)
         await s.execute(update(t).where(t.c.id == schedule_id).values(
             enabled=1 if enabled else 0,
         ))

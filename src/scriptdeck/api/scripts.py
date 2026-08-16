@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+from scriptdeck.api.deps import require_script_owner
 from scriptdeck.api.runs import RunOut, _trigger_run
 from scriptdeck.auth.deps import current_user
 from scriptdeck.auth.users import User
@@ -49,8 +50,12 @@ async def list_endpoint(
     user: User = Depends(current_user),
 ) -> list[ScriptOut]:
     sf = request.app.state.session_factory
+    # Non-admins only see their own scripts. Admins still see everything.
+    user_id_filter: int | None = None if user.role == "admin" else user.id
     async with sf() as s:
-        rows = await script_service.list_scripts(s, language=language, q=q, limit=limit)
+        rows = await script_service.list_scripts(
+            s, language=language, q=q, limit=limit, user_id=user_id_filter,
+        )
     return [ScriptOut(id=r.id, name=r.name, language=r.language,
                       source_path=r.source_path, description=r.description) for r in rows]
 
@@ -66,6 +71,7 @@ async def create(
         row = await script_service.create_script(
             s, name=body.name, language=body.language,
             source_path="scripts/PLACEHOLDER", description=body.description,
+            user_id=user.id,
         )
         script_dir = storage / "scripts" / str(row.id)
         script_dir.mkdir(parents=True, exist_ok=True)
@@ -85,6 +91,7 @@ async def detail(script_id: int, request: Request,
                  user: User = Depends(current_user)) -> ScriptOut:
     sf = request.app.state.session_factory
     async with sf() as s:
+        await require_script_owner(s, script_id, user)
         row = await script_service.get_script(s, script_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="not found")
@@ -99,6 +106,7 @@ async def update(
     _require(user)
     sf = request.app.state.session_factory
     async with sf() as s:
+        await require_script_owner(s, script_id, user)
         await script_service.update_script(
             s, script_id, name=body.name, description=body.description,
         )
@@ -122,6 +130,7 @@ async def remove(script_id: int, request: Request,
     _require(user)
     sf = request.app.state.session_factory
     async with sf() as s:
+        await require_script_owner(s, script_id, user)
         ok = await script_service.delete_script(s, script_id)
         await s.commit()
     if not ok:
@@ -133,6 +142,7 @@ async def remove(script_id: int, request: Request,
 async def get_source(script_id: int, request: Request, user: User = Depends(current_user)):
     sf = request.app.state.session_factory
     async with sf() as s:
+        await require_script_owner(s, script_id, user)
         row = await script_service.get_script(s, script_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="not found")
