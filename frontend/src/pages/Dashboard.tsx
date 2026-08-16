@@ -12,6 +12,15 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/api/client";
 
+type Run = {
+  id: string;
+  script_name: string;
+  status: string;
+  started_at: string;
+  duration: string;
+  exit_code?: number;
+};
+
 export function Dashboard() {
   const { data: scripts = [] } = useQuery({
     queryKey: ["scripts"],
@@ -19,30 +28,30 @@ export function Dashboard() {
   });
   const { data: runs = [] } = useQuery({
     queryKey: ["runs"],
-    queryFn: () => api<unknown[]>("/api/runs"),
+    queryFn: () => api<Run[]>("/api/runs"),
   });
   const { data: schedules = [] } = useQuery({
     queryKey: ["schedules"],
     queryFn: () => api<unknown[]>("/api/schedules"),
   });
 
-  const todayRuns = (runs as any[]).filter((r) => isToday(r.started_at));
-  const failures = (runs as any[]).filter((r) => r.status === "failed").length;
+  const todayRuns = runs.filter((r) => isToday(r.started_at));
+  const failures = runs.filter((r) => r.status === "failed").length;
   const failureRate = todayRuns.length
     ? Math.round((failures / todayRuns.length) * 100)
     : 0;
 
-  const runRows = (runs as any[]).slice(0, 8);
+  const runRows = runs.slice(0, 8);
 
   return (
     <AppShell>
       <div className="space-y-6">
         <h1 className="text-2xl font-semibold">Dashboard</h1>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard title="Total scripts" value={(scripts as any[]).length} />
+          <StatCard title="Total scripts" value={scripts.length} />
           <StatCard
             title="Active schedules"
-            value={(schedules as any[]).filter((s: any) => s.enabled).length}
+            value={schedules.filter((s: any) => s.enabled).length}
           />
           <StatCard title="Runs today" value={todayRuns.length} />
           <StatCard title="Failure rate" value={`${failureRate}%`} />
@@ -71,7 +80,7 @@ export function Dashboard() {
                           r.status === "failed"
                             ? "destructive"
                             : r.status === "success"
-                              ? "secondary"
+                              ? "success"
                               : "secondary"
                         }
                       >

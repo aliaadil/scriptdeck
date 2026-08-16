@@ -27,7 +27,7 @@ export function Scripts() {
   const nav = useNavigate();
   const { data: scripts = [] } = useQuery({
     queryKey: ["scripts"],
-    queryFn: () => api("/api/scripts"),
+    queryFn: () => api<unknown[]>("/api/scripts"),
   });
   const run = useMutation({
     mutationFn: (id: string) => api(`/api/scripts/${id}/run`, { method: "POST", body: JSON.stringify({}) }),
@@ -64,7 +64,7 @@ export function Scripts() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(scripts as any[]).map((s: any) => (
+              {scripts.map((s: any) => (
                 <TableRow key={s.id}>
                   <TableCell>
                     <Link
@@ -108,7 +108,7 @@ export function Scripts() {
                   </TableCell>
                 </TableRow>
               ))}
-              {(scripts as any[]).length === 0 && (
+              {scripts.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={5}>
                     <Empty>

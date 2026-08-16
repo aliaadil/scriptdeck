@@ -140,7 +140,12 @@ export function Settings() {
               />
             </div>
             <Separator />
-            <Button onClick={() => toast.success("System settings saved")}>Save</Button>
+            <div className="space-y-2">
+              <Button disabled>Save</Button>
+              <p className="text-xs text-muted-foreground">
+                System settings are not yet configurable from the UI.
+              </p>
+            </div>
           </CardContent>
         </Card>
 

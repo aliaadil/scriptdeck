@@ -50,7 +50,7 @@ describe("Settings", () => {
     renderWithProviders();
     expect(screen.getByText(/profile/i)).toBeInTheDocument();
     expect(screen.getByText(/security/i)).toBeInTheDocument();
-    expect(screen.getByText(/system/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/system/i).length).toBeGreaterThan(0);
   });
 
   it("renders admin sections (Users, Invite, Audit) for admin user", async () => {

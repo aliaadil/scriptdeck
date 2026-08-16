@@ -1,22 +1,26 @@
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
-const colors: Record<string, string> = {
-  success: "bg-emerald-100 text-emerald-800",
-  failure: "bg-red-100 text-red-800",
-  error: "bg-orange-100 text-orange-800",
-  running: "bg-blue-100 text-blue-800",
-  cancelled: "bg-gray-100 text-gray-800",
+type StatusVariant = "success" | "destructive" | "secondary" | "outline";
+
+const variantByStatus: Record<string, StatusVariant> = {
+  success: "success",
+  failure: "destructive",
+  error: "destructive",
+  running: "secondary",
+  cancelled: "outline",
 };
 
-export function StatusBadge({ status }: { status: string }) {
+export function StatusBadge({
+  status,
+  className,
+}: {
+  status: string;
+  className?: string;
+}) {
   return (
-    <span
-      className={cn(
-        "inline-block rounded px-2 py-0.5 text-xs font-medium",
-        colors[status] ?? "bg-gray-100 text-gray-800",
-      )}
-    >
+    <Badge variant={variantByStatus[status] ?? "outline"} className={cn(className)}>
       {status}
-    </span>
+    </Badge>
   );
 }

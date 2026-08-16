@@ -59,7 +59,7 @@ export function Runs() {
                   <TableCell className="font-mono text-xs">{r.id.slice(0, 8)}</TableCell>
                   <TableCell>{r.script_name}</TableCell>
                   <TableCell>
-                    <Badge variant={r.status === "failed" ? "destructive" : r.status === "success" ? "default" : "secondary"}>
+                    <Badge variant={r.status === "failed" ? "destructive" : r.status === "success" ? "success" : "secondary"}>
                       {r.status}
                     </Badge>
                   </TableCell>
