@@ -1,11 +1,13 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ScriptEdit } from "../ScriptEdit";
 
+const apiMock = vi.fn();
 vi.mock("@/lib/api", () => ({
-  api: vi.fn().mockResolvedValue({ id: "1", name: "test", language: "python", source: "" }),
+  api: (...args: unknown[]) => apiMock(...args),
 }));
 
 vi.mock("@/components/ui/sonner", () => ({
@@ -22,24 +24,107 @@ vi.mock("@/auth/AuthProvider", () => ({
 }));
 
 vi.mock("@monaco-editor/react", () => ({
-  default: () => <div data-testid="monaco-mock" />,
+  default: ({
+    value,
+    onChange,
+  }: {
+    value: string;
+    onChange?: (v: string | undefined) => void;
+  }) => (
+    <textarea
+      data-testid="monaco-mock"
+      value={value}
+      onChange={(e) => onChange?.(e.target.value)}
+    />
+  ),
 }));
 
+function renderNew() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={["/scripts/new"]}>
+        <Routes>
+          <Route path="/scripts/:id" element={<ScriptEdit />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
+function renderExisting() {
+  apiMock.mockResolvedValueOnce({
+    id: "1",
+    name: "test",
+    language: "python",
+    source: "print('hi')",
+    description: "d",
+  });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={["/scripts/1"]}>
+        <Routes>
+          <Route path="/scripts/:id" element={<ScriptEdit />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
 describe("ScriptEdit", () => {
+  beforeEach(() => apiMock.mockReset());
+
   it("renders tabs", async () => {
-    const client = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
-    render(
-      <QueryClientProvider client={client}>
-        <MemoryRouter initialEntries={["/scripts/1"]}>
-          <Routes>
-            <Route path="/scripts/:id" element={<ScriptEdit />} />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>
-    );
+    renderExisting();
     expect(await screen.findByRole("tab", { name: /editor/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /config/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /logs/i })).toBeInTheDocument();
+  });
+
+  it("save for new script sends name + source + language", async () => {
+    apiMock.mockResolvedValueOnce({ id: "42" }); // POST /api/scripts
+    const user = userEvent.setup();
+    renderNew();
+
+    await user.click((await screen.findAllByRole("tab", { name: /config/i }))[0]);
+    const nameInput = await screen.findByLabelText(/name/i);
+    await user.type(nameInput, "my-script");
+
+    await user.click((await screen.findAllByRole("tab", { name: /editor/i }))[0]);
+    const editor = (await screen.findAllByTestId("monaco-mock"))[0];
+    await user.type(editor, "print('hello')");
+
+    await user.click((await screen.findAllByRole("button", { name: /^save$/i }))[0]);
+
+    await waitFor(() =>
+      expect(apiMock.mock.calls.some((c) => c[0] === "/api/scripts" && (c[1] as { method?: string })?.method === "POST")).toBe(true),
+    );
+    const [url, opts] = apiMock.mock.calls.find(
+      (c) => c[0] === "/api/scripts" && (c[1] as { method?: string })?.method === "POST",
+    )!;
+    const body = JSON.parse((opts as { body: string }).body);
+    expect(url).toBe("/api/scripts");
+    expect((opts as { method: string }).method).toBe("POST");
+    expect(body).toMatchObject({
+      name: "my-script",
+      source: "print('hello')",
+      language: "python",
+    });
+  });
+
+  it("accepts a dropped .py file and populates editor", async () => {
+    renderNew();
+
+    const dropZones = await screen.findAllByTestId("script-dropzone");
+    // Pick the visible one (Radix Tabs renders inactive contents but hides them).
+    const visible = dropZones.find((el) => !el.closest('[data-state="inactive"]')) ?? dropZones[0];
+    const file = new File(["print(1)"], "hello.py", { type: "text/x-python" });
+    fireEvent.drop(visible, { dataTransfer: { files: [file] } });
+
+    const editors = await screen.findAllByTestId("monaco-mock");
+    await waitFor(() =>
+      expect(editors.some((e) => (e as HTMLTextAreaElement).value === "print(1)")).toBe(true),
+    );
   });
 });
