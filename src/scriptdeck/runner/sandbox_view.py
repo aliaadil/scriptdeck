@@ -62,3 +62,27 @@ class SandboxView:
     """What a LanguageRunner needs visible inside the sandbox."""
     binds: list[BindMount] = field(default_factory=list)
     env_overrides: dict[str, str] = field(default_factory=dict)
+
+
+def build_bind_plan(user_root: Path, view: SandboxView) -> list[BindMount]:
+    """Materialise the chroot skeleton under `user_root`.
+
+    A bind mount requires its mount point to already exist, and to be of the
+    same kind as the source: a directory source needs a directory target, a
+    file source needs its parent directory (the file target itself is created
+    by the mount at bind time). So for each bind we create the leaf directory
+    when the host path is a directory, and otherwise only the parent.
+
+    Also ensures the standard skeleton dirs are present. Returns the view's
+    binds unchanged.
+    """
+    for bm in view.binds:
+        target = user_root / bm.jail.lstrip("/")
+        if bm.host.is_dir():
+            target.mkdir(parents=True, exist_ok=True)
+        else:
+            target.parent.mkdir(parents=True, exist_ok=True)
+    for d in ("bin", "usr", "lib", "etc", "tmp", "scripts", "envs",
+              "venvs", "node_modules", "logs"):
+        (user_root / d).mkdir(parents=True, exist_ok=True)
+    return list(view.binds)

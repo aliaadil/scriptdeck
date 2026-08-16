@@ -5,6 +5,7 @@ from pathlib import Path
 from scriptdeck.runner.sandbox_view import (
     BindMount,
     SandboxView,
+    build_bind_plan,
     scrub_env,
     WHITELIST,
 )
@@ -49,3 +50,29 @@ def test_bind_mount_construction():
     bm = BindMount(host=Path("/usr/bin/python3"), jail="/usr/bin/python3", readonly=True)
     assert bm.host == Path("/usr/bin/python3")
     assert bm.readonly is True
+
+
+def test_build_bind_plan_resolves_jail_paths(tmp_path):
+    user_root = tmp_path / "user1"
+    view = SandboxView(binds=[
+        BindMount(host=Path("/usr/bin/python3"), jail="/usr/bin/python3"),
+        BindMount(host=Path("/usr/lib"), jail="/usr/lib"),
+    ])
+    plan = build_bind_plan(user_root, view)
+    assert plan[0].host == Path("/usr/bin/python3")
+    assert plan[0].jail == "/usr/bin/python3"
+    assert (user_root / "usr/bin/python3").parent.exists()
+    assert (user_root / "usr/lib").exists()
+
+
+def test_build_bind_plan_creates_chroot_skeleton(tmp_path):
+    user_root = tmp_path / "user2"
+    view = SandboxView(binds=[
+        BindMount(host=Path("/bin"), jail="/bin"),
+        BindMount(host=Path("/usr"), jail="/usr"),
+        BindMount(host=Path("/lib"), jail="/lib"),
+        BindMount(host=Path("/etc"), jail="/etc"),
+    ])
+    build_bind_plan(user_root, view)
+    for d in ("bin", "usr", "lib", "etc", "tmp"):
+        assert (user_root / d).is_dir()
