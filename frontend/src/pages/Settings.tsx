@@ -1,122 +1,295 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
+import { useAuth } from "@/auth/AuthProvider";
 import {
-  changeRole, createInvite, deleteUser, listAudit, listUsers,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { toast } from "@/components/ui/sonner";
+import {
+  changeRole,
+  createInvite,
+  deleteUser,
+  listAudit,
+  listUsers,
 } from "@/api/admin";
 
-export function Settings() {
-  const qc = useQueryClient();
-  const { data: users } = useQuery({ queryKey: ["users"], queryFn: listUsers });
-  const { data: audit } = useQuery({ queryKey: ["audit"], queryFn: () => listAudit() });
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState<"admin" | "editor" | "viewer">("viewer");
-  const [inviteToken, setInviteToken] = useState<string | null>(null);
+const ROLES = ["admin", "editor", "viewer"] as const;
 
-  const invite = useMutation({
-    mutationFn: () => createInvite(email, role),
-    onSuccess: (r) => setInviteToken(r.token),
+export function Settings() {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const isAdmin = user?.role === "admin";
+
+  const [instanceName, setInstanceName] = useState("ScriptDeck");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<"admin" | "editor" | "viewer">("editor");
+  const [lastInviteToken, setLastInviteToken] = useState<string | null>(null);
+
+  const usersQuery = useQuery({
+    queryKey: ["users"],
+    queryFn: listUsers,
+    enabled: isAdmin,
   });
-  const del = useMutation({
-    mutationFn: deleteUser,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
+  const auditQuery = useQuery({
+    queryKey: ["audit"],
+    queryFn: () => listAudit(),
+    enabled: isAdmin,
   });
-  const roleMut = useMutation({
-    mutationFn: (args: { id: number; role: "admin" | "editor" | "viewer" }) =>
-      changeRole(args.id, args.role),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
+
+  const createInviteMut = useMutation({
+    mutationFn: () => createInvite(inviteEmail, inviteRole),
+    onSuccess: (res) => {
+      setLastInviteToken(res.token);
+      setInviteEmail("");
+      toast.success("Invite created");
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const deleteUserMut = useMutation({
+    mutationFn: (id: number) => deleteUser(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["users"] });
+      toast.success("User deleted");
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const changeRoleMut = useMutation({
+    mutationFn: ({ id, role }: { id: number; role: "admin" | "editor" | "viewer" }) =>
+      changeRole(id, role),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["users"] });
+      toast.success("Role updated");
+    },
+    onError: (e) => toast.error((e as Error).message),
   });
 
   return (
     <AppShell>
-      <div className="mx-auto max-w-5xl p-6">
-        <h1 className="mb-6 text-2xl font-semibold">Settings</h1>
+      <div className="space-y-6">
+        <h1 className="text-2xl font-semibold">Settings</h1>
 
-        <section className="mb-8">
-          <h2 className="mb-3 text-lg font-semibold">Users</h2>
-          <table className="w-full text-sm">
-            <thead className="border-b text-left text-muted-foreground">
-              <tr><th className="py-2">Email</th><th>Role</th><th></th></tr>
-            </thead>
-            <tbody>
-              {users?.map((u) => (
-                <tr key={u.id} className="border-b">
-                  <td className="py-2">{u.email}</td>
-                  <td>
-                    <select
-                      value={u.role}
-                      onChange={(e) => roleMut.mutate({ id: u.id, role: e.target.value as "admin" | "editor" | "viewer" })}
-                      className="rounded border px-2 py-1 text-sm"
-                    >
-                      <option value="admin">admin</option>
-                      <option value="editor">editor</option>
-                      <option value="viewer">viewer</option>
-                    </select>
-                  </td>
-                  <td className="text-right">
-                    <button onClick={() => del.mutate(u.id)} className="text-xs text-destructive">
-                      delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <form
-            onSubmit={(e) => { e.preventDefault(); invite.mutate(); }}
-            className="mt-4 flex gap-2"
-          >
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="email"
-              className="flex-1 rounded border px-3 py-1 text-sm"
-            />
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value as "admin" | "editor" | "viewer")}
-              className="rounded border px-2 py-1 text-sm"
-            >
-              <option value="viewer">viewer</option>
-              <option value="editor">editor</option>
-              <option value="admin">admin</option>
-            </select>
-            <button
-              type="submit"
-              disabled={invite.isPending}
-              className="rounded bg-primary px-3 py-1 text-sm text-primary-foreground"
-            >
-              Invite
-            </button>
-          </form>
-          {inviteToken && (
-            <div className="mt-2 rounded border bg-muted p-2 text-xs">
-              Invite token (copy now, shown once): <code>{inviteToken}</code>
+        <Card>
+          <CardHeader>
+            <CardTitle>Profile</CardTitle>
+            <CardDescription>Your account details.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input id="email" value={user?.email ?? ""} disabled />
             </div>
-          )}
-        </section>
+            <div className="space-y-2">
+              <Label htmlFor="name">Display name</Label>
+              <Input id="name" placeholder="Your name" />
+            </div>
+          </CardContent>
+        </Card>
 
-        <section>
-          <h2 className="mb-3 text-lg font-semibold">Audit log</h2>
-          <table className="w-full text-sm">
-            <thead className="border-b text-left text-muted-foreground">
-              <tr><th className="py-2">At</th><th>User</th><th>Action</th><th>Resource</th></tr>
-            </thead>
-            <tbody>
-              {audit?.map((a) => (
-                <tr key={a.id} className="border-b">
-                  <td className="py-2 font-mono text-xs">{a.at}</td>
-                  <td>{a.user_id ?? "—"}</td>
-                  <td>{a.action}</td>
-                  <td>{a.resource_type}#{a.resource_id ?? ""}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
+        <Card>
+          <CardHeader>
+            <CardTitle>Security</CardTitle>
+            <CardDescription>Change your password.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="pw">New password</Label>
+              <Input id="pw" type="password" />
+            </div>
+            <Button>Update password</Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>System</CardTitle>
+            <CardDescription>Instance-level settings.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="instance">Instance name</Label>
+              <Input
+                id="instance"
+                value={instanceName}
+                onChange={(e) => setInstanceName(e.target.value)}
+              />
+            </div>
+            <Separator />
+            <div className="space-y-2">
+              <Button disabled>Save</Button>
+              <p className="text-xs text-muted-foreground">
+                System settings are not yet configurable from the UI.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {isAdmin && (
+          <>
+            <Card>
+              <CardHeader>
+                <CardTitle>Users</CardTitle>
+                <CardDescription>Manage user roles and remove accounts.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead className="w-32 text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(usersQuery.data ?? []).map((u) => (
+                      <TableRow key={u.id}>
+                        <TableCell>{u.email}</TableCell>
+                        <TableCell>
+                          <Select
+                            value={u.role}
+                            onValueChange={(role) =>
+                              changeRoleMut.mutate({
+                                id: u.id,
+                                role: role as "admin" | "editor" | "viewer",
+                              })
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {ROLES.map((r) => (
+                                <SelectItem key={r} value={r}>
+                                  {r}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => deleteUserMut.mutate(u.id)}
+                          >
+                            Delete
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Invite</CardTitle>
+                <CardDescription>Create an invite for a new user.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="invite-email">Email</Label>
+                    <Input
+                      id="invite-email"
+                      type="email"
+                      value={inviteEmail}
+                      onChange={(e) => setInviteEmail(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="invite-role">Role</Label>
+                    <Select
+                      value={inviteRole}
+                      onValueChange={(v) => setInviteRole(v as "admin" | "editor" | "viewer")}
+                    >
+                      <SelectTrigger id="invite-role">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ROLES.map((r) => (
+                          <SelectItem key={r} value={r}>
+                            {r}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <Button
+                  disabled={!inviteEmail || createInviteMut.isPending}
+                  onClick={() => createInviteMut.mutate()}
+                >
+                  Create invite
+                </Button>
+                {lastInviteToken && (
+                  <div className="space-y-2">
+                    <Label>Invite token</Label>
+                    <Input readOnly value={lastInviteToken} />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Audit log</CardTitle>
+                <CardDescription>Recent administrative actions.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>When</TableHead>
+                      <TableHead>Action</TableHead>
+                      <TableHead>Resource</TableHead>
+                      <TableHead>Meta</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(auditQuery.data ?? []).map((a) => (
+                      <TableRow key={a.id}>
+                        <TableCell>{new Date(a.at).toLocaleString()}</TableCell>
+                        <TableCell>{a.action}</TableCell>
+                        <TableCell>
+                          {a.resource_type}
+                          {a.resource_id !== null ? `#${a.resource_id}` : ""}
+                        </TableCell>
+                        <TableCell className="max-w-xs truncate">{a.meta_json}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
     </AppShell>
   );

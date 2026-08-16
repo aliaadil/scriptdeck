@@ -60,9 +60,9 @@ async def run_script(
     script_work = scripts_dir / str(script.id)
     script_work.mkdir(parents=True, exist_ok=True)
     if script.language == "python":
-        work_dir = venvs_dir / str(script.id)
+        work_dir = (venvs_dir / str(script.id)).resolve()
     else:
-        work_dir = node_modules_dir / str(script.id)
+        work_dir = (node_modules_dir / str(script.id)).resolve()
     work_dir.mkdir(parents=True, exist_ok=True)
 
     async with concurrency:

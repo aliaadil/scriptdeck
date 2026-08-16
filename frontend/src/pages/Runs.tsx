@@ -1,55 +1,76 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useState } from "react";
+import { api } from "@/lib/api";
+import { Card } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AppShell } from "@/components/AppShell";
-import { StatusBadge } from "@/components/StatusBadge";
-import { listRuns } from "@/api/runs";
 
 export function Runs() {
-  const [status, setStatus] = useState<string>("");
-  const { data: runs } = useQuery({
+  const nav = useNavigate();
+  const [status, setStatus] = useState<string>("all");
+  const { data: runs = [] } = useQuery({
     queryKey: ["runs", status],
-    queryFn: () => listRuns(status ? { status } : undefined),
+    queryFn: () => api(status === "all" ? "/runs" : `/runs?status=${status}`),
     refetchInterval: 5000,
   });
-
   return (
     <AppShell>
-      <div className="mx-auto max-w-5xl p-6">
-        <div className="mb-4 flex items-center justify-between">
-          <h1 className="text-2xl font-semibold">Runs</h1>
-          <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-            className="rounded border px-3 py-1 text-sm"
-          >
-            <option value="">all</option>
-            <option value="running">running</option>
-            <option value="success">success</option>
-            <option value="failure">failure</option>
-            <option value="error">error</option>
-            <option value="cancelled">cancelled</option>
-          </select>
+      <div className="mx-auto max-w-6xl space-y-6 p-6">
+        <h1 className="text-2xl font-semibold">Runs</h1>
+        <div className="flex gap-3">
+          <Select value={status} onValueChange={setStatus}>
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="success">Success</SelectItem>
+              <SelectItem value="failed">Failed</SelectItem>
+              <SelectItem value="running">Running</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-        <table className="w-full text-sm">
-          <thead className="border-b text-left text-muted-foreground">
-            <tr>
-              <th className="py-2">ID</th><th>Script</th><th>Status</th><th>Started</th>
-            </tr>
-          </thead>
-          <tbody>
-            {runs?.map((r) => (
-              <tr key={r.id} className="border-b">
-                <td className="py-2">
-                  <Link to={`/runs/${r.id}`} className="hover:underline">#{r.id}</Link>
-                </td>
-                <td>{r.script_id}</td>
-                <td><StatusBadge status={r.status} /></td>
-                <td className="text-muted-foreground">{r.started_at}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Run</TableHead>
+                <TableHead>Script</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Started</TableHead>
+                <TableHead>Duration</TableHead>
+                <TableHead>Exit</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {(runs as any[]).map((r: any) => (
+                <TableRow
+                  key={r.id}
+                  tabIndex={0}
+                  onClick={() => nav(`/runs/${r.id}`)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") nav(`/runs/${r.id}`);
+                  }}
+                  className="cursor-pointer hover:bg-muted/50"
+                >
+                  <TableCell className="font-mono text-xs">{r.id.slice(0, 8)}</TableCell>
+                  <TableCell>{r.script_name}</TableCell>
+                  <TableCell>
+                    <Badge variant={r.status === "failed" ? "destructive" : r.status === "success" ? "success" : "secondary"}>
+                      {r.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{new Date(r.started_at).toLocaleString()}</TableCell>
+                  <TableCell>{r.duration}</TableCell>
+                  <TableCell>{r.exit_code}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
       </div>
     </AppShell>
   );

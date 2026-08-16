@@ -1,61 +1,138 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
 import { AppShell } from "@/components/AppShell";
-import { StatusBadge } from "@/components/StatusBadge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { api } from "@/api/client";
 
-type Stats = {
-  total_scripts: number;
-  total_runs_24h: number;
-  success_rate_24h: number;
-  running_now: number;
-  recent_runs: Array<{ id: number; script_id: number; status: string; started_at: string }>;
+type Run = {
+  id: string;
+  script_name: string;
+  status: string;
+  started_at: string;
+  duration: string;
+  exit_code?: number;
 };
 
 export function Dashboard() {
-  const { data } = useQuery({
-    queryKey: ["stats"],
-    queryFn: () => api<Stats>("/api/stats"),
-    refetchInterval: 5000,
+  const { data: scripts = [] } = useQuery({
+    queryKey: ["scripts"],
+    queryFn: () => api<unknown[]>("/api/scripts"),
   });
+  const { data: runs = [] } = useQuery({
+    queryKey: ["runs"],
+    queryFn: () => api<Run[]>("/api/runs"),
+  });
+  const { data: schedules = [] } = useQuery({
+    queryKey: ["schedules"],
+    queryFn: () => api<unknown[]>("/api/schedules"),
+  });
+
+  const todayRuns = runs.filter((r) => isToday(r.started_at));
+  const failures = runs.filter((r) => r.status === "failed").length;
+  const failureRate = todayRuns.length
+    ? Math.round((failures / todayRuns.length) * 100)
+    : 0;
+
+  const runRows = runs.slice(0, 8);
 
   return (
     <AppShell>
-      <div className="mx-auto max-w-5xl p-6">
-        <h1 className="mb-6 text-2xl font-semibold">Dashboard</h1>
-        <div className="mb-8 grid grid-cols-4 gap-4">
-          <Card label="Scripts" value={data?.total_scripts ?? "—"} />
-          <Card label="Runs (24h)" value={data?.total_runs_24h ?? "—"} />
-          <Card label="Success rate (24h)" value={
-            data ? `${Math.round(data.success_rate_24h * 100)}%` : "—"
-          } />
-          <Card label="Running now" value={data?.running_now ?? "—"} />
+      <div className="space-y-6">
+        <h1 className="text-2xl font-semibold">Dashboard</h1>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard title="Total scripts" value={scripts.length} />
+          <StatCard
+            title="Active schedules"
+            value={schedules.filter((s: any) => s.enabled).length}
+          />
+          <StatCard title="Runs today" value={todayRuns.length} />
+          <StatCard title="Failure rate" value={`${failureRate}%`} />
         </div>
-        <h2 className="mb-3 text-lg font-semibold">Recent runs</h2>
-        <table className="w-full text-sm">
-          <tbody>
-            {data?.recent_runs.map((r) => (
-              <tr key={r.id} className="border-b">
-                <td className="py-2">
-                  <Link to={`/runs/${r.id}`} className="hover:underline">#{r.id}</Link>
-                </td>
-                <td>script {r.script_id}</td>
-                <td><StatusBadge status={r.status} /></td>
-                <td className="text-muted-foreground">{r.started_at}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent runs</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Script</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Started</TableHead>
+                  <TableHead>Duration</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {runRows.map((r: any) => (
+                  <TableRow key={r.id}>
+                    <TableCell>{r.script_name}</TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={
+                          r.status === "failed"
+                            ? "destructive"
+                            : r.status === "success"
+                              ? "success"
+                              : "secondary"
+                        }
+                      >
+                        {r.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {new Date(r.started_at).toLocaleString()}
+                    </TableCell>
+                    <TableCell>{r.duration}</TableCell>
+                  </TableRow>
+                ))}
+                {runRows.length === 0 && (
+                  <TableRow>
+                    <TableCell
+                      colSpan={4}
+                      className="text-center text-muted-foreground"
+                    >
+                      No runs yet.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       </div>
     </AppShell>
   );
 }
 
-function Card({ label, value }: { label: string; value: string | number }) {
+function StatCard({ title, value }: { title: string; value: number | string }) {
   return (
-    <div className="rounded-lg border bg-background p-4">
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="mt-1 text-2xl font-semibold">{value}</div>
-    </div>
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium text-muted-foreground">
+          {title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-semibold">{value}</div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function isToday(iso: string) {
+  const d = new Date(iso);
+  const now = new Date();
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
   );
 }
