@@ -14,6 +14,7 @@ from scriptdeck.services.run_service import (
     create_run,
     finalize_run,
     has_active_run,
+    pick_due_retries,
 )
 from scriptdeck.services.schedule_service import advance, advance_next_run, list_due
 
@@ -128,6 +129,38 @@ async def _tick(
             run_id, _ = await create_run(s, script_id=sid, schedule_id=row["id"])
             await s.commit()
 
+            script = Script(
+                id=sid,
+                user_id=row["user_id"],
+                name=row["name"],
+                language=row["language"],
+                source_path=storage_dir / row["source_path"],
+                requirements=[],
+            )
+            _schedule(
+                app=app,
+                run_id=run_id,
+                script=script,
+                env_service=env_service,
+                log_broker=log_broker,
+                concurrency=concurrency,
+                storage_dir=storage_dir,
+                session_factory=session_factory,
+            )
+
+        # ---- Phase 2: due retries (pending_retry -> running) ----
+        retries = await pick_due_retries(s, now)
+        for row in retries:
+            sid = row["script_id"]
+            # If a non-retry run is already active on this script, defer the
+            # retry — leave status='pending_retry' for the next tick.
+            if await has_active_run(s, sid):
+                continue
+            run_id = row["id"]
+            await s.execute(
+                update(_table()).where(_table().c.id == run_id).values(status="running")
+            )
+            await s.commit()
             script = Script(
                 id=sid,
                 user_id=row["user_id"],

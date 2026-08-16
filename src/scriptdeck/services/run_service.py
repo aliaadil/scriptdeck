@@ -81,6 +81,32 @@ async def promote_oldest_pending(
     return run_id
 
 
+async def pick_due_retries(session: AsyncSession, now: datetime) -> list[dict]:
+    """Return run rows with status='pending_retry' and next_attempt_at <= now.
+
+    Joins scripts so the caller can dispatch using the script's name, language,
+    and source_path without an extra round trip.
+    """
+    from scriptdeck.db.models import scripts
+    t = _table()
+    stmt = (
+        select(
+            t,
+            scripts.c.name,
+            scripts.c.language,
+            scripts.c.source_path,
+            scripts.c.user_id,
+        )
+        .where(
+            t.c.status == "pending_retry",
+            t.c.next_attempt_at <= now.isoformat(),
+        )
+        .join(scripts, t.c.script_id == scripts.c.id)
+    )
+    rows = (await session.execute(stmt)).mappings().all()
+    return [dict(r) for r in rows]
+
+
 async def finalize_run(
     session: AsyncSession, *, run_id: int, exit_code: int, status: str
 ) -> None:
