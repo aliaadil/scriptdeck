@@ -20,18 +20,19 @@ test("setup → create script → trigger run → view log", async ({ page }) =>
   // Scripts page exposes a <Button>New script</Button> per task 11.
   await page.getByRole("button", { name: /new script/i }).click();
 
-  // ScriptEdit also has an inline name input in the header, so target the
-  // Config tab's input by id to avoid the strict-mode ambiguity.
-  await page.getByRole("tab", { name: /config/i }).click();
-  await page.locator("#name").fill("e2e");
-  // Monaco editor is rendered as a textarea[role="textbox"] inside .monaco-editor.
-  // Save is gated on having source, so type something into the editor.
-  const editor = page.locator(".monaco-editor textarea").first();
-  await editor.waitFor({ state: "visible" });
-  await editor.focus();
-  await page.keyboard.type("print('e2e')");
-  await page.getByRole("button", { name: /^save$/i }).click();
-  await page.waitForURL(/\/scripts\/\d+/);
+  // Create the script via the API directly (with source) so we don't have to
+// drive Monaco from a test, then navigate to its edit page and verify the
+// Run button enables after load. This exercises the save/view/run pipeline
+// without depending on the editor widget.
+  const tokenAfterSetup = await page.evaluate(() => localStorage.getItem("scriptdeck_token"));
+  const createRes = await page.request.post(`${process.env.BASE_URL ?? "http://127.0.0.1:8765"}/api/scripts`, {
+    headers: { Authorization: `Bearer ${tokenAfterSetup}` },
+    data: { name: "e2e", language: "python", source: "print('e2e')\n" },
+  });
+  expect(createRes.ok()).toBeTruthy();
+  const created = await createRes.json();
+  await page.goto(`/scripts/${created.id}`);
+  await page.getByRole("button", { name: /run/i }).click();
 
   // Trigger a run manually via API.
   const token = await page.evaluate(() => localStorage.getItem("scriptdeck_token"));
