@@ -150,13 +150,30 @@ it in the repository. Restart or redeploy the service after changing it.
 ```
 .
 ├── scriptdeck.db                # ← backup this one file
-├── storage/
-│   ├── scripts/<id>/<file>      # source uploaded per script
-│   ├── envs/<id>/               # per-script venv (when runner ships)
-│   └── logs/<run_id>.log        # captured stdout/stderr per run
+└── storage/
+    ├── users/<user_id>/
+    │   ├── scripts/<id>/<file>      # source uploaded per script
+    │   ├── envs/<id>/.env.encrypted # AES-GCM encrypted
+    │   ├── venvs/<id>/.venv/...     # per-script Python venv
+    │   ├── node_modules/<id>/...    # per-script Node deps
+    │   └── logs/<run_id>.log        # captured stdout/stderr
+    └── locks/<id>.lock
 ```
 
 Backing up `scriptdeck.db` plus `storage/` is a complete disaster-recovery snapshot.
+
+## Security model
+
+When `SCRIPTDECK_SANDBOX_ENABLED=true`, every script runs in a private mount
+namespace chrooted into its user's subtree. Other users' files are not
+mounted and therefore `open('/storage/users/<other>/...')` returns `ENOENT`.
+Env vars are scrubbed to a small whitelist plus the script's own decrypted
+env. The parent process's `os.environ` (which contains `SCRIPTDECK_JWT_SECRET`
+and `SCRIPTDECK_ENV_ENCRYPTION_KEY`) is never copied into the child.
+
+This is **good-citizen** isolation: it stops accidental cross-reads and
+defends against a curious user, but does not claim to defeat a knowledgeable
+attacker. For hardening beyond this, see the Roadmap.
 
 ## Development
 

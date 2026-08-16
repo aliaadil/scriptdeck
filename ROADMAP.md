@@ -8,6 +8,9 @@ Single-host dashboard rewrite. See CHANGELOG.md.
 
 ## Future (v2.1+)
 
+- Per-user sandbox (chroot + bind-mount into /storage/users/<uid>/) behind
+  `SCRIPTDECK_SANDBOX_ENABLED` flag. Storage migration CLI
+  `scriptdeck migrate-users`. See `docs/superpowers/specs/2026-08-16-user-isolation-design.md`.
 - Language #3 (Ruby or Go runner).
 - `EnvProvider` protocol for Vault/Infisical integration.
 - Webhook trigger via n8n in front.
