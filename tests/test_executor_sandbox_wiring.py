@@ -13,12 +13,29 @@ from scriptdeck.runner.registry import get_runner
 from scriptdeck.services.log_broker import LogBroker
 
 
-# The sandbox path imports `scriptdeck.runner.sandbox`, which dlopens
-# `libc.so.6` at module load time. macOS does not ship libc.so.6, so the
-# import itself raises OSError there. Skip on non-Linux platforms.
+# The sandbox path requires libc.so.6 + SYS_ADMIN/SYS_CHROOT capabilities.
+# macOS lacks libc.so.6; some Linux CI runners (e.g. GitHub Actions default
+# container) lack the caps. Skip when the runtime can't unshare(CLONE_NEWNS).
+def _can_unshare() -> tuple[bool, str]:
+    try:
+        import ctypes
+        libc = ctypes.CDLL("libc.so.6", use_errno=True)
+    except OSError:
+        return False, "libc.so.6 not loadable"
+    CLONE_NEWNS = 0x00020000
+    unshare = libc.unshare
+    unshare.argtypes = [ctypes.c_int]
+    unshare.restype = ctypes.c_int
+    if unshare(CLONE_NEWNS) != 0:
+        return False, "unshare(CLONE_NEWNS) failed (needs SYS_ADMIN)"
+    return True, ""
+
+
+_RUNNABLE, _REASON = _can_unshare()
+
 pytestmark = pytest.mark.skipif(
-    not sys.platform.startswith("linux"),
-    reason="sandbox requires libc.so.6 (Linux only)",
+    not _RUNNABLE,
+    reason=f"sandbox not runnable: {_REASON}",
 )
 
 

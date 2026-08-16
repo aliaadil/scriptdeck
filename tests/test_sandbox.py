@@ -7,9 +7,33 @@ from pathlib import Path
 import pytest
 
 
+def _sandbox_runnable() -> tuple[bool, str]:
+    """Return (can_run, reason). Skip if libc.so.6 missing or no SYS_ADMIN cap."""
+    if not os.path.exists("/usr/bin/python3"):
+        return False, "python3 not available"
+    try:
+        import ctypes
+        ctypes.CDLL("libc.so.6", use_errno=True)
+    except OSError:
+        return False, "libc.so.6 not loadable (non-Linux host)"
+    try:
+        with open("/proc/self/status") as f:
+            for line in f:
+                if line.startswith("CapEff:"):
+                    # CapEff bit 21 = SYS_ADMIN. Nonzero = some caps present.
+                    if int(line.split()[1], 16) == 0:
+                        return False, "no effective capabilities (needs SYS_ADMIN + SYS_CHROOT)"
+                    return True, ""
+    except OSError:
+        return False, "/proc/self/status unreadable"
+    return False, "CapEff not found in /proc/self/status"
+
+
+_RUNNABLE, _REASON = _sandbox_runnable()
+
 pytestmark = pytest.mark.skipif(
-    not os.path.exists("/usr/bin/python3"),
-    reason="python3 not available",
+    not _RUNNABLE,
+    reason=f"sandbox not runnable: {_REASON}",
 )
 
 
