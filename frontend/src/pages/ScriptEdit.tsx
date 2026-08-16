@@ -125,26 +125,60 @@ export function ScriptEdit() {
   return (
     <AppShell>
       <div className="mx-auto max-w-5xl space-y-6 p-6">
-        <div className="flex items-center justify-between gap-4">
-          <h1 className="truncate text-2xl font-semibold">
-            {isNew ? "New script" : script?.name ?? "Loading…"}
-          </h1>
-          <div className="flex shrink-0 gap-2">
-            <Button
-              variant="outline"
-              onClick={() => run.mutate()}
-              disabled={isNew || !script}
-              title={isNew ? "Save the script first to enable Run" : undefined}
-            >
-              <Play className="mr-2 h-4 w-4" /> Run
-            </Button>
-            <Button onClick={handleSave} disabled={!canSave || save.isPending}>
-              <Save className="mr-2 h-4 w-4" /> {save.isPending ? "Saving…" : "Save"}
-            </Button>
-            {!isNew && (
-              <Button variant="destructive" onClick={() => del.mutate()}>
-                <Trash2 className="mr-2 h-4 w-4" /> Delete
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0 flex-1 space-y-2">
+            <h1 className="truncate text-2xl font-semibold">
+              {isNew ? "New script" : script?.name ?? "Loading…"}
+            </h1>
+            {isNew && (
+              <div className="max-w-md space-y-1">
+                <Label htmlFor="name-inline" className="sr-only">
+                  Name
+                </Label>
+                <Input
+                  id="name-inline"
+                  placeholder="Script name (required to save)"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </div>
+            )}
+          </div>
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => run.mutate()}
+                disabled={isNew || !script}
+                title={isNew ? "Save the script first to enable Run" : undefined}
+              >
+                <Play className="mr-2 h-4 w-4" /> Run
               </Button>
+              <Button
+                onClick={handleSave}
+                disabled={!canSave || save.isPending}
+                title={
+                  isNew && !canSave
+                    ? name.trim().length === 0
+                      ? "Enter a name to save"
+                      : "Add some source code to save"
+                    : undefined
+                }
+              >
+                <Save className="mr-2 h-4 w-4" /> {save.isPending ? "Saving…" : "Save"}
+              </Button>
+              {!isNew && (
+                <Button variant="destructive" onClick={() => del.mutate()}>
+                  <Trash2 className="mr-2 h-4 w-4" /> Delete
+                </Button>
+              )}
+            </div>
+            {isNew && !canSave && (
+              <p className="text-xs text-muted-foreground">
+                {name.trim().length === 0
+                  ? "Enter a name above to enable Save."
+                  : "Add source code to enable Save."}
+              </p>
             )}
           </div>
         </div>

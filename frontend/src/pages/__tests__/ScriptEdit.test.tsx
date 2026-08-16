@@ -87,7 +87,6 @@ describe("ScriptEdit", () => {
     const user = userEvent.setup();
     renderNew();
 
-    await user.click((await screen.findAllByRole("tab", { name: /config/i }))[0]);
     const nameInput = await screen.findByLabelText(/name/i);
     await user.type(nameInput, "my-script");
 
