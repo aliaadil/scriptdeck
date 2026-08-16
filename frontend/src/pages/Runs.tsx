@@ -14,6 +14,7 @@ export function Runs() {
   const { data: runs = [] } = useQuery({
     queryKey: ["runs", status],
     queryFn: () => api(status === "all" ? "/runs" : `/runs?status=${status}`),
+    refetchInterval: 5000,
   });
   return (
     <AppShell>
@@ -46,7 +47,15 @@ export function Runs() {
             </TableHeader>
             <TableBody>
               {(runs as any[]).map((r: any) => (
-                <TableRow key={r.id} onClick={() => nav(`/runs/${r.id}`)} className="cursor-pointer">
+                <TableRow
+                  key={r.id}
+                  tabIndex={0}
+                  onClick={() => nav(`/runs/${r.id}`)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") nav(`/runs/${r.id}`);
+                  }}
+                  className="cursor-pointer hover:bg-muted/50"
+                >
                   <TableCell className="font-mono text-xs">{r.id.slice(0, 8)}</TableCell>
                   <TableCell>{r.script_name}</TableCell>
                   <TableCell>
