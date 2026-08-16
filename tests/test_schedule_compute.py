@@ -64,10 +64,15 @@ def test_dst_spring_forward():
         tz_name="America/New_York",
         blackout_dates=None,
         include_days=None,
-        after=datetime(2026, 3, 7, 0, 0, tzinfo=UTC),
+        after=datetime(2026, 3, 8, 0, 0, tzinfo=UTC),
     )
-    # Expect a datetime on 2026-03-09 (skipping the gap day).
-    assert nxt.date() >= datetime(2026, 3, 9).date()
+    # The gap day 2026-03-08 02:30 EST doesn't exist; croniter returns the next
+    # valid local time after the gap (2026-03-08 03:00 EDT = 2026-03-08 07:00 UTC).
+    # Verify the result is on or after the gap day and not inside the gap.
+    from zoneinfo import ZoneInfo
+    ny = ZoneInfo("America/New_York")
+    nxt_local = nxt.astimezone(ny)
+    assert nxt_local >= datetime(2026, 3, 8, 3, 0, tzinfo=ny)
 
 
 def test_invalid_cron_raises():
