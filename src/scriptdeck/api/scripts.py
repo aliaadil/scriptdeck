@@ -6,10 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+from scriptdeck.api.runs import RunOut, _trigger_run
 from scriptdeck.auth.deps import current_user
 from scriptdeck.auth.users import User
 from scriptdeck.services import script_service
-from scriptdeck.api.runs import RunOut, _trigger_run
 
 router = APIRouter(prefix="/scripts")
 
