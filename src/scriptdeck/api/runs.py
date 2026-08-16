@@ -48,6 +48,11 @@ class RunOut(BaseModel):
     ended_at: str | None
     exit_code: int | None
     status: str
+    # Retry-chain identity, so the UI can group a run with its sibling
+    # attempts via GET /api/runs?group=<retry_group>. Defaulted because
+    # _trigger_run builds RunOut by hand for a fresh (attempt 0) run.
+    attempt: int = 0
+    retry_group: str | None = None
 
 
 @router.get("")

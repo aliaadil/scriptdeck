@@ -3,7 +3,11 @@ import { api } from "./client";
 export type Run = {
   id: number; script_id: number; schedule_id: number | null;
   started_at: string; ended_at: string | null; exit_code: number | null; status: string;
+  attempt: number; retry_group: string | null;
 };
+
+export const listRunGroup = (group: string) =>
+  api<Run[]>(`/api/runs?group=${encodeURIComponent(group)}`);
 
 export const listRuns = (params?: { script_id?: number; status?: string }) => {
   const q = new URLSearchParams();

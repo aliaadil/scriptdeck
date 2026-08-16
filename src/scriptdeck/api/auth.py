@@ -33,6 +33,9 @@ class MeOut(BaseModel):
     id: int
     email: str
     role: str
+    # Surfaced so the settings UI can show the saved timezone without a
+    # second round-trip. Written by PATCH /api/users/me.
+    timezone: str = "UTC"
 
 
 class PasswordIn(BaseModel):
@@ -109,7 +112,7 @@ async def logout(request: Request, authorization: str = Header(...)) -> dict:
 
 @router.get("/me")
 async def me(user: User = Depends(current_user)) -> MeOut:
-    return MeOut(id=user.id, email=user.email, role=user.role)
+    return MeOut(id=user.id, email=user.email, role=user.role, timezone=user.timezone)
 
 
 @router.put("/me/password")

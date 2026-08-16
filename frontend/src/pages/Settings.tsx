@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
 import { useAuth } from "@/auth/AuthProvider";
@@ -29,6 +29,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "@/components/ui/sonner";
+import { TimezoneSelect } from "@/components/users/TimezoneSelect";
+import { api } from "@/api/client";
 import {
   changeRole,
   createInvite,
@@ -48,6 +50,26 @@ export function Settings() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "editor" | "viewer">("editor");
   const [lastInviteToken, setLastInviteToken] = useState<string | null>(null);
+  // AuthProvider loads the user once and exposes no refetch, so hold the
+  // timezone locally and treat the PATCH response as the source of truth.
+  const [timezone, setTimezone] = useState(user?.timezone ?? "UTC");
+
+  // `user` is null on first render while /auth/me is in flight; adopt the saved
+  // timezone once it arrives so the select doesn't sit on a stale default.
+  useEffect(() => {
+    if (user?.timezone) setTimezone(user.timezone);
+  }, [user?.timezone]);
+
+  const timezoneMut = useMutation({
+    mutationFn: (tz: string) =>
+      api("/api/users/me", { method: "PATCH", body: JSON.stringify({ timezone: tz }) }),
+    onSuccess: (_data, tz) => {
+      setTimezone(tz);
+      qc.invalidateQueries({ queryKey: ["auth-me"] });
+      toast.success("Timezone updated");
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
 
   const usersQuery = useQuery({
     queryKey: ["users"],
@@ -108,6 +130,23 @@ export function Settings() {
               <Label htmlFor="name">Display name</Label>
               <Input id="name" placeholder="Your name" />
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Preferences</CardTitle>
+            <CardDescription>
+              Your timezone is the default for new schedules.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <Label>Timezone</Label>
+            <TimezoneSelect
+              value={timezone}
+              onChange={(tz) => timezoneMut.mutate(tz)}
+              disabled={timezoneMut.isPending}
+            />
           </CardContent>
         </Card>
 

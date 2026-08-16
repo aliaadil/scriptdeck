@@ -40,8 +40,8 @@ describe("Schedules", () => {
     expect(screen.getByRole("button", { name: /new schedule/i })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: /cron/i })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: /script/i })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /timezone/i })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: /enabled/i })).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: /last run/i })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: /next run/i })).toBeInTheDocument();
   });
 });
