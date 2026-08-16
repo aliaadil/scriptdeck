@@ -1,21 +1,50 @@
-# ScriptDeck
-
-> **Single-host scheduled script runner.** Upload a script, give it a cron or interval, watch runs and their logs land in one SQLite file plus a `storage/` tree. The core service uses the standard library; bcrypt is an optional dependency for HTTP Basic auth. No Docker required.
+# ScriptDeck v2.0
 
 [![CI](https://github.com/aliaadil/scriptdeck/actions/workflows/ci.yml/badge.svg)](https://github.com/aliaadil/scriptdeck/actions/workflows/ci.yml)
-[![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+
+Self-hosted scheduled script runner. Upload Python or Node scripts, attach a
+cron or interval, watch runs and live logs in the dashboard. Single Docker
+container, single SQLite file, multi-user with roles, per-script isolated
+environments, encrypted `.env` files, auto dependency detection.
+
+## Quickstart
+
+```bash
+docker compose up -d
+open http://localhost:8765/dashboard/
+```
+
+First boot redirects to `/setup` to create the first admin.
+
+## Migrate from v1
+
+```bash
+scriptdeck migrate-from-v1 \
+  --v1-db-path=./old/scriptdeck.db \
+  --v1-storage-path=./old/storage \
+  --v2-db-path=./data/scriptdeck.db \
+  --v2-storage-path=./storage
+```
+
+v1.x receives security fixes until 2027-02-14, then archived.
 
 ## Why
 
 Cron + logrotate + ad-hoc shell wrappers work — until you have a dozen jobs that need conflicting Python versions, structured run history, and a record of *what actually ran and when*. ScriptDeck gives you that without dragging in Postgres, Redis, or a workflow engine.
 
-## What ships today
+## What ships in v2.0
 
-- **SQLite-backed persistence** — one file, four tables (`scripts`, `schedules`, `runs`, `logs`), versioned migrations.
-- **Stdlib HTTP JSON API** — manage scripts, schedules, runs, and read log metadata over a single port.
-- **Small dependency surface** — `pip install scriptdeck` and you're done. No FastAPI, no Pydantic, no SQLAlchemy. Install the optional `auth` extra when enabling Basic auth.
-- **Environment-variable config** — `SCRIPTDECK_DB_PATH`, `SCRIPTDECK_STORAGE_DIR`, `SCRIPTDECK_HOST`, `SCRIPTDECK_PORT`. Coolify, systemd, plain shell — all the same.
+- FastAPI + React/Vite SPA in a single Docker image.
+- Multi-user with JWT auth, role-based access (admin/editor/viewer), invite flow.
+- Per-script isolated runtimes: Python via `uv venv`, Node via `node_modules`.
+- Encrypted per-script `.env` files (AES-GCM).
+- Auto dependency detection for Python + Node.
+- Live log streaming via SSE.
+- Cron + interval scheduling with retries.
+- CLI subcommands: `serve`, `doctor`, `backup`, `restore`, `migrate-from-v1`.
+- Full audit log of every mutating action.
 
 ## What's tracked but not yet built
 

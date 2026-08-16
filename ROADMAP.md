@@ -2,6 +2,17 @@
 
 The path from "scaffold on a laptop" to "polished self-hosted product." Each milestone is sized to ship as a single Kanban card, with the worker branching off the current `main` and opening a PR per card. As cards land, the merge target moves: v0.7 was developed and merged first on its own branch because the dependency chain (`runs.log_path`, the runner status field) was needed by v0.5; subsequent cards stack on top.
 
+## v2.0 — Released 2026-08-15
+
+Single-host dashboard rewrite. See CHANGELOG.md.
+
+## Future (v2.1+)
+
+- Language #3 (Ruby or Go runner).
+- `EnvProvider` protocol for Vault/Infisical integration.
+- Webhook trigger via n8n in front.
+- Argon2 parameter tuning from perf data.
+
 ## v0.1 — Scaffold (shipped)
 
 - SQLite schema with four tables and versioned migrations

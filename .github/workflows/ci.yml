@@ -1,37 +1,79 @@
 name: CI
-
 on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
 
 jobs:
-  test:
+  backend:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
-
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Install uv
+        run: pip install uv
+      - run: uv sync --extra dev
+      - run: uv run ruff check src/
+      - run: uv run mypy src/
+      - run: uv run pytest
 
-      - name: Install package
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - working-directory: frontend
         run: |
-          python -m pip install --upgrade pip
-          pip install -e '.[auth]'
+          npm ci
+          npm run build
+          npm run lint
 
-      - name: Install test deps
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: pip install uv
+      - run: uv sync --extra dev
+      - name: Generate AES-GCM key
+        id: aesgcm-key
         run: |
-          pip install pytest ruff uv
-
-      - name: Lint
-        run: ruff check src/ tests/
-
-      - name: Test
-        run: pytest -v
+          KEY=$(uv run python -c 'import os, base64; print(base64.b64encode(os.urandom(32)).decode())')
+          echo "key=$KEY" >> $GITHUB_OUTPUT
+      - working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+          npx playwright install --with-deps chromium
+      # Build the dist → dashboard_static BEFORE the backend boots. The
+      # FastAPI app reads dashboard_dir.exists() at import time and only
+      # registers the SPA catch-all when the directory is present.
+      - name: Copy frontend dist into dashboard_static
+        run: |
+          mkdir -p src/scriptdeck/dashboard_static
+          cp -r frontend/dist/. src/scriptdeck/dashboard_static/
+          ls -la src/scriptdeck/dashboard_static/
+      - name: Start backend
+        env:
+          SCRIPTDECK_JWT_SECRET: test-secret
+          SCRIPTDECK_ENV_ENCRYPTION_KEY: ${{ steps.aesgcm-key.outputs.key }}
+        run: |
+          uv run python -m scriptdeck serve &
+          curl --retry 10 --retry-delay 2 --retry-connrefused -sf http://127.0.0.1:8765/api/health
+      - working-directory: frontend
+        run: npm run test:e2e
+      - name: Stop backend
+        if: always()
+        run: |
+          pkill -f "python -m scriptdeck serve" || true
+          pkill -f "uvicorn" || true

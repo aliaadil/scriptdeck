@@ -4,6 +4,30 @@ All notable changes to ScriptDeck are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] — 2026-08-15
+
+### Added
+- Full rewrite on FastAPI + React/Vite SPA (single Docker image).
+- Multi-user auth (admin/editor/viewer) with JWT sessions; invite flow.
+- Per-script isolated runtimes: `uv venv` for Python, `node_modules/` for Node.
+- Auto dependency detection (AST scan Python, regex scan Node) with manual override.
+- Encrypted per-script `.env` files (AES-GCM).
+- Full dashboard: Scripts, Schedules, Runs, RunView (live SSE), Settings.
+- `LanguageRunner` protocol with PythonRunner + NodeRunner (extensible to lang #3+).
+- Live log streaming via SSE with heartbeat + terminal `event: end` frame.
+- `scriptdeck doctor` / `scriptdeck backup` / `scriptdeck restore` / `scriptdeck migrate-from-v1`.
+- OpenAPI docs at `/api/docs`.
+- Audit log of every mutating action.
+
+### Changed
+- **BREAKING**: Replaced stdlib HTTP server with FastAPI.
+- **BREAKING**: Basic auth replaced with JWT (HS256, 24h).
+- **BREAKING**: Removed Bash language from v2.0 (Python + Node only).
+- Schema: added `users`, `invites`, `script_envs`, `script_deps`, `audit_log`.
+
+### Removed
+- `SCRIPTDECK_BASIC_AUTH` env var (use `SCRIPTDECK_JWT_SECRET` + `/api/auth/login`).
+
 ## [0.4.0] — 2026-08-08
 
 ### Added
