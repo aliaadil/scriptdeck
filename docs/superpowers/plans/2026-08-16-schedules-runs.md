@@ -810,9 +810,27 @@ async def test_overlap_queue_creates_pending_then_drops(tmp_path):
 Run: `pytest tests/test_scheduler_tick_v2.py -v`
 Expected: FAIL — current `_tick` always uses `status='error'` on overlap (old path).
 
-- [ ] **Step 3: Extend `run_service.py` with pending helpers**
+- [ ] **Step 3: Extend `run_service.py` with pending helpers and extend `list_due`**
 
-Append to `src/scriptdeck/services/run_service.py`:
+First, extend `list_due` in `src/scriptdeck/services/schedule_service.py` to include the new schedule columns the tick needs. Replace the SELECT list:
+
+```python
+async def list_due(session: AsyncSession, now: datetime) -> list[dict[str, Any]]:
+    t = _table()
+    s = _scripts()
+    stmt = (
+        select(
+            t, s.c.language, s.c.name, s.c.source_path, s.c.user_id,
+            t.c.overlap_policy, t.c.queue_max,
+        )
+        .where(t.c.enabled == 1, t.c.next_run_at <= now.isoformat())
+        .join(s, t.c.script_id == s.c.id)
+    )
+    rows = (await session.execute(stmt)).mappings().all()
+    return [dict(r) for r in rows]
+```
+
+Then append to `src/scriptdeck/services/run_service.py`:
 
 ```python
 async def count_pending(session: AsyncSession, script_id: int) -> int:
@@ -1184,33 +1202,7 @@ In `src/scriptdeck/runner/executor.py`, at the end of `_execute_and_finalize` (a
             )
 ```
 
-Refactor the helper in `run_service.py`:
-
-```python
-async def promote_oldest_pending(
-    session: AsyncSession, *, script_id: int, session_factory=None
-) -> int | None:
-    """Atomically flip the oldest pending run to running; return its id or None."""
-    t = _table()
-    row = (
-        await session.execute(
-            select(t.c.id)
-            .where(t.c.script_id == script_id, t.c.status == "pending")
-            .order_by(t.c.started_at)
-            .limit(1)
-        )
-    ).first()
-    if row is None:
-        return None
-    run_id = int(row[0])
-    await session.execute(
-        update(t).where(t.c.id == run_id).values(status="running")
-    )
-    await session.commit()
-    return run_id
-```
-
-(Adjust the call signature from Task 4: now keyword-only with `script_id`. The Task 4 test still passes because both signatures accept positional/keyword `script_id`.)
+The `promote_oldest_pending` helper was added in Task 4 with signature `(session, script_id)` — no changes needed here.
 
 - [ ] **Step 3: Add `last_gc_at` initialization in `app.py`**
 
