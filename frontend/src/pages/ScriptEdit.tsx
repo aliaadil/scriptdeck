@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Editor from "@monaco-editor/react";
@@ -48,6 +49,16 @@ export function ScriptEdit() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+
+  useEffect(() => {
+    if (script) {
+      setName(script.name ?? "");
+      setDescription(script.description ?? "");
+    }
+  }, [script]);
+
   return (
     <AppShell>
       <div className="mx-auto max-w-5xl space-y-6 p-6">
@@ -57,7 +68,7 @@ export function ScriptEdit() {
             <Button variant="outline" onClick={() => run.mutate()} disabled={isNew}>
               <Play className="mr-2 h-4 w-4" /> Run
             </Button>
-            <Button onClick={() => save.mutate(script)} disabled={!script}>
+            <Button onClick={() => save.mutate({ ...script, name, description })} disabled={!script && !isNew}>
               <Save className="mr-2 h-4 w-4" /> Save
             </Button>
             {!isNew && (
@@ -91,11 +102,11 @@ export function ScriptEdit() {
               <CardContent className="space-y-4 pt-6">
                 <div className="space-y-2">
                   <Label htmlFor="name">Name</Label>
-                  <Input id="name" defaultValue={script?.name} />
+                  <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="desc">Description</Label>
-                  <Textarea id="desc" defaultValue={script?.description} />
+                  <Textarea id="desc" value={description} onChange={(e) => setDescription(e.target.value)} />
                 </div>
               </CardContent>
             </Card>
