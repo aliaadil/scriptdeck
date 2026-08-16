@@ -15,6 +15,7 @@ from scriptdeck.services.run_service import (
     finalize_run,
     has_active_run,
     pick_due_retries,
+    promote_oldest_pending,
 )
 from scriptdeck.services.schedule_service import advance, advance_next_run, list_due
 
@@ -180,6 +181,21 @@ async def _tick(
                 session_factory=session_factory,
             )
 
+        # ---- Phase 3: retention GC (idempotent; cheap when nothing to do) ----
+        last_gc = getattr(app.state, "last_gc_at", None) if app is not None else None
+        gc_due = (
+            last_gc is None
+            or (now - last_gc).total_seconds() > settings.gc_interval_seconds
+        )
+        if gc_due:
+            from scriptdeck.services.retention import gc_logs
+            gc_logs(
+                storage_dir=storage_dir,
+                retention_days=settings.log_retention_days,
+            )
+            if app is not None:
+                app.state.last_gc_at = now
+
 
 def _schedules_table():
     from scriptdeck.db.models import schedules as _schedules
@@ -257,3 +273,26 @@ async def _execute_and_finalize(
     async with session_factory() as s:
         await finalize_run(s, run_id=run_id, exit_code=result.exit_code, status=status)
         await s.commit()
+        # Drain queued runs waiting on this script (overlap=queue policy).
+        try:
+            promoted = await promote_oldest_pending(s, script_id=script.id)
+            if promoted is not None:
+                # Commit the status flip so the background task the
+                # scheduler spawns below sees status='running' from its
+                # own session.
+                await s.commit()
+        except Exception:
+            promoted = None
+        if promoted is not None:
+            # `_schedule` is defined in this module; no import needed and a
+            # self-import would create a circular reference.
+            _schedule(
+                app=None,
+                run_id=promoted,
+                script=script,
+                env_service=env_service,
+                log_broker=log_broker,
+                concurrency=concurrency,
+                storage_dir=storage_dir,
+                session_factory=session_factory,
+            )

@@ -65,6 +65,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
         )
         app.state.scheduler_task = task
+        app.state.last_gc_at = None
         try:
             yield
         finally:
