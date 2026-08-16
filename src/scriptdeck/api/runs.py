@@ -53,6 +53,7 @@ class RunOut(BaseModel):
 @router.get("")
 async def list_endpoint(request: Request, script_id: int | None = None,
                         status_filter: str | None = None, since: str | None = None,
+                        group: str | None = None,
                         limit: int = 50, user: User = Depends(current_user)) -> list[RunOut]:
     sf = request.app.state.session_factory
     t = _runs_table()
@@ -74,6 +75,14 @@ async def list_endpoint(request: Request, script_id: int | None = None,
         stmt = stmt.where(t.c.status == status_filter)
     if since:
         stmt = stmt.where(t.c.started_at >= since)
+    if group is not None:
+        # Retry-group lookup — order attempts ascending so callers see the
+        # chain in order (1, 2, 3, ...) rather than newest-first.
+        stmt = (
+            select(t)
+            .where(t.c.retry_group == group)
+            .order_by(t.c.attempt.asc(), t.c.id.asc())
+        )
     async with sf() as s:
         rows = (await s.execute(stmt)).mappings().all()
     return [RunOut(**dict(r)) for r in rows]

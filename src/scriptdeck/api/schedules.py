@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -9,7 +10,11 @@ from sqlalchemy import delete, insert, select, update
 from scriptdeck.api.deps import require_script_owner
 from scriptdeck.auth.deps import current_user
 from scriptdeck.auth.users import User
-from scriptdeck.services.schedule_service import advance_next_run
+from scriptdeck.services.schedule_service import (
+    ComputeError,
+    advance_next_run,
+    compute_next_run,
+)
 
 router = APIRouter(prefix="/schedules")
 
@@ -188,3 +193,54 @@ async def _set_enabled(schedule_id: int, enabled: bool, request: Request, user: 
         ))
         await s.commit()
     return {"ok": True, "enabled": enabled}
+
+
+@router.get("/{schedule_id}/next-runs")
+async def next_runs(
+    schedule_id: int,
+    request: Request,
+    limit: int = 5,
+    user: User = Depends(current_user),
+) -> list[str]:
+    """Compute the next `limit` fire times for the given schedule.
+
+    Owner-checked via the schedule's script. Returns ISO 8601 timestamps in
+    UTC, suitable for direct rendering in the UI.
+    """
+    sf = request.app.state.session_factory
+    t = _table()
+    async with sf() as s:
+        sched = (
+            await s.execute(
+                select(
+                    t.c.expression, t.c.timezone, t.c.blackout_dates,
+                    t.c.include_days, t.c.script_id,
+                ).where(t.c.id == schedule_id)
+            )
+        ).mappings().one_or_none()
+    if sched is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="schedule not found")
+    async with sf() as s:
+        await require_script_owner(s, int(sched["script_id"]), user)
+
+    tz_name = sched["timezone"] or "UTC"
+    bo = json.loads(sched["blackout_dates"]) if sched["blackout_dates"] else None
+    inc = json.loads(sched["include_days"]) if sched["include_days"] else None
+
+    fires: list[str] = []
+    cursor = datetime.now(UTC)
+    for _ in range(limit):
+        try:
+            cursor = compute_next_run(
+                cron_expr=sched["expression"],
+                tz_name=tz_name,
+                blackout_dates=bo,
+                include_days=inc,
+                after=cursor,
+            )
+        except ComputeError as exc:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+            ) from exc
+        fires.append(cursor.isoformat())
+    return fires
