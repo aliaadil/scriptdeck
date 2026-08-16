@@ -10,8 +10,10 @@ export function SiteHeader() {
         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
         <Input placeholder="Search…" className="pl-8" />
       </div>
-      <ModeToggle />
-      <UserMenu />
+      <div className="flex items-center gap-1 border-l pl-4">
+        <ModeToggle />
+        <UserMenu />
+      </div>
     </header>
   );
 }
