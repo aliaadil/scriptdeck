@@ -66,7 +66,7 @@ Implementation: `subprocess.Popen(... preexec_fn=_setup_sandbox(user_root, ro_pa
    - `/bin`, `/lib`, `/usr`, `/etc` → RO bind from host. `/etc` restricted to `passwd`, `group`, `resolv.conf`, `ssl/certs`.
    - `/scripts/<sid>/`, `/venvs/<sid>/`, `/node_modules/<sid>/`, `/envs/<sid>/`, `/logs/` → bind from user subtree, RW.
 4. `mount("tmpfs", "/tmp", "tmpfs", 0, "size=64M,mode=1777")` — scratch space.
-5. `os.chroot(user_root)` + `os.chdir("/")`.
+5. `os.chroot(user_root)`. Parent passes `cwd = <user_root>/venvs/<sid>` (or `node_modules/<sid>`); after chroot the child sees that as `/venvs/<sid>`.
 6. Child execs the interpreter (already on PATH via `/usr/bin`).
 
 `preexec_fn` runs in child only; parent retains full host filesystem access for cleanup.
