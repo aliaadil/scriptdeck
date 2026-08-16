@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     storage_dir: str = "storage"
     runner_concurrency: int = 4
     scheduler_interval: int = 5
+    sandbox_enabled: bool = False
     audit_retention_days: int = 90
     log_buffer_lines: int = 200
 
@@ -28,3 +29,14 @@ class Settings(BaseSettings):
     @property
     def storage_dir_path(self) -> Path:
         return Path(self.storage_dir)
+
+
+def get_settings() -> Settings:
+    """Return a fresh Settings instance.
+
+    Intentionally not cached: callers (e.g. `run_script`) may run under
+    tests that patch env vars via `monkeypatch.setenv`, and a process-wide
+    cache would freeze the first observation. In production, Settings() is
+    cheap and is invoked once per request anyway.
+    """
+    return Settings()

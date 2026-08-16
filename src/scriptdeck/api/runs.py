@@ -105,7 +105,7 @@ async def _trigger_run(app, script_id: int, user: User) -> RunOut:
             env_nonce = env_row["nonce"]
         await s.commit()
     runner_script = Script(
-        id=script.id, name=script.name, language=script.language,
+        id=script.id, user_id=script.user_id, name=script.name, language=script.language,
         source_path=(storage / script.source_path).resolve(),
         requirements=deps,
     )

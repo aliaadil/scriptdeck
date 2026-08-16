@@ -80,6 +80,7 @@ async def _tick(
 
             script = Script(
                 id=sid,
+                user_id=row["user_id"],
                 name=row["name"],
                 language=row["language"],
                 source_path=storage_dir / row["source_path"],
