@@ -23,7 +23,15 @@ export function ScriptEdit() {
   const isNew = id === "new";
   const { data: script } = useQuery({
     queryKey: ["script", id],
-    queryFn: () => api<Script>(`/api/scripts/${id}`),
+    queryFn: async () => {
+      const meta = await api<Omit<Script, "source">>(`/api/scripts/${id}`);
+      const token = localStorage.getItem("scriptdeck_token");
+      const srcRes = await fetch(`/api/scripts/${id}/source`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const source = srcRes.ok ? await srcRes.text() : "";
+      return { ...meta, source } as Script;
+    },
     enabled: !isNew,
   });
 

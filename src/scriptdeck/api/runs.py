@@ -106,7 +106,8 @@ async def _trigger_run(app, script_id: int, user: User) -> RunOut:
         await s.commit()
     runner_script = Script(
         id=script.id, name=script.name, language=script.language,
-        source_path=storage / script.source_path, requirements=deps,
+        source_path=(storage / script.source_path).resolve(),
+        requirements=deps,
     )
     _schedule_execution(
         app,

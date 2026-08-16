@@ -57,7 +57,6 @@ function renderExisting() {
     id: "1",
     name: "test",
     language: "python",
-    source: "print('hi')",
     description: "d",
   });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -73,7 +72,23 @@ function renderExisting() {
 }
 
 describe("ScriptEdit", () => {
-  beforeEach(() => apiMock.mockReset());
+  beforeEach(() => {
+    apiMock.mockReset();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : (input as URL).toString();
+        if (url.endsWith("/source")) {
+          return Promise.resolve(new Response("print('hi')", { status: 200 }));
+        }
+        return Promise.resolve(new Response("", { status: 404 }));
+      }) as unknown as typeof fetch,
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("renders tabs", async () => {
     renderExisting();
