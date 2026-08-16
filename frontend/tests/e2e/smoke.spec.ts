@@ -7,17 +7,23 @@ import { test, expect } from "@playwright/test";
 test("setup → create script → trigger run → view log", async ({ page }) => {
   await page.goto("/setup");
 
-  await page.fill('input[type="email"]', "admin@example.com");
-  await page.fill('input[type="password"]', "hunter22pass");
-  await page.click('button[type="submit"]');
+  // shadcn Field + Input: label uses htmlFor; getByLabel matches by accessible name.
+  await page.getByLabel(/email/i).fill("admin@example.com");
+  await page.getByLabel(/password/i).fill("hunter22pass");
+  // SetupPage submit button text is "Create admin".
+  await page.getByRole("button", { name: /create admin/i }).click();
 
   await page.waitForURL("**/dashboard");
   await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
 
   await page.goto("/scripts");
-  await page.getByRole("button", { name: "New script" }).click();
-  await page.fill('input[required]', "e2e");
-  await page.click('button[type="submit"]');
+  // Scripts page exposes a <Button>New script</Button> per task 11.
+  await page.getByRole("button", { name: /new script/i }).click();
+
+  // ScriptEdit keeps the name/description inputs inside the "Config" tab.
+  await page.getByRole("tab", { name: /config/i }).click();
+  await page.getByLabel(/name/i).fill("e2e");
+  await page.getByRole("button", { name: /^save$/i }).click();
   await page.waitForURL(/\/scripts\/\d+/);
 
   // Trigger a run manually via API.
@@ -32,5 +38,6 @@ test("setup → create script → trigger run → view log", async ({ page }) =>
 
   await page.waitForTimeout(3000);
   await page.goto(`/runs/${run.id}`);
+  // RunView shows "Run #{id}" in heading per task 15.
   await expect(page.getByText(/Run #/)).toBeVisible();
 });
