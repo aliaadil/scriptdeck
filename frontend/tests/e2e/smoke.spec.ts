@@ -24,6 +24,12 @@ test("setup → create script → trigger run → view log", async ({ page }) =>
   // Config tab's input by id to avoid the strict-mode ambiguity.
   await page.getByRole("tab", { name: /config/i }).click();
   await page.locator("#name").fill("e2e");
+  // Monaco editor is rendered as a textarea[role="textbox"] inside .monaco-editor.
+  // Save is gated on having source, so type something into the editor.
+  const editor = page.locator(".monaco-editor textarea").first();
+  await editor.waitFor({ state: "visible" });
+  await editor.focus();
+  await page.keyboard.type("print('e2e')");
   await page.getByRole("button", { name: /^save$/i }).click();
   await page.waitForURL(/\/scripts\/\d+/);
 
