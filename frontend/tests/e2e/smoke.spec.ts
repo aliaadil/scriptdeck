@@ -20,9 +20,10 @@ test("setup → create script → trigger run → view log", async ({ page }) =>
   // Scripts page exposes a <Button>New script</Button> per task 11.
   await page.getByRole("button", { name: /new script/i }).click();
 
-  // ScriptEdit keeps the name/description inputs inside the "Config" tab.
+  // ScriptEdit also has an inline name input in the header, so target the
+  // Config tab's input by id to avoid the strict-mode ambiguity.
   await page.getByRole("tab", { name: /config/i }).click();
-  await page.getByLabel(/name/i).fill("e2e");
+  await page.locator("#name").fill("e2e");
   await page.getByRole("button", { name: /^save$/i }).click();
   await page.waitForURL(/\/scripts\/\d+/);
 
