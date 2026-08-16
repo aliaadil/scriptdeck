@@ -65,8 +65,8 @@ class SandboxView:
     env_overrides: dict[str, str] = field(default_factory=dict)
 
 
-def build_bind_plan(user_root: Path, view: SandboxView) -> list[BindMount]:
-    """Materialise the chroot skeleton under `user_root`.
+def _materialise_chroot(user_root: Path, view: SandboxView) -> None:
+    """Create the chroot skeleton under `user_root` for `view`'s binds.
 
     A bind mount requires its mount point to already exist, and to be of the
     same kind as the source: a directory source needs a directory target, a
@@ -74,14 +74,18 @@ def build_bind_plan(user_root: Path, view: SandboxView) -> list[BindMount]:
     by the mount at bind time). So for each bind we create the leaf directory
     when the host path is a directory, and otherwise only the parent.
 
-    Also ensures the standard skeleton dirs are present. Returns the view's
-    binds unchanged.
+    Also ensures the standard skeleton dirs are present.
 
     `jail` is expected to be a hardcoded literal supplied by a LanguageRunner,
     never a per-script or request-supplied value. We still refuse any jail path
     that escapes `user_root` (e.g. via `..`), because this function is what
     materialises the isolation boundary: a traversal here would create — and
     later bind-mount over — directories inside another user's subtree.
+
+    Shared by `build_bind_plan` (used by the scheduler pre-flight to verify
+    the plan) and `_setup_sandbox` (called in the child via preexec_fn before
+    mount(2) and chroot(2)). Keeping the classification in one place prevents
+    the two code paths from drifting.
     """
     root_normalised = Path(os.path.normpath(user_root.absolute()))
     for bm in view.binds:
@@ -91,11 +95,20 @@ def build_bind_plan(user_root: Path, view: SandboxView) -> list[BindMount]:
             raise ValueError(
                 f"bind jail path {bm.jail!r} escapes user_root {user_root}"
             )
+        target.parent.mkdir(parents=True, exist_ok=True)
         if bm.host.is_dir():
             target.mkdir(parents=True, exist_ok=True)
-        else:
-            target.parent.mkdir(parents=True, exist_ok=True)
     for d in ("bin", "usr", "lib", "etc", "tmp", "scripts", "envs",
               "venvs", "node_modules", "logs"):
         (user_root / d).mkdir(parents=True, exist_ok=True)
+
+
+def build_bind_plan(user_root: Path, view: SandboxView) -> list[BindMount]:
+    """Materialise the chroot skeleton and return the view's binds.
+
+    The shared chroot-creation logic lives in `_materialise_chroot`; this
+    wrapper is the public entry point used by the scheduler pre-flight so
+    callers can compute the plan without performing the actual mount(2).
+    """
+    _materialise_chroot(user_root, view)
     return list(view.binds)
