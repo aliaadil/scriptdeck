@@ -10,6 +10,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select, update
 
+from scriptdeck.api.deps import require_script_owner
 from scriptdeck.auth.deps import current_user
 from scriptdeck.auth.users import User
 from scriptdeck.runner.executor import Script, run_script
@@ -58,6 +59,9 @@ async def list_endpoint(request: Request, script_id: int | None = None,
     stmt = select(t).order_by(t.c.id.desc()).limit(limit)
     if script_id:
         stmt = stmt.where(t.c.script_id == script_id)
+        # Enforce ownership when filtering by a specific script_id.
+        async with sf() as s:
+            await require_script_owner(s, script_id, user)
     if status_filter:
         stmt = stmt.where(t.c.status == status_filter)
     if since:
@@ -82,6 +86,7 @@ async def _trigger_run(app, script_id: int, user: User) -> RunOut:
     env_ciphertext: str | None = None
     env_nonce: str | None = None
     async with sf() as s:
+        await require_script_owner(s, script_id, user)
         script = await script_service.get_script(s, script_id)
         if script is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="script not found")
