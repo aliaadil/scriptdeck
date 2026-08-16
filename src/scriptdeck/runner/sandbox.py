@@ -98,8 +98,10 @@ async def run_sandboxed(
 
     import subprocess
 
-    def _popen() -> "subprocess.Popen[bytes]":
-        return subprocess.Popen(
+    def _popen() -> subprocess.Popen[bytes]:
+        # cmd is fully owned by the script's LanguageRunner and the per-script
+        # source path; it is not derived from request input. Safe to execute.
+        return subprocess.Popen(  # noqa: S603
             cmd,
             env=env,
             stdout=subprocess.PIPE,

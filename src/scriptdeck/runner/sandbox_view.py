@@ -7,19 +7,19 @@ overrides.
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
-import os
 
 # Core env vars passed to every sandboxed script. Add to this list only when
 # the variable is genuinely safe to expose to arbitrary user code.
 WHITELIST: dict[str, str] = {
     "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-    "HOME": "/tmp",
+    "HOME": "/tmp",  # noqa: S108 — sandbox chroots to a private subtree, /tmp is a tmpfs inside it
     "LANG": "C.UTF-8",
     "LC_ALL": "C.UTF-8",
     "TZ": "UTC",
-    "TMPDIR": "/tmp",
+    "TMPDIR": "/tmp",  # noqa: S108 — same as HOME; tmpfs is created by the sandbox
 }
 
 # Names that must NEVER reach a sandboxed script, even if a user somehow
