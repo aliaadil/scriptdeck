@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
+from scriptdeck.runner.sandbox_view import SandboxView
+
 
 @runtime_checkable
 class LanguageRunner(Protocol):
@@ -17,3 +19,5 @@ class LanguageRunner(Protocol):
     def build_command(
         self, interpreter: Path, source_path: Path, env: dict[str, str]
     ) -> list[str]: ...
+
+    def sandbox_view(self) -> SandboxView: ...

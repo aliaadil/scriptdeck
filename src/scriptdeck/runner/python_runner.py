@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
+from scriptdeck.runner.sandbox_view import BindMount, SandboxView
+
 
 class PythonRunner:
     name = "python"
@@ -38,6 +40,16 @@ class PythonRunner:
         self, interpreter: Path, source_path: Path, env: dict[str, str]
     ) -> list[str]:
         return [str(interpreter), str(source_path)]
+
+    def sandbox_view(self) -> SandboxView:
+        return SandboxView(binds=[
+            BindMount(host=Path("/usr/bin/python3"), jail="/usr/bin/python3"),
+            BindMount(host=Path("/usr/lib/python3.12"), jail="/usr/lib/python3.12"),
+            BindMount(host=Path("/usr/local/lib/python3.12"), jail="/usr/local/lib/python3.12"),
+            BindMount(host=Path("/etc/ssl"), jail="/etc/ssl"),
+            BindMount(host=Path("/etc/passwd"), jail="/etc/passwd"),
+            BindMount(host=Path("/etc/group"), jail="/etc/group"),
+        ])
 
 
 async def _run(cmd: list[str], cwd: Path | None = None) -> None:
