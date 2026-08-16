@@ -35,8 +35,8 @@ class ScheduleCreate(BaseModel):
     kind: str = Field(pattern="^(cron|interval)$")
     expression: str = Field(min_length=1)
     enabled: bool = True
-    retry_max: int = Field(default=0, ge=0, le=100)
-    retry_backoff: int = Field(default=0, ge=0, le=86400)
+    retry_max: int = 0
+    retry_backoff: int = 0
     timezone: str | None = None
     blackout_dates: list[str] | None = None
     include_days: list[int] | None = None
@@ -87,7 +87,6 @@ class ScheduleOut(BaseModel):
     overlap_policy: str
     queue_max: int
     queue_dropped: int
-    next_runs: list[str] = []
 
 
 def _require(user: User) -> None:
@@ -105,7 +104,7 @@ def _row_to_out(row) -> ScheduleOut:
         retry_max=row["retry_max"], retry_backoff=row["retry_backoff"],
         timezone=row["timezone"], blackout_dates=bo, include_days=inc,
         overlap_policy=row["overlap_policy"], queue_max=row["queue_max"],
-        queue_dropped=row["queue_dropped"], next_runs=[],
+        queue_dropped=row["queue_dropped"],
     )
 
 
