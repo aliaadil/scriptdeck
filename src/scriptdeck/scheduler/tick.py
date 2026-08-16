@@ -14,6 +14,7 @@ from scriptdeck.services.run_service import (
     create_run,
     finalize_run,
     has_active_run,
+    mark_pending_retry,
     pick_due_retries,
     promote_oldest_pending,
 )
@@ -271,6 +272,31 @@ async def _execute_and_finalize(
         status = "error"
         result = type("R", (), {"exit_code": -1})()
     async with session_factory() as s:
+        if status == "failure":
+            from sqlalchemy import select as _select
+            from scriptdeck.db.models import runs as _runs_t, schedules as _sched_t
+            sched_row = (
+                await s.execute(
+                    _select(_sched_t.c.retry_max, _sched_t.c.retry_backoff)
+                    .join(_runs_t, _runs_t.c.schedule_id == _sched_t.c.id)
+                    .where(_runs_t.c.id == run_id)
+                )
+            ).first()
+            attempt_row = (
+                await s.execute(
+                    _select(_runs_t.c.attempt).where(_runs_t.c.id == run_id)
+                )
+            ).first()
+            retry_scheduled = await mark_pending_retry(
+                s,
+                run_id=run_id,
+                attempt=attempt_row[0] if attempt_row else 0,
+                schedule_retry_max=sched_row[0] if sched_row else 0,
+                schedule_retry_backoff=sched_row[1] if sched_row else 0,
+            )
+            if retry_scheduled:
+                await s.commit()
+                return
         await finalize_run(s, run_id=run_id, exit_code=result.exit_code, status=status)
         await s.commit()
         # Drain queued runs waiting on this script (overlap=queue policy).

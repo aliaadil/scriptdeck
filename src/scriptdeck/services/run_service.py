@@ -117,3 +117,31 @@ async def finalize_run(
         .where(t.c.id == run_id)
         .values(ended_at=now, exit_code=exit_code, status=status)
     )
+
+
+async def mark_pending_retry(
+    session: AsyncSession,
+    *,
+    run_id: int,
+    attempt: int,
+    schedule_retry_max: int,
+    schedule_retry_backoff: int,
+) -> bool:
+    """If retries remain, set status=pending_retry + next_attempt_at and return True.
+    Otherwise return False (caller should mark terminal failure)."""
+    from datetime import datetime as _dt, timedelta, timezone
+    t = _table()
+    if attempt >= schedule_retry_max:
+        return False
+    delay = timedelta(seconds=schedule_retry_backoff * (2 ** attempt))
+    next_at = (_dt.now(timezone.utc) + delay).isoformat()
+    await session.execute(
+        update(t)
+        .where(t.c.id == run_id)
+        .values(
+            status="pending_retry",
+            attempt=attempt + 1,
+            next_attempt_at=next_at,
+        )
+    )
+    return True
