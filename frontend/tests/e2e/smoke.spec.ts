@@ -21,9 +21,8 @@ test("setup → create script → trigger run → view log", async ({ page }) =>
   await page.getByRole("button", { name: /new script/i }).click();
 
   // Create the script via the API directly (with source) so we don't have to
-// drive Monaco from a test, then navigate to its edit page and verify the
-// Run button enables after load. This exercises the save/view/run pipeline
-// without depending on the editor widget.
+  // drive Monaco from a test, then drive the UI for Run + view log. Save/
+  // view-source are covered by frontend unit tests.
   const tokenAfterSetup = await page.evaluate(() => localStorage.getItem("scriptdeck_token"));
   const createRes = await page.request.post(`${process.env.BASE_URL ?? "http://127.0.0.1:8765"}/api/scripts`, {
     headers: { Authorization: `Bearer ${tokenAfterSetup}` },
@@ -34,18 +33,15 @@ test("setup → create script → trigger run → view log", async ({ page }) =>
   await page.goto(`/scripts/${created.id}`);
   await page.getByRole("button", { name: /run/i }).click();
 
-  // Trigger a run manually via API.
-  const token = await page.evaluate(() => localStorage.getItem("scriptdeck_token"));
-  const scriptId = Number(page.url().split("/").pop());
-  const runRes = await page.request.post(`${process.env.BASE_URL ?? "http://127.0.0.1:8765"}/api/runs`, {
-    headers: { Authorization: `Bearer ${token}` },
-    data: { script_id: scriptId },
-  });
-  expect(runRes.ok()).toBeTruthy();
-  const run = await runRes.json();
-
+  // The Run click triggers the mutation but the UI only shows a toast and
+  // switches to the Logs tab. Capture the run id from the toast / fetch and
+  // navigate to RunView explicitly so we can assert the log renders.
+  const triggered = await page
+    .waitForResponse((r) => r.url().includes(`/api/scripts/${created.id}/run`) && r.status() === 201, {
+      timeout: 15_000,
+    })
+    .then((r) => r.json());
   await page.waitForTimeout(3000);
-  await page.goto(`/runs/${run.id}`);
-  // RunView shows "Run #{id}" in heading per task 15.
+  await page.goto(`/runs/${triggered.id}`);
   await expect(page.getByText(/Run #/)).toBeVisible();
 });
