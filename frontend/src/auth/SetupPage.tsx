@@ -1,55 +1,71 @@
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { toast } from "@/components/ui/sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { useAuth } from "./AuthProvider";
+import { Brand } from "@/components/brand";
+
+const schema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+});
 
 export function SetupPage() {
   const { setup } = useAuth();
   const nav = useNavigate();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<z.infer<typeof schema>>({
+    resolver: zodResolver(schema),
+  });
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
+  async function onSubmit(values: z.infer<typeof schema>) {
     try {
-      await setup(email, password);
+      await setup(values.email, values.password);
       nav("/dashboard");
     } catch (e) {
       const msg = e instanceof Error ? e.message : JSON.stringify(e);
-      setError(msg);
+      toast.error(msg);
     }
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted">
-      <form onSubmit={onSubmit} className="w-96 rounded-lg border bg-background p-8 shadow-sm">
-        <h1 className="mb-2 text-2xl font-semibold">Welcome</h1>
-        <p className="mb-6 text-sm text-muted-foreground">
-          Create the first admin account.
-        </p>
-        <label className="mb-2 block text-sm font-medium">Email</label>
-        <input
-          type="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="mb-4 w-full rounded border px-3 py-2"
-        />
-        <label className="mb-2 block text-sm font-medium">Password (min 8)</label>
-        <input
-          type="password"
-          required
-          minLength={8}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="mb-4 w-full rounded border px-3 py-2"
-        />
-        {error && <div className="mb-4 text-sm text-destructive">{error}</div>}
-        <button type="submit" className="w-full rounded bg-primary px-4 py-2 text-primary-foreground">
-          Create admin
-        </button>
-      </form>
+    <div className="flex min-h-screen items-center justify-center bg-muted p-4">
+      <Card className="w-full max-w-sm">
+        <CardHeader className="space-y-2 text-center">
+          <div className="flex justify-center">
+            <Brand />
+          </div>
+          <CardTitle>Welcome</CardTitle>
+          <CardDescription>Create the first admin account.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit(onSubmit)}>
+            <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="email">Email</FieldLabel>
+                <Input id="email" type="email" {...register("email")} />
+                {errors.email && <FieldError>{errors.email.message}</FieldError>}
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="password">Password (min 8)</FieldLabel>
+                <Input id="password" type="password" {...register("password")} />
+                {errors.password && <FieldError>{errors.password.message}</FieldError>}
+              </Field>
+              <Button type="submit" disabled={isSubmitting} className="w-full">
+                {isSubmitting ? "Creating…" : "Create admin"}
+              </Button>
+            </FieldGroup>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }
