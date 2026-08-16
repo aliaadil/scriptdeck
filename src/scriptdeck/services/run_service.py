@@ -31,6 +31,17 @@ async def has_active_run(session: AsyncSession, script_id: int) -> bool:
     return (await session.execute(stmt)).first() is not None
 
 
+async def own_script_ids(session: AsyncSession, user_id: int) -> list[int]:
+    """Return the list of script_ids owned by ``user_id``.
+
+    Used by the runs listing endpoint to restrict non-admin users to
+    their own scripts' runs.
+    """
+    from scriptdeck.db.models import scripts as _scripts
+    stmt = select(_scripts.c.id).where(_scripts.c.user_id == user_id)
+    return [int(i) for i in (await session.execute(stmt)).scalars().all()]
+
+
 async def finalize_run(
     session: AsyncSession, *, run_id: int, exit_code: int, status: str
 ) -> None:

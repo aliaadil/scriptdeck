@@ -32,6 +32,29 @@ async def require_script_owner(
     return script.user_id
 
 
+async def require_run_owner(
+    session, run_id: int, current_user: User
+) -> int:
+    """Resolve a run via its underlying script and verify ownership.
+
+    Used by run-id-scoped endpoints (``/runs/{run_id}``,
+    ``/runs/{run_id}/log``, ``/runs/{run_id}/cancel``) where there is no
+    ``script_id`` in the URL — ownership is derived from the joined
+    script row. Returns the owning user_id. Raises 404 if the run or
+    its script does not exist; 403 if the current user is neither the
+    script owner nor an admin.
+    """
+    from sqlalchemy import select
+    from scriptdeck.db.models import runs
+
+    row = (
+        await session.execute(select(runs.c.script_id).where(runs.c.id == run_id))
+    ).mappings().one_or_none()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="run not found")
+    return await require_script_owner(session, int(row["script_id"]), current_user)
+
+
 def _table():
     from scriptdeck.db.models import script_deps
     return script_deps

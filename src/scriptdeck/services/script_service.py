@@ -60,6 +60,7 @@ async def list_scripts(
     language: str | None = None,
     q: str | None = None,
     limit: int = 50,
+    user_id: int | None = None,
 ) -> list[ScriptRow]:
     t = _table()
     stmt = select(t).order_by(t.c.id.desc()).limit(limit)
@@ -67,6 +68,8 @@ async def list_scripts(
         stmt = stmt.where(t.c.language == language)
     if q:
         stmt = stmt.where(t.c.name.like(f"%{q}%"))
+    if user_id is not None:
+        stmt = stmt.where(t.c.user_id == user_id)
     return [ScriptRow(**r) for r in (await session.execute(stmt)).mappings().all()]
 
 

@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select, update
 
-from scriptdeck.api.deps import require_script_owner
+from scriptdeck.api.deps import require_run_owner, require_script_owner
 from scriptdeck.auth.deps import current_user
 from scriptdeck.auth.users import User
 from scriptdeck.runner.executor import Script, run_script
@@ -62,6 +62,14 @@ async def list_endpoint(request: Request, script_id: int | None = None,
         # Enforce ownership when filtering by a specific script_id.
         async with sf() as s:
             await require_script_owner(s, script_id, user)
+    else:
+        # No script_id filter — non-admins see only their own scripts' runs.
+        if user.role != "admin":
+            async with sf() as s:
+                own_script_ids = await run_service.own_script_ids(s, user.id)
+            if not own_script_ids:
+                return []
+            stmt = stmt.where(t.c.script_id.in_(own_script_ids))
     if status_filter:
         stmt = stmt.where(t.c.status == status_filter)
     if since:
@@ -197,6 +205,7 @@ async def detail(run_id: int, request: Request,
     sf = request.app.state.session_factory
     t = _runs_table()
     async with sf() as s:
+        await require_run_owner(s, run_id, user)
         row = (await s.execute(select(t).where(t.c.id == run_id))).mappings().one_or_none()
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="not found")
@@ -206,6 +215,9 @@ async def detail(run_id: int, request: Request,
 @router.get("/{run_id}/log")
 async def log_text(run_id: int, request: Request,
                    user: User = Depends(current_user)):
+    sf = request.app.state.session_factory
+    async with sf() as s:
+        await require_run_owner(s, run_id, user)
     storage = Path(request.app.state.settings.storage_dir)
     log_path = storage / "logs" / f"{run_id}.log"
     if not log_path.exists():
@@ -221,6 +233,11 @@ async def log_stream(
     token: str | None = Query(default=None),
     user: User = Depends(current_user),
 ) -> StreamingResponse:
+    # Authorize before opening the stream so unauthorized callers never
+    # receive a single chunk of another user's logs.
+    sf = request.app.state.session_factory
+    async with sf() as s:
+        await require_run_owner(s, run_id, user)
     broker = request.app.state.log_broker
 
     async def event_gen():
@@ -241,6 +258,12 @@ async def cancel(run_id: int, request: Request,
     t = _runs_table()
     # I4: terminate the live subprocess, if any, so cancel actually kills work
     procs: dict[int, asyncio.subprocess.Process] = request.app.state.active_procs
+    # Authorize ownership before killing anything or mutating DB rows.
+    async with sf() as s:
+        await require_run_owner(s, run_id, user)
+        row = (await s.execute(select(t).where(t.c.id == run_id))).mappings().one_or_none()
+        if row is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="not found")
     proc = procs.get(run_id)
     if proc is not None and proc.returncode is None:
         try:
@@ -248,9 +271,6 @@ async def cancel(run_id: int, request: Request,
         except ProcessLookupError:
             pass
     async with sf() as s:
-        row = (await s.execute(select(t).where(t.c.id == run_id))).mappings().one_or_none()
-        if row is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="not found")
         if row["status"] != "running":
             return {"ok": True, "status": row["status"]}
         await s.execute(update(t).where(t.c.id == run_id).values(status="cancelled"))
