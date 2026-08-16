@@ -1,213 +1,114 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, lazy, Suspense } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import Editor from "@monaco-editor/react";
 import { AppShell } from "@/components/AppShell";
-import { getScript, updateScript } from "@/api/scripts";
-import { detectDeps, getDeps, setDeps } from "@/api/deps";
-import { deleteEnv, getEnv, setEnv } from "@/api/envs";
-
-const MonacoEditor = lazy(() =>
-  import("@monaco-editor/react").then((m) => ({ default: m.default })),
-);
-
-type Tab = "source" | "deps" | "env";
+import { api } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "@/components/ui/sonner";
+import { Save, Play, Trash2 } from "lucide-react";
 
 export function ScriptEdit() {
   const { id } = useParams();
-  const scriptId = Number(id);
-  const [tab, setTab] = useState<Tab>("source");
-
+  const nav = useNavigate();
+  const qc = useQueryClient();
+  const isNew = id === "new";
   const { data: script } = useQuery({
-    queryKey: ["script", scriptId],
-    queryFn: () => getScript(scriptId),
+    queryKey: ["script", id],
+    queryFn: () => api<{ id: string; name: string; language: string; source: string; description?: string }>(`/api/scripts/${id}`),
+    enabled: !isNew,
   });
-
-  if (!script) {
-    return <AppShell><div className="p-8">Loading…</div></AppShell>;
-  }
+  const save = useMutation({
+    mutationFn: (body: unknown) =>
+      isNew
+        ? api("/api/scripts", { method: "POST", body: JSON.stringify(body) })
+        : api(`/api/scripts/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["scripts"] });
+      toast.success("Saved");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const run = useMutation({
+    mutationFn: () => api(`/api/scripts/${id}/run`, { method: "POST", body: "{}" }),
+    onSuccess: () => toast.success("Run started"),
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const del = useMutation({
+    mutationFn: () => api(`/api/scripts/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["scripts"] });
+      toast.success("Deleted");
+      nav("/scripts");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   return (
     <AppShell>
-      <div className="mx-auto max-w-5xl p-6">
-        <h1 className="mb-4 text-2xl font-semibold">{script.name}</h1>
-        <div className="mb-4 flex gap-2 border-b">
-          {(["source", "deps", "env"] as Tab[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`px-4 py-2 text-sm ${
-                tab === t ? "border-b-2 border-primary font-semibold" : "text-muted-foreground"
-              }`}
-            >
-              {t}
-            </button>
-          ))}
+      <div className="mx-auto max-w-5xl space-y-6 p-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold">{isNew ? "New script" : script?.name ?? "Loading…"}</h1>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => run.mutate()} disabled={isNew}>
+              <Play className="mr-2 h-4 w-4" /> Run
+            </Button>
+            <Button onClick={() => save.mutate(script)} disabled={!script}>
+              <Save className="mr-2 h-4 w-4" /> Save
+            </Button>
+            {!isNew && (
+              <Button variant="destructive" onClick={() => del.mutate()}>
+                <Trash2 className="mr-2 h-4 w-4" /> Delete
+              </Button>
+            )}
+          </div>
         </div>
-        {tab === "source" && <SourceTab scriptId={scriptId} language={script.language} />}
-        {tab === "deps" && <DepsTab scriptId={scriptId} />}
-        {tab === "env" && <EnvTab scriptId={scriptId} />}
+        <Tabs defaultValue="editor">
+          <TabsList>
+            <TabsTrigger value="editor">Editor</TabsTrigger>
+            <TabsTrigger value="config">Config</TabsTrigger>
+            <TabsTrigger value="logs">Logs</TabsTrigger>
+          </TabsList>
+          <TabsContent value="editor">
+            <Card>
+              <CardContent className="p-0">
+                <Editor
+                  height="60vh"
+                  defaultLanguage={script?.language ?? "python"}
+                  value={script?.source ?? ""}
+                  theme="vs-dark"
+                  options={{ minimap: { enabled: false } }}
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
+          <TabsContent value="config">
+            <Card>
+              <CardContent className="space-y-4 pt-6">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Name</Label>
+                  <Input id="name" defaultValue={script?.name} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="desc">Description</Label>
+                  <Textarea id="desc" defaultValue={script?.description} />
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+          <TabsContent value="logs">
+            <Card>
+              <CardContent className="font-mono text-xs">
+                <pre>Run the script to see logs.</pre>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </AppShell>
-  );
-}
-
-function SourceTab({ scriptId, language }: { scriptId: number; language: string }) {
-  const [code, setCode] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  // fetch full source on mount
-  useQuery({
-    queryKey: ["script-source", scriptId],
-    enabled: !!scriptId && !Number.isNaN(scriptId),
-    queryFn: async () => {
-      // raw fetch because /source returns plain text, not JSON
-      const text = await (await fetch(`/api/scripts/${scriptId}/source`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("scriptdeck_token")}` },
-      })).text();
-      setCode(text);
-      return text;
-    },
-  });
-
-  async function save() {
-    setSaving(true);
-    try {
-      await updateScript(scriptId, { source: code });
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div>
-      <Suspense fallback={<div className="text-muted-foreground">Loading editor…</div>}>
-        <MonacoEditor
-          height="60vh"
-          language={language === "python" ? "python" : "javascript"}
-          value={code}
-          onChange={(v) => setCode(v ?? "")}
-        />
-      </Suspense>
-      <button
-        onClick={save}
-        disabled={saving}
-        className="mt-3 rounded bg-primary px-4 py-2 text-primary-foreground"
-      >
-        {saving ? "Saving…" : "Save"}
-      </button>
-    </div>
-  );
-}
-
-function DepsTab({ scriptId }: { scriptId: number }) {
-  const qc = useQueryClient();
-  const { data: deps } = useQuery({ queryKey: ["deps", scriptId], queryFn: () => getDeps(scriptId) });
-  const [list, setList] = useState<string[]>(() => deps?.deps ?? []);
-  const [draft, setDraft] = useState("");
-
-  const detect = useMutation({
-    mutationFn: () => detectDeps(scriptId),
-    onSuccess: (d) => setList(d.deps),
-  });
-  const save = useMutation({
-    mutationFn: () => setDeps(scriptId, { deps: list, source: "manual" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["deps", scriptId] }),
-  });
-
-  return (
-    <div>
-      <div className="mb-3 flex gap-2">
-        <button
-          onClick={() => detect.mutate()}
-          disabled={detect.isPending}
-          className="rounded border px-3 py-1 text-sm"
-        >
-          {detect.isPending ? "Detecting…" : "Detect from source"}
-        </button>
-        <button
-          onClick={() => save.mutate()}
-          disabled={save.isPending}
-          className="rounded bg-primary px-3 py-1 text-sm text-primary-foreground"
-        >
-          {save.isPending ? "Saving…" : "Save deps"}
-        </button>
-      </div>
-      <div className="mb-3 flex gap-2">
-        <input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder="package name"
-          className="flex-1 rounded border px-3 py-1 text-sm"
-        />
-        <button
-          onClick={() => {
-            if (draft && !list.includes(draft)) {
-              setList([...list, draft]);
-              setDraft("");
-            }
-          }}
-          className="rounded border px-3 py-1 text-sm"
-        >
-          Add
-        </button>
-      </div>
-      <ul className="space-y-1">
-        {list.map((d) => (
-          <li key={d} className="flex items-center justify-between rounded border px-3 py-1 text-sm">
-            <span className="font-mono">{d}</span>
-            <button onClick={() => setList(list.filter((x) => x !== d))} className="text-destructive">
-              remove
-            </button>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function EnvTab({ scriptId }: { scriptId: number }) {
-  const { data: info } = useQuery({ queryKey: ["env", scriptId], queryFn: () => getEnv(scriptId) });
-  const [content, setContent] = useState("");
-  const [saved, setSaved] = useState(false);
-
-  const save = useMutation({
-    mutationFn: () => setEnv(scriptId, content),
-    onSuccess: () => setSaved(true),
-  });
-  const clear = useMutation({
-    mutationFn: () => deleteEnv(scriptId),
-    onSuccess: () => setContent(""),
-  });
-
-  return (
-    <div>
-      <p className="mb-2 text-sm text-muted-foreground">
-        {info?.has_env ? `Stored (${info.line_count} lines). Encrypted at rest.` : "No env stored."}
-      </p>
-      <textarea
-        value={content}
-        onChange={(e) => { setContent(e.target.value); setSaved(false); }}
-        rows={12}
-        placeholder={"KEY=value\nANOTHER=thing"}
-        className="w-full rounded border px-3 py-2 font-mono text-sm"
-      />
-      <div className="mt-2 flex gap-2">
-        <button
-          onClick={() => save.mutate()}
-          disabled={save.isPending}
-          className="rounded bg-primary px-3 py-1 text-sm text-primary-foreground"
-        >
-          {save.isPending ? "Saving…" : "Save env"}
-        </button>
-        <button
-          onClick={() => clear.mutate()}
-          disabled={clear.isPending}
-          className="rounded border px-3 py-1 text-sm text-destructive"
-        >
-          Delete env
-        </button>
-        {saved && <span className="text-sm text-emerald-700">Saved.</span>}
-      </div>
-    </div>
   );
 }
