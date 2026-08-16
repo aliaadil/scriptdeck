@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, insert, select, update
 
@@ -199,7 +199,7 @@ async def _set_enabled(schedule_id: int, enabled: bool, request: Request, user: 
 async def next_runs(
     schedule_id: int,
     request: Request,
-    limit: int = 5,
+    limit: int = Query(default=5, ge=1, le=100),
     user: User = Depends(current_user),
 ) -> list[str]:
     """Compute the next `limit` fire times for the given schedule.

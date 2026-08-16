@@ -155,5 +155,14 @@ async def patch_me(
             await s.execute(
                 update(users_table).where(users_table.c.id == user.id).values(**values)
             )
+            if "timezone" in values:
+                await audit(
+                    s,
+                    user.id,
+                    "timezone_updated",
+                    "user",
+                    user.id,
+                    {"timezone": values["timezone"]},
+                )
             await s.commit()
     return {"ok": True, "updated": list(values.keys())}

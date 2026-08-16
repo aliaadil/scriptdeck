@@ -44,16 +44,24 @@ async def app_and_token(tmp_path):
 @pytest.mark.asyncio
 async def test_run_group_returns_chained_attempts(app_and_token):
     app, token = app_and_token
-    # Seed three runs sharing retry_group "XYZ" on script 1.
+    # Seed three runs sharing retry_group "XYZ" on script 1. Insert in
+    # descending-attempt order (2, 1, 0) with descending started_at so that
+    # the natural id ASC order (which matches insertion order) produces the
+    # WRONG attempt sequence: ids 1, 2, 3 → attempts 2, 1, 0. Only an
+    # explicit ORDER BY attempt ASC re-orders them into attempts 0, 1, 2.
     async with app.state.session_factory() as s:
-        for attempt in (1, 2, 3):
+        for attempt, ts in (
+            (2, "2026-08-16T00:03:00+00:00"),
+            (1, "2026-08-16T00:02:00+00:00"),
+            (0, "2026-08-16T00:01:00+00:00"),
+        ):
             await s.execute(
                 insert(runs).values(
                     script_id=1,
                     status="failure",
                     retry_group="XYZ",
                     attempt=attempt,
-                    started_at=f"2026-08-16T00:0{attempt}:00+00:00",
+                    started_at=ts,
                 )
             )
         await s.commit()
@@ -66,9 +74,13 @@ async def test_run_group_returns_chained_attempts(app_and_token):
     body = r.json()
     assert len(body) == 3
     # Retry-group responses must be ordered by attempt ASC. RunOut doesn't
-    # expose attempt, but insertion order matches attempt, so id ASC is a
-    # proxy that also exercises the order-by clause in the endpoint.
-    ids = [row["id"] for row in body]
-    assert ids == sorted(ids)
-    # Status filter sanity: all three rows belong to retry_group "XYZ".
+    # expose `attempt`, but we chose started_at to match attempt order
+    # (attempt 2 = newest, attempt 0 = oldest), so the response's
+    # started_at values must be ASCENDING. If the endpoint had fallen
+    # back to id ASC / insertion order, started_at would be DESCENDING.
+    started_ats = [row["started_at"] for row in body]
+    assert started_ats == sorted(started_ats), (
+        f"expected started_at ASC (matching attempt ASC), got {started_ats}"
+    )
+    # All three rows belong to retry_group "XYZ" and share status "failure".
     assert all(row["status"] == "failure" for row in body)
