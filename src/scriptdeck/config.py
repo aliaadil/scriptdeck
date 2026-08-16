@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     sandbox_enabled: bool = False
     audit_retention_days: int = 90
     log_buffer_lines: int = 200
+    log_retention_days: int = 7
+    gc_interval_seconds: int = 3600
+    feature_schedules_v2: bool = False
 
     # Required on real boot; nullable here so tests can construct Settings()
     jwt_secret: str | None = None
