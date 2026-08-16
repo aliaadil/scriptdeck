@@ -12,13 +12,23 @@ def _table():
 
 
 async def create_run(
-    session: AsyncSession, *, script_id: int, schedule_id: int | None, status: str = "running"
+    session: AsyncSession,
+    *,
+    script_id: int,
+    schedule_id: int | None,
+    status: str = "running",
+    skip_reason: str | None = None,
 ) -> tuple[int, str]:
     """Insert a new run row and return (run_id, started_at)."""
     t = _table()
     stmt = (
         insert(t)
-        .values(script_id=script_id, schedule_id=schedule_id, status=status)
+        .values(
+            script_id=script_id,
+            schedule_id=schedule_id,
+            status=status,
+            skip_reason=skip_reason,
+        )
         .returning(t.c.id, t.c.started_at)
     )
     row = (await session.execute(stmt)).one()
@@ -40,6 +50,35 @@ async def own_script_ids(session: AsyncSession, user_id: int) -> list[int]:
     from scriptdeck.db.models import scripts as _scripts
     stmt = select(_scripts.c.id).where(_scripts.c.user_id == user_id)
     return [int(i) for i in (await session.execute(stmt)).scalars().all()]
+
+
+async def count_pending(session: AsyncSession, script_id: int) -> int:
+    """Return the count of runs in 'pending' status for a script."""
+    t = _table()
+    stmt = select(t.c.id).where(t.c.script_id == script_id, t.c.status == "pending")
+    return len((await session.execute(stmt)).all())
+
+
+async def promote_oldest_pending(
+    session: AsyncSession, script_id: int
+) -> int | None:
+    """Atomically flip the oldest pending run to running; return its id or None."""
+    t = _table()
+    row = (
+        await session.execute(
+            select(t.c.id)
+            .where(t.c.script_id == script_id, t.c.status == "pending")
+            .order_by(t.c.started_at)
+            .limit(1)
+        )
+    ).first()
+    if row is None:
+        return None
+    run_id = int(row[0])
+    await session.execute(
+        update(t).where(t.c.id == run_id).values(status="running")
+    )
+    return run_id
 
 
 async def finalize_run(

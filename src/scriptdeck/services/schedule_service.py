@@ -98,7 +98,10 @@ async def list_due(session: AsyncSession, now: datetime) -> list[dict[str, Any]]
     t = _table()
     s = _scripts()
     stmt = (
-        select(t, s.c.language, s.c.name, s.c.source_path, s.c.user_id)
+        select(
+            t, s.c.language, s.c.name, s.c.source_path, s.c.user_id,
+            t.c.overlap_policy, t.c.queue_max,
+        )
         .where(t.c.enabled == 1, t.c.next_run_at <= now.isoformat())
         .join(s, t.c.script_id == s.c.id)
     )

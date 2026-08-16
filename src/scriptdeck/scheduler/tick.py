@@ -5,9 +5,12 @@ import logging
 from datetime import UTC, datetime
 from pathlib import Path
 
+from sqlalchemy import update
+
 from scriptdeck.runner.executor import Script, run_script
 from scriptdeck.services.log_broker import LogBroker
 from scriptdeck.services.run_service import (
+    count_pending,
     create_run,
     finalize_run,
     has_active_run,
@@ -15,6 +18,11 @@ from scriptdeck.services.run_service import (
 from scriptdeck.services.schedule_service import advance, advance_next_run, list_due
 
 log = logging.getLogger(__name__)
+
+
+def _table():
+    from scriptdeck.db.models import runs as _runs
+    return _runs
 
 
 async def scheduler_loop(
@@ -62,20 +70,62 @@ async def _tick(
         due = await list_due(s, now)
         for row in due:
             sid = row["script_id"]
-            if await has_active_run(s, sid):
-                run_id, _started_at = await create_run(
-                    s, script_id=sid, schedule_id=row["id"], status="error"
+            policy = row.get("overlap_policy", "skip")
+            queue_max = row.get("queue_max", 10)
+
+            # Advance schedule cursor before dispatching, so skipped fires
+            # still move the schedule forward.
+            new_next = advance_next_run(row["kind"], row["expression"], row["next_run_at"])
+            await advance(s, row["id"], new_next)
+            await s.commit()
+
+            overlap = await has_active_run(s, sid)
+            if overlap and policy == "skip":
+                run_id, _ = await create_run(
+                    s,
+                    script_id=sid,
+                    schedule_id=row["id"],
+                    status="skipped",
+                    skip_reason="overlap",
                 )
-                new_next = advance_next_run(row["kind"], row["expression"], row["next_run_at"])
-                await advance(s, row["id"], new_next)
-                await finalize_run(s, run_id=run_id, exit_code=-1, status="error")
+                await finalize_run(s, run_id=run_id, exit_code=-1, status="skipped")
                 await s.commit()
-                await log_broker.close(run_id, "error", -1)
+                await log_broker.close(run_id, "skipped", -1)
                 continue
 
-            new_next = advance_next_run(row["kind"], row["expression"], row["next_run_at"])
-            run_id, _started_at = await create_run(s, script_id=sid, schedule_id=row["id"])
-            await advance(s, row["id"], new_next)
+            if overlap and policy == "queue":
+                pending = await count_pending(s, sid)
+                if pending >= queue_max:
+                    run_id, _ = await create_run(
+                        s,
+                        script_id=sid,
+                        schedule_id=row["id"],
+                        status="skipped",
+                        skip_reason="queue_full",
+                    )
+                    await finalize_run(s, run_id=run_id, exit_code=-1, status="skipped")
+                    schedules_t = _schedules_table()
+                    await s.execute(
+                        update(schedules_t)
+                        .where(schedules_t.c.id == row["id"])
+                        .values(queue_dropped=schedules_t.c.queue_dropped + 1)
+                    )
+                    await s.commit()
+                    await log_broker.close(run_id, "skipped", -1)
+                    continue
+                # Insert as pending — promote_oldest_pending picks it up
+                # when the running run finishes (Task 6 hook in executor).
+                await create_run(
+                    s,
+                    script_id=sid,
+                    schedule_id=row["id"],
+                    status="pending",
+                )
+                await s.commit()
+                continue
+
+            # No overlap OR overlap_policy='parallel' (best-effort dispatch).
+            run_id, _ = await create_run(s, script_id=sid, schedule_id=row["id"])
             await s.commit()
 
             script = Script(
@@ -96,6 +146,11 @@ async def _tick(
                 storage_dir=storage_dir,
                 session_factory=session_factory,
             )
+
+
+def _schedules_table():
+    from scriptdeck.db.models import schedules as _schedules
+    return _schedules
 
 
 def _schedule(
