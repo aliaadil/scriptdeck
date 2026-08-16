@@ -82,3 +82,98 @@ async def test_next_runs_endpoint_uses_croniter(app_and_token):
         # All returned timestamps must be parseable ISO datetimes in the future.
         parsed = datetime.fromisoformat(ts.replace("Z", "+00:00"))
         assert parsed > now
+
+
+# ---- Task 9: new fields on ScheduleCreate / ScheduleOut ----
+
+
+@pytest.mark.asyncio
+async def test_create_schedule_validates_blackout_dates(app_and_token):
+    app, token = app_and_token
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
+        r = await ac.post(
+            "/api/schedules",
+            json={
+                "script_id": 1, "kind": "cron", "expression": "0 9 * * *",
+                "blackout_dates": ["not-a-date"],
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert r.status_code == 422, r.text
+
+
+@pytest.mark.asyncio
+async def test_create_schedule_validates_overlap_policy(app_and_token):
+    app, token = app_and_token
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
+        r = await ac.post(
+            "/api/schedules",
+            json={
+                "script_id": 1, "kind": "cron", "expression": "0 9 * * *",
+                "overlap_policy": "explode",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert r.status_code == 422, r.text
+
+
+@pytest.mark.asyncio
+async def test_create_schedule_validates_include_days_range(app_and_token):
+    app, token = app_and_token
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
+        r = await ac.post(
+            "/api/schedules",
+            json={
+                "script_id": 1, "kind": "cron", "expression": "0 9 * * *",
+                "include_days": [7],
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert r.status_code == 422, r.text
+
+
+@pytest.mark.asyncio
+async def test_create_schedule_with_blackout_round_trips(app_and_token):
+    app, token = app_and_token
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
+        r = await ac.post(
+            "/api/schedules",
+            json={
+                "script_id": 1, "kind": "cron", "expression": "0 9 * * *",
+                "timezone": "UTC",
+                "blackout_dates": ["2026-12-25"],
+                "include_days": [0, 1, 2],
+                "overlap_policy": "skip",
+                "queue_max": 5,
+                "retry_max": 2,
+                "retry_backoff": 30,
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert r.status_code == 201, r.text
+    body = r.json()
+    # The API returns lists (deserialized), not JSON strings.
+    assert body["blackout_dates"] == ["2026-12-25"]
+    assert body["include_days"] == [0, 1, 2]
+    assert isinstance(body["blackout_dates"], list)
+    assert isinstance(body["include_days"], list)
+
+
+@pytest.mark.asyncio
+async def test_queue_dropped_visible_in_schedule_out(app_and_token):
+    app, token = app_and_token
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
+        r = await ac.post(
+            "/api/schedules",
+            json={
+                "script_id": 1, "kind": "cron", "expression": "0 9 * * *",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert r.status_code == 201, r.text
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
+        r = await ac.get("/api/schedules", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert len(body) == 1
+    assert body[0]["queue_dropped"] == 0

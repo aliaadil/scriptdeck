@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
+from datetime import date as _date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import delete, insert, select, update
 
 from scriptdeck.api.deps import require_script_owner
@@ -34,8 +35,41 @@ class ScheduleCreate(BaseModel):
     kind: str = Field(pattern="^(cron|interval)$")
     expression: str = Field(min_length=1)
     enabled: bool = True
-    retry_max: int = 0
-    retry_backoff: int = 0
+    retry_max: int = Field(default=0, ge=0, le=100)
+    retry_backoff: int = Field(default=0, ge=0, le=86400)
+    timezone: str | None = None
+    blackout_dates: list[str] | None = None
+    include_days: list[int] | None = None
+    overlap_policy: str = "skip"
+    queue_max: int = Field(default=10, ge=1, le=100)
+
+    @field_validator("blackout_dates")
+    @classmethod
+    def _check_blackout(cls, v: list[str] | None) -> list[str] | None:
+        if v is None:
+            return v
+        for s in v:
+            try:
+                _date.fromisoformat(s)
+            except ValueError as exc:
+                raise ValueError(f"bad blackout date: {s!r}") from exc
+        return v
+
+    @field_validator("include_days")
+    @classmethod
+    def _check_include_days(cls, v: list[int] | None) -> list[int] | None:
+        if v is None:
+            return v
+        if any(d < 0 or d > 6 for d in v):
+            raise ValueError("include_days must be 0..6")
+        return v
+
+    @field_validator("overlap_policy")
+    @classmethod
+    def _check_policy(cls, v: str) -> str:
+        if v not in {"skip", "queue", "parallel"}:
+            raise ValueError(f"bad overlap_policy: {v!r}")
+        return v
 
 
 class ScheduleOut(BaseModel):
@@ -47,6 +81,13 @@ class ScheduleOut(BaseModel):
     next_run_at: str
     retry_max: int
     retry_backoff: int
+    timezone: str | None
+    blackout_dates: list[str] | None
+    include_days: list[int] | None
+    overlap_policy: str
+    queue_max: int
+    queue_dropped: int
+    next_runs: list[str] = []
 
 
 def _require(user: User) -> None:
@@ -55,11 +96,16 @@ def _require(user: User) -> None:
 
 
 def _row_to_out(row) -> ScheduleOut:
+    bo = json.loads(row["blackout_dates"]) if row["blackout_dates"] else None
+    inc = json.loads(row["include_days"]) if row["include_days"] else None
     return ScheduleOut(
         id=row["id"], script_id=row["script_id"], kind=row["kind"],
         expression=row["expression"], enabled=bool(row["enabled"]),
-        next_run_at=row["next_run_at"], retry_max=row["retry_max"],
-        retry_backoff=row["retry_backoff"],
+        next_run_at=row["next_run_at"],
+        retry_max=row["retry_max"], retry_backoff=row["retry_backoff"],
+        timezone=row["timezone"], blackout_dates=bo, include_days=inc,
+        overlap_policy=row["overlap_policy"], queue_max=row["queue_max"],
+        queue_dropped=row["queue_dropped"], next_runs=[],
     )
 
 
@@ -107,6 +153,11 @@ async def create(body: ScheduleCreate, request: Request,
                 script_id=body.script_id, kind=body.kind, expression=body.expression,
                 enabled=1 if body.enabled else 0, next_run_at=initial_next,
                 retry_max=body.retry_max, retry_backoff=body.retry_backoff,
+                timezone=body.timezone,
+                blackout_dates=json.dumps(body.blackout_dates) if body.blackout_dates else None,
+                include_days=json.dumps(body.include_days) if body.include_days else None,
+                overlap_policy=body.overlap_policy,
+                queue_max=body.queue_max,
             ).returning(*t.c)
         )
         row = (await s.execute(stmt)).mappings().one()
@@ -137,6 +188,11 @@ async def update_schedule(schedule_id: int, body: ScheduleCreate, request: Reque
             kind=body.kind, expression=body.expression,
             enabled=1 if body.enabled else 0, next_run_at=new_next,
             retry_max=body.retry_max, retry_backoff=body.retry_backoff,
+            timezone=body.timezone,
+            blackout_dates=json.dumps(body.blackout_dates) if body.blackout_dates else None,
+            include_days=json.dumps(body.include_days) if body.include_days else None,
+            overlap_policy=body.overlap_policy,
+            queue_max=body.queue_max,
         ))
         await s.commit()
         row = (await s.execute(select(t).where(t.c.id == schedule_id))).mappings().one()
