@@ -139,7 +139,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from scriptdeck.db import models
+from datetime import UTC, datetime, timedelta
+
 from scriptdeck.services.run_service import create_run
 
 
@@ -163,11 +164,10 @@ async def test_create_run_writes_tz_aware_started_at(tmp_path):
         )
     sf = session_factory(str(db))
     async with sf() as s:
-        await s.execute(...)  # ensure schema loaded — may need explicit metadata create
         run_id, started_at, _ = await create_run(s, script_id=1, schedule_id=None)
         parsed = datetime.fromisoformat(started_at)
         assert parsed.tzinfo is not None
-        assert parsed.utcoffset() == __import__("datetime").timedelta(0)
+        assert parsed.utcoffset() == timedelta(0)
 ```
 
 If `session_factory(...)` signature differs in this codebase, follow the existing pattern from `tests/api/test_runs_schedule_filter.py:app_ctx`.
