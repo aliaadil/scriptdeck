@@ -83,7 +83,7 @@ python -m kindling
 
 ```bash
 # 1. Health check
-curl -s http://127.0.0.1:8765/health
+curl -s http://127.0.0.1:8765/api/kindling/health
 # -> {"status": "ok"}
 
 # 2. Register a script
@@ -107,16 +107,18 @@ curl -s http://127.0.0.1:8765/api/kindling/schedules
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `KINDLING_DB_PATH` | `kindling.db` | SQLite file path. Backup this one file. |
+| `KINDLING_DB_PATH` | `./data/kindling.db` | SQLite file path. Backup this one file. |
 | `KINDLING_STORAGE_DIR` | `storage` | Per-script source + per-run logs live here. |
 | `KINDLING_HOST` | `127.0.0.1` | Bind address. Set to `0.0.0.0` if fronted by a reverse proxy. |
 | `KINDLING_PORT` | `8765` | TCP port. |
+| `KINDLING_JWT_SECRET` | unset | Required. Random secret for JWT signing. |
+| `KINDLING_ENV_ENCRYPTION_KEY` | unset | Required. Base64 32-byte key for AES-GCM .env encryption. |
 | `KINDLING_BASIC_AUTH` | unset | Optional single-user Basic auth in `username:bcrypt_hash` format. |
 
 ### HTTP Basic auth
 
 Authentication is disabled when `KINDLING_BASIC_AUTH` is unset. When it is
-set, `/health`, `/`, `/kindling/logs`, and every `/api/kindling/*` route require HTTP Basic auth.
+set, `/api/kindling/health`, `/`, `/kindling/logs`, and every `/api/kindling/*` route require HTTP Basic auth.
 The configured password must be a bcrypt hash; plaintext passwords are not
 accepted. Install the optional dependency with:
 
@@ -144,7 +146,7 @@ it in the repository. Restart or redeploy the service after changing it.
 
 ```
 .
-├── kindling.db                   # ← backup this one file
+├── data/kindling.db            # ← backup this one file
 └── storage/
     ├── users/<user_id>/
     │   ├── scripts/<id>/<file>      # source uploaded per script
@@ -155,7 +157,7 @@ it in the repository. Restart or redeploy the service after changing it.
     └── locks/<id>.lock
 ```
 
-Backing up `kindling.db` plus `storage/` is a complete disaster-recovery snapshot.
+Backing up `data/kindling.db` plus `storage/` is a complete disaster-recovery snapshot.
 
 ## Security model
 
@@ -185,20 +187,47 @@ ruff check src/ tests/          # lint
 ```
 kindling/
 ├── src/kindling/                # the package
-│   ├── __init__.py
-│   ├── __main__.py              # `python -m kindling` entry
+│   ├── api/                     # FastAPI routers (auth, scripts, runs, ...)
+│   ├── auth/                    # JWT + bcrypt helpers
+│   ├── cli_commands/            # subcommand implementations
+│   ├── db/                      # engine + SQLAlchemy models
+│   ├── migrations/              # versioned SQL migrations
+│   ├── runner/                  # subprocess execution + sandboxing
+│   ├── scheduler/               # cron/interval tick loop
+│   ├── services/                # EnvService, log broker, retention, ...
+│   ├── app.py                   # FastAPI factory + lifespan
+│   ├── cli.py                   # argparse entry
 │   ├── config.py                # Settings dataclass + env-var loader
-│   ├── db.py                    # SQLite connect + versioned migrations
-│   ├── repository.py            # typed CRUD over the schema
-│   └── server.py                # stdlib HTTP/JSON API
+│   └── dashboard_static/        # Vite build output (mounted at /kindling)
 ├── tests/
-│   ├── test_db.py               # migrations + smoke
-│   ├── test_repository.py       # CRUD invariants
-│   └── test_server.py           # end-to-end HTTP contract
+│   ├── api/                     # HTTP contract tests
+│   ├── services/                # service-layer tests
+│   ├── test_app.py
+│   ├── test_auth.py / test_auth_api.py
+│   ├── test_branding.py
+│   ├── test_compose.py
+│   ├── test_config.py
+│   ├── test_db.py / test_migrations.py
+│   ├── test_env_service.py
+│   ├── test_executor.py / test_executor_sandbox_wiring.py
+│   ├── test_kindling_spa_fallback.py
+│   ├── test_log_broker.py
+│   ├── test_migrate_from_v1.py
+│   ├── test_migrate_users.py
+│   ├── test_retention.py
+│   ├── test_routes.py
+│   ├── test_runner_protocol.py / test_runner_sandbox_view.py
+│   ├── test_sandbox.py / test_sandbox_view.py
+│   ├── test_schedule_api.py / test_schedule_compute.py
+│   ├── test_scheduler.py / test_scheduler_tick_v2.py
+│   └── test_*.py                # many more focused suites
+├── frontend/                    # Vite + React SPA
+│   ├── src/api / src/auth / src/components / src/pages
+│   └── index.html
+├── docs/                        # install, operations, troubleshooting
 ├── pyproject.toml
-├── README.md
-├── ROADMAP.md
-├── LICENSE
+├── docker-compose.yml / Dockerfile
+├── README.md / ROADMAP.md / CHANGELOG.md / LICENSE
 └── .github/workflows/ci.yml
 ```
 

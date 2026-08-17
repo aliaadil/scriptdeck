@@ -6,7 +6,7 @@ Build locally with `docker build -t kindling:1.0.0 .`, or pull `ghcr.io/aliaadil
 
 ## Coolify
 
-Create a Docker Compose resource from `coolify/docker-compose.yml`. Set `KINDLING_BASIC_AUTH` to `username:bcrypt_hash`, map port 8765, and retain both named volumes.
+Create a Docker Compose resource from the repo's `docker-compose.yml`. Set `KINDLING_BASIC_AUTH` to `username:bcrypt_hash`, map port 8765, and retain both named volumes.
 
 ## Manual
 
