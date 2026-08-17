@@ -29,7 +29,7 @@ export function LoginPage() {
   async function onSubmit(values: z.infer<typeof schema>) {
     try {
       await login(values.email, values.password);
-      nav("/dashboard");
+      nav("/kindling/dashboard");
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -43,7 +43,7 @@ export function LoginPage() {
             <Brand />
           </div>
           <CardTitle>Welcome back</CardTitle>
-          <CardDescription>Sign in to your ScriptDeck account.</CardDescription>
+          <CardDescription>Sign in to your Kindling account.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)}>

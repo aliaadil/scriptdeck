@@ -29,7 +29,7 @@ export function SetupPage() {
   async function onSubmit(values: z.infer<typeof schema>) {
     try {
       await setup(values.email, values.password);
-      nav("/dashboard");
+      nav("/kindling/dashboard");
     } catch (e) {
       const msg = e instanceof Error ? e.message : JSON.stringify(e);
       toast.error(msg);

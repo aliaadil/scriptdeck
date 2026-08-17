@@ -46,7 +46,7 @@ export function Settings() {
   const qc = useQueryClient();
   const isAdmin = user?.role === "admin";
 
-  const [instanceName, setInstanceName] = useState("ScriptDeck");
+  const [instanceName, setInstanceName] = useState("Kindling");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "editor" | "viewer">("editor");
   const [lastInviteToken, setLastInviteToken] = useState<string | null>(null);

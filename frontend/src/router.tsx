@@ -11,18 +11,19 @@ import { RunView } from "@/pages/RunView";
 import { Settings } from "@/pages/Settings";
 
 const router = createBrowserRouter([
+  { path: "/kindling/*", element: <ProtectedRoute />, children: [
+    { path: "dashboard", element: <Dashboard /> },
+    { path: "scripts", element: <Scripts /> },
+    { path: "scripts/:id", element: <ScriptEdit /> },
+    { path: "schedules", element: <Schedules /> },
+    { path: "runs", element: <Runs /> },
+    { path: "runs/:id", element: <RunView /> },
+    { path: "settings", element: <Settings /> },
+  ] },
+  { path: "/kindling", element: <Navigate to="/kindling/dashboard" replace /> },
   { path: "/login", element: <LoginPage /> },
   { path: "/setup", element: <SetupPage /> },
-  { element: <ProtectedRoute />, children: [
-    { path: "/dashboard", element: <Dashboard /> },
-    { path: "/scripts", element: <Scripts /> },
-    { path: "/scripts/:id", element: <ScriptEdit /> },
-    { path: "/schedules", element: <Schedules /> },
-    { path: "/runs", element: <Runs /> },
-    { path: "/runs/:id", element: <RunView /> },
-    { path: "/settings", element: <Settings /> },
-  ] },
-  { path: "*", element: <Navigate to="/dashboard" replace /> },
+  { path: "*", element: <Navigate to="/kindling/dashboard" replace /> },
 ]);
 
 export function AppRouter() {

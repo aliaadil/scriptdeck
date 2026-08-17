@@ -1,5 +1,7 @@
 const TOKEN_KEY = "scriptdeck_token";
 
+export const API_BASE = "/api/kindling";
+
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
@@ -15,6 +17,15 @@ export class ApiError extends Error {
   }
 }
 
+function buildUrl(path: string): string {
+  // If path is absolute (starts with /) or already includes the API_BASE,
+  // pass it through; otherwise prefix with API_BASE.
+  if (path.startsWith("http://") || path.startsWith("https://")) return path;
+  if (path.startsWith(API_BASE)) return path;
+  if (path.startsWith("/")) return `${API_BASE}${path}`;
+  return `${API_BASE}/${path}`;
+}
+
 export async function api<T = unknown>(
   path: string,
   opts: RequestInit = {},
@@ -23,7 +34,8 @@ export async function api<T = unknown>(
   headers.set("Content-Type", "application/json");
   const token = getToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  const res = await fetch(path, { ...opts, headers });
+  const url = buildUrl(path);
+  const res = await fetch(url, { ...opts, headers });
   if (!res.ok) {
     let detail = res.statusText;
     let code = "unknown";

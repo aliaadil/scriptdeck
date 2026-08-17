@@ -120,23 +120,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # In dev (no build yet) the directory is absent and the mount is skipped.
     dashboard_dir = Path(__file__).parent / "dashboard_static"
     if dashboard_dir.exists():
-        app.mount("/dashboard", StaticFiles(directory=str(dashboard_dir), html=True), name="dashboard")
+        app.mount("/kindling", StaticFiles(directory=str(dashboard_dir), html=True), name="kindling")
 
         @app.get("/")
         async def root_redirect():
             from fastapi.responses import RedirectResponse
-            return RedirectResponse(url="/dashboard/")
+            return RedirectResponse(url="/kindling/")
 
         # SPA catch-all: serve index.html for any client-side path that did
-        # not match /api/* or /dashboard/*. Routes are matched in registration
+        # not match /api/* or /kindling/*. Routes are matched in registration
         # order, so the explicit routes above take precedence.
         from fastapi import HTTPException
         from fastapi.responses import FileResponse
 
         @app.get("/{path:path}")
         async def spa_catch_all(path: str):
-            # Exclude any path that begins with api/ or dashboard/ explicitly.
-            if path.startswith("api/") or path.startswith("dashboard/"):
+            # Exclude any path that begins with api/ or kindling/ explicitly.
+            if path.startswith("api/") or path.startswith("kindling/"):
                 raise HTTPException(status_code=404)
             # Static assets (Vite emits /assets/index-*.js, /assets/index-*.css,
             # /favicon.ico, etc.) live on disk under dashboard_static/. Serve

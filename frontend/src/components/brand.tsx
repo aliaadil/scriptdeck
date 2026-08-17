@@ -12,13 +12,13 @@ export function BrandMark({ size = 32 }: { size?: number }) {
 export function Brand({ collapsed = false }: { collapsed?: boolean }) {
   return (
     <Link
-      to="/dashboard"
+      to="/kindling/dashboard"
       className="flex items-center gap-2 font-semibold"
       // The mark is decorative, so when the label is hidden the link needs an
       // explicit name or it is announced as an unlabelled "link".
       aria-label={collapsed ? "Kindling" : undefined}
     >
-      <BrandMark size={32} />
+      <BrandLogo size="sm" />
       {!collapsed && <span className="text-base">Kindling</span>}
     </Link>
   );

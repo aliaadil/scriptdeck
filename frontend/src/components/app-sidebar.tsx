@@ -11,7 +11,7 @@ import { Brand } from "./brand";
 import { cn } from "@/lib/utils";
 
 const items = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/kindling/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/scripts", label: "Scripts", icon: FileCode2 },
   { to: "/schedules", label: "Schedules", icon: Calendar },
   { to: "/runs", label: "Runs", icon: Activity },
