@@ -7,11 +7,11 @@ from datetime import datetime, timezone
 import pytest
 from sqlalchemy import insert, text
 
-from scriptdeck.config import Settings
-from scriptdeck.db.engine import make_engine, session_factory
-from scriptdeck.db.migrations import run_migrations
-from scriptdeck.scheduler.tick import _tick
-from scriptdeck.services.log_broker import LogBroker
+from kindling.config import Settings
+from kindling.db.engine import make_engine, session_factory
+from kindling.db.migrations import run_migrations
+from kindling.scheduler.tick import _tick
+from kindling.services.log_broker import LogBroker
 
 
 def _settings(tmp_path):
@@ -25,7 +25,7 @@ def _settings(tmp_path):
 
 
 async def _setup_due_schedule(Sf, *, overlap_policy="skip", queue_max=10):
-    from scriptdeck.db.models import schedules, scripts, users
+    from kindling.db.models import schedules, scripts, users
 
     now = datetime.now(timezone.utc).isoformat()
     async with Sf() as s:
@@ -61,7 +61,7 @@ async def _setup_due_schedule(Sf, *, overlap_policy="skip", queue_max=10):
 
 
 async def _mark_running(Sf, script_id=1):
-    from scriptdeck.db.models import runs
+    from kindling.db.models import runs
 
     now = datetime.now(timezone.utc).isoformat()
     async with Sf() as s:
@@ -177,7 +177,7 @@ async def test_tick_advances_cursor_with_timezone(tmp_path):
     await run_migrations(engine)
     Sf = session_factory(engine)
 
-    from scriptdeck.db.models import schedules, scripts, users
+    from kindling.db.models import schedules, scripts, users
 
     # Pin next_run_at to a known UTC instant and pick a cron that, under
     # naive croniter math, would fire at 09:00 UTC; under NY time math it
@@ -246,7 +246,7 @@ async def test_tick_advances_cursor_without_timezone_uses_utc(tmp_path):
     await run_migrations(engine)
     Sf = session_factory(engine)
 
-    from scriptdeck.db.models import schedules, scripts, users
+    from kindling.db.models import schedules, scripts, users
 
     after_utc = datetime(2026, 8, 16, 0, 0, tzinfo=timezone.utc)
     next_run_at = after_utc.isoformat()

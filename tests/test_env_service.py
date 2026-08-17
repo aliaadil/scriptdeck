@@ -1,7 +1,7 @@
 import base64
 import pytest
 
-from scriptdeck.services.env_service import EnvService
+from kindling.services.env_service import EnvService
 
 
 @pytest.fixture

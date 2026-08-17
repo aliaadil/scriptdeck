@@ -14,4 +14,4 @@ def test_compose_env_uses_kindling_prefix():
     env = data['services']['kindling'].get('environment', {})
     keys = list(env.keys()) if isinstance(env, dict) else [k.split('=')[0] for k in env]
     assert any(k.startswith('KINDLING_') for k in keys)
-    assert not any(k.startswith('SCRIPTDECK_') for k in keys)
+    assert not any(k.startswith('KINDLING_') for k in keys)

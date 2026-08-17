@@ -4,7 +4,7 @@ from pathlib import Path
 
 def test_env_var_prefix():
     os.environ['KINDLING_DB_PATH'] = '/tmp/kindling.db'
-    os.environ.pop('SCRIPTDECK_DB_PATH', None)
+    os.environ.pop('KINDLING_DB_PATH', None)
     from kindling.config import load_config, reset_cache
     reset_cache()
     cfg = load_config()

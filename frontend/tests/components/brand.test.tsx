@@ -24,8 +24,8 @@ describe('Brand', () => {
     expect(screen.getByRole('link', { name: /kindling/i })).toBeInTheDocument();
   });
 
-  it('does not render the retired ScriptDeck name', () => {
+  it('does not render the retired Kindling name', () => {
     renderBrand(false);
-    expect(screen.queryByText(/scriptdeck/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/kindling/i)).not.toBeInTheDocument();
   });
 });

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from scriptdeck.runner.python_runner import PythonRunner
-from scriptdeck.runner.node_runner import NodeRunner
+from kindling.runner.python_runner import PythonRunner
+from kindling.runner.node_runner import NodeRunner
 
 
 def test_python_runner_sandbox_view_includes_python():

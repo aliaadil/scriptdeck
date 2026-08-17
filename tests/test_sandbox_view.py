@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from scriptdeck.runner.sandbox_view import (
+from kindling.runner.sandbox_view import (
     BindMount,
     SandboxView,
     build_bind_plan,
@@ -14,15 +14,15 @@ from scriptdeck.runner.sandbox_view import (
 
 
 def test_scrub_env_strips_blacklisted_keys():
-    out = scrub_env({"SCRIPTDECK_JWT_SECRET": "leaky", "PYTHONPATH": "/foo"})
-    assert "SCRIPTDECK_JWT_SECRET" not in out
+    out = scrub_env({"KINDLING_JWT_SECRET": "leaky", "PYTHONPATH": "/foo"})
+    assert "KINDLING_JWT_SECRET" not in out
     assert out["PYTHONPATH"] == "/foo"
 
 
 def test_scrub_env_ignores_parent_os_environ(monkeypatch):
-    monkeypatch.setenv("SCRIPTDECK_JWT_SECRET", "parent-secret")
+    monkeypatch.setenv("KINDLING_JWT_SECRET", "parent-secret")
     out = scrub_env({})
-    assert "SCRIPTDECK_JWT_SECRET" not in out
+    assert "KINDLING_JWT_SECRET" not in out
 
 
 def test_scrub_env_keeps_whitelist():

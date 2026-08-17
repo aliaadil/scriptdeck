@@ -1,8 +1,8 @@
 import pytest
 
-from scriptdeck.runner.node_runner import NodeRunner
-from scriptdeck.runner.python_runner import PythonRunner
-from scriptdeck.runner.registry import RUNNERS, get_runner
+from kindling.runner.node_runner import NodeRunner
+from kindling.runner.python_runner import PythonRunner
+from kindling.runner.registry import RUNNERS, get_runner
 
 
 def test_registry_has_python_and_node():

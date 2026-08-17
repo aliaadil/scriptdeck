@@ -3,11 +3,11 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import insert
 
-from scriptdeck.app import create_app
-from scriptdeck.auth.jwt import encode_jwt
-from scriptdeck.auth.passwords import hash_password
-from scriptdeck.config import Settings
-from scriptdeck.db.models import users
+from kindling.app import create_app
+from kindling.auth.jwt import encode_jwt
+from kindling.auth.passwords import hash_password
+from kindling.config import Settings
+from kindling.db.models import users
 
 
 @pytest.fixture
@@ -38,7 +38,7 @@ async def app_and_tokens(tmp_path):
 async def test_audit_requires_admin(app_and_tokens):
     app, vtok, _ = app_and_tokens
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
-        r = await ac.get("/api/admin/audit",
+        r = await ac.get("/api/kindling/admin/audit",
                          headers={"Authorization": f"Bearer {vtok}"})
     assert r.status_code == 403
 
@@ -47,7 +47,7 @@ async def test_audit_requires_admin(app_and_tokens):
 async def test_audit_admin_returns_list(app_and_tokens):
     app, _, atok = app_and_tokens
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
-        r = await ac.get("/api/admin/audit",
+        r = await ac.get("/api/kindling/admin/audit",
                          headers={"Authorization": f"Bearer {atok}"})
     assert r.status_code == 200
     assert isinstance(r.json(), list)
@@ -57,7 +57,7 @@ async def test_audit_admin_returns_list(app_and_tokens):
 async def test_stats_returns_expected_keys(app_and_tokens):
     app, _, atok = app_and_tokens
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
-        r = await ac.get("/api/stats",
+        r = await ac.get("/api/kindling/stats",
                          headers={"Authorization": f"Bearer {atok}"})
     assert r.status_code == 200
     body = r.json()

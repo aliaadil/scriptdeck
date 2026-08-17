@@ -4,7 +4,7 @@ import os
 import time
 from pathlib import Path
 
-from scriptdeck.services.retention import GcResult, gc_logs
+from kindling.services.retention import GcResult, gc_logs
 
 
 def test_deletes_old_logs_leaves_recent(tmp_path: Path):

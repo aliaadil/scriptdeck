@@ -1,3 +1,3 @@
 def test_package_imports():
-    import scriptdeck
-    assert scriptdeck.__version__ == "2.0.0"
+    import kindling
+    assert kindling.__version__ == "2.0.0"

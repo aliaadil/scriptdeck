@@ -62,10 +62,10 @@ async def test_sandbox_blocks_read_of_other_user(tmp_path: Path):
     _setup_user_storage(tmp_path, user_id, 1)
     _populate_other_user(tmp_path, other_user_id, 7)
 
-    from scriptdeck.runner.sandbox_view import (
+    from kindling.runner.sandbox_view import (
         BindMount, SandboxView, scrub_env, build_bind_plan,
     )
-    from scriptdeck.runner.sandbox import run_sandboxed
+    from kindling.runner.sandbox import run_sandboxed
 
     user_root = tmp_path / "users" / str(user_id)
     src = user_root / "scripts" / "1" / "sniff.py"
@@ -107,14 +107,14 @@ async def test_sandbox_blocks_read_of_other_user(tmp_path: Path):
 async def test_sandbox_strips_parent_env_secrets(tmp_path: Path, monkeypatch):
     user_id = 1
     _setup_user_storage(tmp_path, user_id, 1)
-    monkeypatch.setenv("SCRIPTDECK_JWT_SECRET", "parent-secret")
+    monkeypatch.setenv("KINDLING_JWT_SECRET", "parent-secret")
 
-    from scriptdeck.runner.sandbox_view import SandboxView, scrub_env, BindMount
-    from scriptdeck.runner.sandbox import run_sandboxed
+    from kindling.runner.sandbox_view import SandboxView, scrub_env, BindMount
+    from kindling.runner.sandbox import run_sandboxed
 
     user_root = tmp_path / "users" / str(user_id)
     src = user_root / "scripts" / "1" / "print_env.py"
-    src.write_text("import os; print('JWT=', os.environ.get('SCRIPTDECK_JWT_SECRET'))")
+    src.write_text("import os; print('JWT=', os.environ.get('KINDLING_JWT_SECRET'))")
 
     view = SandboxView(binds=[
         BindMount(Path("/usr"), "/usr"),

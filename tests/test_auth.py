@@ -1,9 +1,9 @@
 import pytest
 from argon2.exceptions import VerifyMismatchError
 
-from scriptdeck.auth.passwords import hash_password, verify_password
-from scriptdeck.auth.jwt import encode_jwt, decode_jwt
-from scriptdeck.auth.users import create_user, get_by_email
+from kindling.auth.passwords import hash_password, verify_password
+from kindling.auth.jwt import encode_jwt, decode_jwt
+from kindling.auth.users import create_user, get_by_email
 
 
 def test_password_hash_and_verify():
@@ -30,9 +30,9 @@ def test_jwt_rejects_tampered():
 
 @pytest.mark.asyncio
 async def test_create_and_get_user(tmp_db):
-    from scriptdeck.db.engine import make_engine, session_factory
-    from scriptdeck.db.migrations import run_migrations
-    engine = make_engine(__import__("scriptdeck").config.Settings(db_path=str(tmp_db)))
+    from kindling.db.engine import make_engine, session_factory
+    from kindling.db.migrations import run_migrations
+    engine = make_engine(__import__("kindling").config.Settings(db_path=str(tmp_db)))
     await run_migrations(engine)
     Session = session_factory(engine)
     async with Session() as s:

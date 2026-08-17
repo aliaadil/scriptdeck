@@ -8,9 +8,9 @@ from dataclasses import dataclass
 
 import pytest
 
-from scriptdeck.runner.executor import Script, run_script
-from scriptdeck.runner.registry import get_runner
-from scriptdeck.services.log_broker import LogBroker
+from kindling.runner.executor import Script, run_script
+from kindling.runner.registry import get_runner
+from kindling.services.log_broker import LogBroker
 
 
 # The sandbox path requires libc.so.6 + SYS_ADMIN/SYS_CHROOT capabilities.
@@ -50,7 +50,7 @@ class FakeEnv:
 
 @pytest.mark.asyncio
 async def test_executor_sandbox_path_runs_user_script(tmp_path: Path, monkeypatch):
-    monkeypatch.setenv("SCRIPTDECK_SANDBOX_ENABLED", "true")
+    monkeypatch.setenv("KINDLING_SANDBOX_ENABLED", "true")
 
     user_root = tmp_path / "users" / "1"
     src_dir = user_root / "scripts" / "1"

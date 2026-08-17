@@ -5,7 +5,7 @@ from pathlib import Path
 
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from scriptdeck.db.migrations import run_migrations_sync
+from kindling.db.migrations import run_migrations_sync
 
 
 def test_scripts_user_id_column_exists(tmp_path: Path):

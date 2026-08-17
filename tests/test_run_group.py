@@ -6,11 +6,11 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import insert
 
-from scriptdeck.app import create_app
-from scriptdeck.auth.jwt import encode_jwt
-from scriptdeck.auth.passwords import hash_password
-from scriptdeck.config import Settings
-from scriptdeck.db.models import runs, scripts, users
+from kindling.app import create_app
+from kindling.auth.jwt import encode_jwt
+from kindling.auth.passwords import hash_password
+from kindling.config import Settings
+from kindling.db.models import runs, scripts, users
 
 
 @pytest.fixture
@@ -67,7 +67,7 @@ async def test_run_group_returns_chained_attempts(app_and_token):
         await s.commit()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
         r = await ac.get(
-            "/api/runs?group=XYZ",
+            "/api/kindling/runs?group=XYZ",
             headers={"Authorization": f"Bearer {token}"},
         )
     assert r.status_code == 200, r.text

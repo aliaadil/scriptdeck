@@ -3,7 +3,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-from scriptdeck.cli_commands.migrate_users import migrate_users_run
+from kindling.cli_commands.migrate_users import migrate_users_run
 
 
 def _bootstrap(tmp_path: Path) -> tuple[Path, Path]:

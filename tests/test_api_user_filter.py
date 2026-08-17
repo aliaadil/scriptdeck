@@ -13,11 +13,11 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import insert
 
-from scriptdeck.app import create_app
-from scriptdeck.auth.jwt import encode_jwt
-from scriptdeck.auth.passwords import hash_password
-from scriptdeck.config import Settings
-from scriptdeck.db.models import users
+from kindling.app import create_app
+from kindling.auth.jwt import encode_jwt
+from kindling.auth.passwords import hash_password
+from kindling.config import Settings
+from kindling.db.models import users
 
 
 @pytest.fixture
@@ -57,7 +57,7 @@ async def two_users_app(tmp_path):
     # alice creates a script (gets user_id=1 from auth.deps).
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
         r = await ac.post(
-            "/api/scripts",
+            "/api/kindling/scripts",
             headers={"Authorization": f"Bearer {alice_token}"},
             json={"name": "alice-s", "language": "python", "source": "print(1)\n"},
         )
@@ -71,7 +71,7 @@ async def test_user_b_cannot_get_user_a_script(two_users_app):
     app, _alice_token, bob_token, sid = two_users_app
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
         r = await ac.get(
-            f"/api/scripts/{sid}",
+            f"/api/kindling/scripts/{sid}",
             headers={"Authorization": f"Bearer {bob_token}"},
         )
     # The script exists but is owned by alice, so bob must get 403 — NOT
@@ -85,7 +85,7 @@ async def test_user_a_can_get_own_script(two_users_app):
     app, alice_token, _bob_token, sid = two_users_app
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
         r = await ac.get(
-            f"/api/scripts/{sid}",
+            f"/api/kindling/scripts/{sid}",
             headers={"Authorization": f"Bearer {alice_token}"},
         )
     assert r.status_code == 200, r.text
@@ -96,11 +96,11 @@ async def test_user_a_can_get_own_script(two_users_app):
 
 @pytest.mark.asyncio
 async def test_user_b_cannot_create_schedule_on_user_a_script(two_users_app):
-    """POST /api/schedules must verify ownership of body.script_id."""
+    """POST /api/kindling/schedules must verify ownership of body.script_id."""
     app, _alice_token, bob_token, sid = two_users_app
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
         r = await ac.post(
-            "/api/schedules",
+            "/api/kindling/schedules",
             headers={"Authorization": f"Bearer {bob_token}"},
             json={
                 "script_id": sid, "kind": "interval",
@@ -113,11 +113,11 @@ async def test_user_b_cannot_create_schedule_on_user_a_script(two_users_app):
 
 @pytest.mark.asyncio
 async def test_user_b_cannot_list_user_a_schedules(two_users_app):
-    """GET /api/schedules?script_id=<alice's> must reject bob."""
+    """GET /api/kindling/schedules?script_id=<alice's> must reject bob."""
     app, _alice_token, bob_token, sid = two_users_app
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
         r = await ac.get(
-            f"/api/schedules?script_id={sid}",
+            f"/api/kindling/schedules?script_id={sid}",
             headers={"Authorization": f"Bearer {bob_token}"},
         )
     assert r.status_code == 403, r.text
@@ -127,7 +127,7 @@ async def _make_run(app, token: str, sid: int) -> int:
     """Trigger a run synchronously enough to read it back; return run_id."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
         r = await ac.post(
-            "/api/runs",
+            "/api/kindling/runs",
             headers={"Authorization": f"Bearer {token}"},
             json={"script_id": sid},
         )
@@ -141,7 +141,7 @@ async def test_user_b_cannot_get_user_a_run_detail(two_users_app):
     run_id = await _make_run(app, alice_token, sid)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
         r = await ac.get(
-            f"/api/runs/{run_id}",
+            f"/api/kindling/runs/{run_id}",
             headers={"Authorization": f"Bearer {bob_token}"},
         )
     assert r.status_code == 403, r.text
@@ -153,7 +153,7 @@ async def test_user_b_cannot_read_user_a_run_log(two_users_app):
     run_id = await _make_run(app, alice_token, sid)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
         r = await ac.get(
-            f"/api/runs/{run_id}/log",
+            f"/api/kindling/runs/{run_id}/log",
             headers={"Authorization": f"Bearer {bob_token}"},
         )
     assert r.status_code == 403, r.text
@@ -165,7 +165,7 @@ async def test_user_b_cannot_cancel_user_a_run(two_users_app):
     run_id = await _make_run(app, alice_token, sid)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
         r = await ac.post(
-            f"/api/runs/{run_id}/cancel",
+            f"/api/kindling/runs/{run_id}/cancel",
             headers={"Authorization": f"Bearer {bob_token}"},
         )
     assert r.status_code == 403, r.text
@@ -173,12 +173,12 @@ async def test_user_b_cannot_cancel_user_a_run(two_users_app):
 
 @pytest.mark.asyncio
 async def test_user_b_sees_only_own_scripts_in_listing(two_users_app):
-    """Non-admin GET /api/scripts must return only the caller's own scripts."""
+    """Non-admin GET /api/kindling/scripts must return only the caller's own scripts."""
     app, alice_token, bob_token, sid = two_users_app
     # bob creates his own script
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
         r = await ac.post(
-            "/api/scripts",
+            "/api/kindling/scripts",
             headers={"Authorization": f"Bearer {bob_token}"},
             json={"name": "bob-s", "language": "python", "source": "pass\n"},
         )
@@ -187,7 +187,7 @@ async def test_user_b_sees_only_own_scripts_in_listing(two_users_app):
 
         # alice still sees her own
         ra = await ac.get(
-            "/api/scripts",
+            "/api/kindling/scripts",
             headers={"Authorization": f"Bearer {alice_token}"},
         )
         assert ra.status_code == 200, ra.text
@@ -197,7 +197,7 @@ async def test_user_b_sees_only_own_scripts_in_listing(two_users_app):
 
         # bob sees only his own — not alice's
         rb = await ac.get(
-            "/api/scripts",
+            "/api/kindling/scripts",
             headers={"Authorization": f"Bearer {bob_token}"},
         )
         assert rb.status_code == 200, rb.text
@@ -208,7 +208,7 @@ async def test_user_b_sees_only_own_scripts_in_listing(two_users_app):
 
 @pytest.mark.asyncio
 async def test_user_b_sees_only_own_runs_in_listing(two_users_app):
-    """Non-admin GET /api/runs must return only the caller's own runs."""
+    """Non-admin GET /api/kindling/runs must return only the caller's own runs."""
     app, alice_token, bob_token, sid = two_users_app
     # alice triggers a run on her own script
     alice_run_id = await _make_run(app, alice_token, sid)
@@ -216,7 +216,7 @@ async def test_user_b_sees_only_own_runs_in_listing(two_users_app):
     # bob triggers a run on his own (new) script
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
         r = await ac.post(
-            "/api/scripts",
+            "/api/kindling/scripts",
             headers={"Authorization": f"Bearer {bob_token}"},
             json={"name": "bob-runs-s", "language": "python", "source": "pass\n"},
         )
@@ -226,7 +226,7 @@ async def test_user_b_sees_only_own_runs_in_listing(two_users_app):
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
         ra = await ac.get(
-            "/api/runs",
+            "/api/kindling/runs",
             headers={"Authorization": f"Bearer {alice_token}"},
         )
         assert ra.status_code == 200, ra.text
@@ -235,7 +235,7 @@ async def test_user_b_sees_only_own_runs_in_listing(two_users_app):
         assert bob_run_id not in alice_run_ids
 
         rb = await ac.get(
-            "/api/runs",
+            "/api/kindling/runs",
             headers={"Authorization": f"Bearer {bob_token}"},
         )
         assert rb.status_code == 200, rb.text

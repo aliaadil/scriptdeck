@@ -24,5 +24,5 @@ def test_old_paths_return_404():
 
     app = create_app()
     client = TestClient(app)
-    assert client.get('/dashboard/').status_code == 404
-    assert client.get('/api/health').status_code == 404
+    assert client.get('/kindling/').status_code == 404
+    assert client.get('/api/kindling/health').status_code == 404

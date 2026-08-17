@@ -1,4 +1,4 @@
-"""Tests for GET /api/scripts/{id}/source returning JSON {content}.
+"""Tests for GET /api/kindling/scripts/{id}/source returning JSON {content}.
 
 Task 4 of feat/run-logs runs-page refresh.
 """
@@ -11,9 +11,9 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import insert
 
-from scriptdeck.app import create_app
-from scriptdeck.config import Settings
-from scriptdeck.db.models import scripts, users
+from kindling.app import create_app
+from kindling.config import Settings
+from kindling.db.models import scripts, users
 
 
 def _build_app(tmp_path, *, write_source: bool):
@@ -80,7 +80,7 @@ async def app_ctx_missing(tmp_path):
 async def test_source_returns_json_content(app_ctx, monkeypatch_auth):
     ac, app = app_ctx
     monkeypatch_auth(user_id=1, role="editor", app=app)
-    r = await ac.get("/api/scripts/1/source")
+    r = await ac.get("/api/kindling/scripts/1/source")
     assert r.status_code == 200, r.text
     assert r.headers["content-type"].startswith("application/json")
     assert r.json() == {"content": "print('hi')\n"}
@@ -90,7 +90,7 @@ async def test_source_returns_json_content(app_ctx, monkeypatch_auth):
 async def test_source_missing_file_returns_404(app_ctx_missing, monkeypatch_auth):
     ac, app = app_ctx_missing
     monkeypatch_auth(user_id=1, role="editor", app=app)
-    r = await ac.get("/api/scripts/1/source")
+    r = await ac.get("/api/kindling/scripts/1/source")
     assert r.status_code == 404
 
 
@@ -99,5 +99,5 @@ async def test_source_unowned_returns_403(app_ctx, monkeypatch_auth):
     ac, app = app_ctx
     # User 2 is not the owner of script 1.
     monkeypatch_auth(user_id=2, role="editor", app=app)
-    r = await ac.get("/api/scripts/1/source")
+    r = await ac.get("/api/kindling/scripts/1/source")
     assert r.status_code == 403

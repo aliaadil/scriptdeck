@@ -1,4 +1,4 @@
-"""Tests for GET /api/runs schedule_id + offset filter.
+"""Tests for GET /api/kindling/runs schedule_id + offset filter.
 
 Task 1 of feat/run-logs runs-page refresh.
 """
@@ -11,9 +11,9 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import insert
 
-from scriptdeck.app import create_app
-from scriptdeck.config import Settings
-from scriptdeck.db.models import runs, schedules, scripts, users
+from kindling.app import create_app
+from kindling.config import Settings
+from kindling.db.models import runs, schedules, scripts, users
 
 
 @pytest.fixture
@@ -87,7 +87,7 @@ async def app_ctx(tmp_path):
 async def test_schedule_id_returns_only_matching(app_ctx, monkeypatch_auth):
     ac, app = app_ctx
     monkeypatch_auth(user_id=1, role="editor", app=app)
-    r = await ac.get("/api/runs", params={"schedule_id": 100})
+    r = await ac.get("/api/kindling/runs", params={"schedule_id": 100})
     assert r.status_code == 200, r.text
     runs_out = r.json()
     assert {x["script_id"] for x in runs_out} == {10}
@@ -98,7 +98,7 @@ async def test_schedule_id_returns_only_matching(app_ctx, monkeypatch_auth):
 async def test_script_name_populated(app_ctx, monkeypatch_auth):
     ac, app = app_ctx
     monkeypatch_auth(user_id=1, role="editor", app=app)
-    r = await ac.get("/api/runs", params={"schedule_id": 100})
+    r = await ac.get("/api/kindling/runs", params={"schedule_id": 100})
     assert r.status_code == 200, r.text
     runs_out = r.json()
     assert len(runs_out) > 0
@@ -110,7 +110,7 @@ async def test_script_name_populated(app_ctx, monkeypatch_auth):
 async def test_schedule_id_owner_check(app_ctx, monkeypatch_auth):
     ac, app = app_ctx
     monkeypatch_auth(user_id=1, role="editor", app=app)
-    r = await ac.get("/api/runs", params={"schedule_id": 200})  # belongs to bob
+    r = await ac.get("/api/kindling/runs", params={"schedule_id": 200})  # belongs to bob
     assert r.status_code == 403
 
 
@@ -118,7 +118,7 @@ async def test_schedule_id_owner_check(app_ctx, monkeypatch_auth):
 async def test_schedule_id_404(app_ctx, monkeypatch_auth):
     ac, app = app_ctx
     monkeypatch_auth(user_id=1, role="editor", app=app)
-    r = await ac.get("/api/runs", params={"schedule_id": 999})
+    r = await ac.get("/api/kindling/runs", params={"schedule_id": 999})
     assert r.status_code == 404
 
 
@@ -126,7 +126,7 @@ async def test_schedule_id_404(app_ctx, monkeypatch_auth):
 async def test_offset_and_limit(app_ctx, monkeypatch_auth):
     ac, app = app_ctx
     monkeypatch_auth(user_id=1, role="editor", app=app)
-    r = await ac.get("/api/runs", params={"schedule_id": 100, "limit": 2, "offset": 1})
+    r = await ac.get("/api/kindling/runs", params={"schedule_id": 100, "limit": 2, "offset": 1})
     runs_out = r.json()
     assert len(runs_out) == 2
     # Newest-first default ordering. Schedule 100 owns 4 rows now (1000-1002
@@ -138,7 +138,7 @@ async def test_offset_and_limit(app_ctx, monkeypatch_auth):
 async def test_offset_clamps_upper(app_ctx, monkeypatch_auth):
     ac, app = app_ctx
     monkeypatch_auth(user_id=1, role="editor", app=app)
-    r = await ac.get("/api/runs", params={"offset": 99999})
+    r = await ac.get("/api/kindling/runs", params={"offset": 99999})
     assert r.status_code == 422
 
 
@@ -154,7 +154,7 @@ async def test_status_filter_returns_only_matching(app_ctx, monkeypatch_auth):
         from sqlalchemy import update
         await s.execute(update(runs).where(runs.c.id == 1000).values(status="running"))
         await s.commit()
-    r = await ac.get("/api/runs", params={"status": "running"})
+    r = await ac.get("/api/kindling/runs", params={"status": "running"})
     assert r.status_code == 200, r.text
     runs_out = r.json()
     assert {x["id"] for x in runs_out} == {1000}
@@ -166,7 +166,7 @@ async def test_skip_reason_round_trips(app_ctx, monkeypatch_auth):
     """RunOut exposes skip_reason so the UI can show why a run was skipped."""
     ac, app = app_ctx
     monkeypatch_auth(user_id=1, role="editor", app=app)
-    r = await ac.get("/api/runs", params={"status": "skipped"})
+    r = await ac.get("/api/kindling/runs", params={"status": "skipped"})
     assert r.status_code == 200, r.text
     runs_out = r.json()
     assert len(runs_out) == 1
@@ -179,7 +179,7 @@ async def test_schedule_timezone_round_trips(app_ctx, monkeypatch_auth):
     at the instant it did (UTC vs local timezone schedule)."""
     ac, app = app_ctx
     monkeypatch_auth(user_id=1, role="editor", app=app)
-    r = await ac.get("/api/runs", params={"schedule_id": 100})
+    r = await ac.get("/api/kindling/runs", params={"schedule_id": 100})
     assert r.status_code == 200, r.text
     runs_out = r.json()
     assert all(x["schedule_timezone"] == "UTC" for x in runs_out)

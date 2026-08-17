@@ -7,11 +7,11 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import insert
 
-from scriptdeck.app import create_app
-from scriptdeck.auth.jwt import encode_jwt
-from scriptdeck.auth.passwords import hash_password
-from scriptdeck.config import Settings
-from scriptdeck.db.models import runs, schedules, scripts, users
+from kindling.app import create_app
+from kindling.auth.jwt import encode_jwt
+from kindling.auth.passwords import hash_password
+from kindling.config import Settings
+from kindling.db.models import runs, schedules, scripts, users
 
 
 @pytest.fixture
@@ -46,7 +46,7 @@ async def app_and_token(tmp_path):
 async def test_presets_endpoint_returns_six(app_and_token):
     app, _ = app_and_token
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
-        r = await ac.get("/api/schedule-presets")
+        r = await ac.get("/api/kindling/schedule-presets")
     assert r.status_code == 200, r.text
     body = r.json()
     assert isinstance(body, list)
@@ -70,7 +70,7 @@ async def test_next_runs_endpoint_uses_croniter(app_and_token):
         await s.commit()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
         r = await ac.get(
-            "/api/schedules/1/next-runs?limit=5",
+            "/api/kindling/schedules/1/next-runs?limit=5",
             headers={"Authorization": f"Bearer {token}"},
         )
     assert r.status_code == 200, r.text
@@ -92,7 +92,7 @@ async def test_create_schedule_validates_blackout_dates(app_and_token):
     app, token = app_and_token
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
         r = await ac.post(
-            "/api/schedules",
+            "/api/kindling/schedules",
             json={
                 "script_id": 1, "kind": "cron", "expression": "0 9 * * *",
                 "blackout_dates": ["not-a-date"],
@@ -107,7 +107,7 @@ async def test_create_schedule_validates_overlap_policy(app_and_token):
     app, token = app_and_token
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
         r = await ac.post(
-            "/api/schedules",
+            "/api/kindling/schedules",
             json={
                 "script_id": 1, "kind": "cron", "expression": "0 9 * * *",
                 "overlap_policy": "explode",
@@ -122,7 +122,7 @@ async def test_create_schedule_validates_include_days_range(app_and_token):
     app, token = app_and_token
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
         r = await ac.post(
-            "/api/schedules",
+            "/api/kindling/schedules",
             json={
                 "script_id": 1, "kind": "cron", "expression": "0 9 * * *",
                 "include_days": [7],
@@ -137,7 +137,7 @@ async def test_create_schedule_with_blackout_round_trips(app_and_token):
     app, token = app_and_token
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
         r = await ac.post(
-            "/api/schedules",
+            "/api/kindling/schedules",
             json={
                 "script_id": 1, "kind": "cron", "expression": "0 9 * * *",
                 "timezone": "UTC",
@@ -164,7 +164,7 @@ async def test_queue_dropped_visible_in_schedule_out(app_and_token):
     app, token = app_and_token
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
         r = await ac.post(
-            "/api/schedules",
+            "/api/kindling/schedules",
             json={
                 "script_id": 1, "kind": "cron", "expression": "0 9 * * *",
             },
@@ -172,7 +172,7 @@ async def test_queue_dropped_visible_in_schedule_out(app_and_token):
         )
     assert r.status_code == 201, r.text
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
-        r = await ac.get("/api/schedules", headers={"Authorization": f"Bearer {token}"})
+        r = await ac.get("/api/kindling/schedules", headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 200, r.text
     body = r.json()
     assert len(body) == 1
@@ -186,7 +186,7 @@ async def test_create_schedule_rejects_negative_retry_max(app_and_token):
     app, token = app_and_token
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
         r = await ac.post(
-            "/api/schedules",
+            "/api/kindling/schedules",
             json={
                 "script_id": 1, "kind": "cron", "expression": "0 9 * * *",
                 "retry_max": -1,
@@ -201,7 +201,7 @@ async def test_create_schedule_rejects_negative_retry_backoff(app_and_token):
     app, token = app_and_token
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
         r = await ac.post(
-            "/api/schedules",
+            "/api/kindling/schedules",
             json={
                 "script_id": 1, "kind": "cron", "expression": "0 9 * * *",
                 "retry_backoff": -5,
@@ -217,7 +217,7 @@ async def test_update_schedule_rejects_negative_retry_max(app_and_token):
     # Create a schedule first.
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
         r = await ac.post(
-            "/api/schedules",
+            "/api/kindling/schedules",
             json={
                 "script_id": 1, "kind": "cron", "expression": "0 9 * * *",
             },
@@ -228,7 +228,7 @@ async def test_update_schedule_rejects_negative_retry_max(app_and_token):
     # Update with negative retry_max — must be rejected.
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
         r = await ac.put(
-            f"/api/schedules/{sched_id}",
+            f"/api/kindling/schedules/{sched_id}",
             json={
                 "script_id": 1, "kind": "cron", "expression": "0 9 * * *",
                 "retry_max": -1,
@@ -238,7 +238,7 @@ async def test_update_schedule_rejects_negative_retry_max(app_and_token):
     assert r.status_code == 422, r.text
 
 
-# ---- Bug 1: GET /api/schedules/{id} prefill support ----
+# ---- Bug 1: GET /api/kindling/schedules/{id} prefill support ----
 
 
 @pytest.mark.asyncio
@@ -261,7 +261,7 @@ async def test_get_schedule_returns_full_record(app_and_token):
     }
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
         r = await ac.post(
-            "/api/schedules", json=payload,
+            "/api/kindling/schedules", json=payload,
             headers={"Authorization": f"Bearer {token}"},
         )
     assert r.status_code == 201, r.text
@@ -269,7 +269,7 @@ async def test_get_schedule_returns_full_record(app_and_token):
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
         r = await ac.get(
-            f"/api/schedules/{sched_id}",
+            f"/api/kindling/schedules/{sched_id}",
             headers={"Authorization": f"Bearer {token}"},
         )
     assert r.status_code == 200, r.text
@@ -294,7 +294,7 @@ async def test_get_schedule_404_for_unknown_id(app_and_token):
     app, token = app_and_token
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
         r = await ac.get(
-            "/api/schedules/9999",
+            "/api/kindling/schedules/9999",
             headers={"Authorization": f"Bearer {token}"},
         )
     assert r.status_code == 404, r.text
@@ -344,7 +344,7 @@ async def test_get_schedule_403_for_other_users_script(app_and_token):
     user_a_token, _, _ = encode_jwt(1, "editor", secret)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
         r = await ac.get(
-            "/api/schedules/1",  # id=1 is the schedule on user 2's script
+            "/api/kindling/schedules/1",  # id=1 is the schedule on user 2's script
             headers={"Authorization": f"Bearer {user_a_token}"},
         )
     # 404 is also acceptable per the spec mirror; both prove isolation.
@@ -360,12 +360,12 @@ async def test_list_schedules_includes_run_count(app_and_token):
     # Two schedules via API.
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
         r1 = await ac.post(
-            "/api/schedules",
+            "/api/kindling/schedules",
             json={"script_id": 1, "kind": "cron", "expression": "0 9 * * *"},
             headers={"Authorization": f"Bearer {token}"},
         )
         r2 = await ac.post(
-            "/api/schedules",
+            "/api/kindling/schedules",
             json={"script_id": 1, "kind": "cron", "expression": "0 10 * * *"},
             headers={"Authorization": f"Bearer {token}"},
         )
@@ -401,7 +401,7 @@ async def test_list_schedules_includes_run_count(app_and_token):
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
         r = await ac.get(
-            "/api/schedules",
+            "/api/kindling/schedules",
             headers={"Authorization": f"Bearer {token}"},
         )
     assert r.status_code == 200, r.text
@@ -416,12 +416,12 @@ async def test_list_schedules_run_count_isolated_per_schedule(app_and_token):
     app, token = app_and_token
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
         r1 = await ac.post(
-            "/api/schedules",
+            "/api/kindling/schedules",
             json={"script_id": 1, "kind": "cron", "expression": "0 9 * * *"},
             headers={"Authorization": f"Bearer {token}"},
         )
         r2 = await ac.post(
-            "/api/schedules",
+            "/api/kindling/schedules",
             json={"script_id": 1, "kind": "cron", "expression": "0 10 * * *"},
             headers={"Authorization": f"Bearer {token}"},
         )
@@ -449,7 +449,7 @@ async def test_list_schedules_run_count_isolated_per_schedule(app_and_token):
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
         r = await ac.get(
-            "/api/schedules",
+            "/api/kindling/schedules",
             headers={"Authorization": f"Bearer {token}"},
         )
     assert r.status_code == 200, r.text

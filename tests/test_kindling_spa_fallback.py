@@ -16,12 +16,12 @@ from pathlib import Path
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from scriptdeck.app import create_app
-from scriptdeck.config import Settings
+from kindling.app import create_app
+from kindling.config import Settings
 
 
 # Path where create_app() looks for the dashboard build output.
-DASHBOARD_DIR = Path(__file__).resolve().parents[1] / "src" / "scriptdeck" / "dashboard_static"
+DASHBOARD_DIR = Path(__file__).resolve().parents[1] / "src" / "kindling" / "dashboard_static"
 
 
 def _index_html_content() -> str:

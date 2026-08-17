@@ -1,4 +1,4 @@
-"""Tests for GET /api/runs/{id}/log returning JSON {content}.
+"""Tests for GET /api/kindling/runs/{id}/log returning JSON {content}.
 
 Task 3 of feat/run-logs runs-page refresh.
 """
@@ -11,9 +11,9 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import insert
 
-from scriptdeck.app import create_app
-from scriptdeck.config import Settings
-from scriptdeck.db.models import runs, scripts, users
+from kindling.app import create_app
+from kindling.config import Settings
+from kindling.db.models import runs, scripts, users
 
 
 @pytest.fixture
@@ -56,7 +56,7 @@ async def test_log_returns_json_with_content(app_ctx, monkeypatch_auth):
     log_file = storage / "logs" / "42.log"
     log_file.write_text("hello\nworld\n", encoding="utf-8")
     monkeypatch_auth(user_id=1, role="editor", app=app)
-    r = await ac.get("/api/runs/42/log")
+    r = await ac.get("/api/kindling/runs/42/log")
     assert r.status_code == 200, r.text
     assert r.headers["content-type"].startswith("application/json")
     body = r.json()
@@ -68,5 +68,5 @@ async def test_log_missing_returns_404(app_ctx, monkeypatch_auth):
     ac, app, storage = app_ctx
     # No log file written.
     monkeypatch_auth(user_id=1, role="editor", app=app)
-    r = await ac.get("/api/runs/42/log")
+    r = await ac.get("/api/kindling/runs/42/log")
     assert r.status_code == 404

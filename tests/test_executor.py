@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from scriptdeck.runner.executor import run_script
+from kindling.runner.executor import run_script
 
 
 @pytest.mark.asyncio
@@ -27,7 +27,7 @@ async def test_run_script_success(tmp_path):
         def decrypt_lines(self, *args, **kwargs):
             return {}
 
-    from scriptdeck.services.log_broker import LogBroker
+    from kindling.services.log_broker import LogBroker
     broker = LogBroker()
     sem = asyncio.Semaphore(4)
 

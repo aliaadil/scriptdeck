@@ -3,7 +3,7 @@ from pathlib import Path
 
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from scriptdeck.db.migrations import run_migrations_sync
+from kindling.db.migrations import run_migrations_sync
 
 
 def test_schedules_have_v2_columns(tmp_path: Path):
