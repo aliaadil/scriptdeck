@@ -256,7 +256,7 @@ export function Runs() {
                     </TableCell>
                     <TableCell>{r.exit_code ?? "—"}</TableCell>
                     <TableCell className="text-right">
-                      {user?.role !== "viewer" && (
+                      {user?.role !== "viewer" && r.status === "running" && (
                         <Button
                           variant="ghost"
                           size="icon"

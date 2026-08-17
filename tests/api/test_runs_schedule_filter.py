@@ -132,3 +132,22 @@ async def test_offset_clamps_upper(app_ctx, monkeypatch_auth):
     monkeypatch_auth(user_id=1, role="editor", app=app)
     r = await ac.get("/api/runs", params={"offset": 99999})
     assert r.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_status_filter_returns_only_matching(app_ctx, monkeypatch_auth):
+    """?status=running must filter server-side. Regression: backend param was
+    named status_filter and the frontend sent status=, so the running section
+    showed every run regardless of status."""
+    ac, app = app_ctx
+    monkeypatch_auth(user_id=1, role="editor", app=app)
+    # Mark one of alice's existing success runs as running.
+    async with app.state.session_factory() as s:
+        from sqlalchemy import update
+        await s.execute(update(runs).where(runs.c.id == 1000).values(status="running"))
+        await s.commit()
+    r = await ac.get("/api/runs", params={"status": "running"})
+    assert r.status_code == 200, r.text
+    runs_out = r.json()
+    assert {x["id"] for x in runs_out} == {1000}
+    assert all(x["status"] == "running" for x in runs_out)

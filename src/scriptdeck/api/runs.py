@@ -70,7 +70,7 @@ class RunOut(BaseModel):
 async def list_endpoint(
     request: Request,
     script_id: int | None = None,
-    status_filter: str | None = None,
+    status_filter: str | None = Query(default=None, alias="status"),
     since: str | None = None,
     group: str | None = None,
     schedule_id: int | None = Query(default=None, ge=1),

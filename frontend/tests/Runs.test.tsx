@@ -208,4 +208,55 @@ describe("Runs page", () => {
     });
     invalidateSpy.mockRestore();
   });
+
+  it("hides Cancel button when running-section row is not status=running", async () => {
+    // Regression: backend was returning all rows for /api/runs?status=running
+    // because the param was misnamed, so the running section showed success
+    // and skipped rows with a stray Cancel button. With server-side filter
+    // + status guard, only status=running rows render the X.
+    cleanup();
+    apiMock.mockReset();
+    schedulesMock.mockReset();
+    schedulesMock.mockResolvedValue([
+      {
+        id: 1,
+        expression: "* * * * *",
+        script_id: 10,
+        enabled: true,
+        next_run_at: null,
+        timezone: "UTC",
+        run_count: 0,
+      },
+    ]);
+    apiMock.mockImplementation((url: string) => {
+      if (url.includes("status=running")) {
+        return Promise.resolve([
+          {
+            id: 1,
+            script_name: "hello",
+            schedule_id: null,
+            started_at: new Date().toISOString(),
+            ended_at: new Date().toISOString(),
+            exit_code: 0,
+            status: "success",
+          },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter>
+          <Runs />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByText(/Currently running/i)).toBeInTheDocument(),
+    );
+    expect(screen.queryByLabelText(/Cancel run 1/i)).not.toBeInTheDocument();
+  });
 });
