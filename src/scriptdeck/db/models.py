@@ -24,6 +24,7 @@ users = Table(
     Column("role", String, nullable=False),
     Column("created_at", Text, nullable=False),
     Column("last_login_at", Text, nullable=True),
+    Column("timezone", String, nullable=False, default="UTC"),
     CheckConstraint("role IN ('admin', 'editor', 'viewer')", name="users_role_check"),
 )
 
@@ -115,6 +116,12 @@ schedules = Table(
     Column("retry_backoff", Integer, nullable=False, default=0),
     Column("last_status", String),
     Column("last_error", Text),
+    Column("timezone", String),
+    Column("blackout_dates", Text),
+    Column("include_days", Text),
+    Column("overlap_policy", String, nullable=False, default="skip"),
+    Column("queue_max", Integer, nullable=False, default=10),
+    Column("queue_dropped", Integer, nullable=False, default=0),
     CheckConstraint("kind IN ('cron', 'interval')", name="schedules_kind_check"),
     Index("idx_schedules_script", "script_id"),
     Index("idx_schedules_due", "enabled", "next_run_at"),
@@ -140,8 +147,18 @@ runs = Table(
     Column("exit_code", Integer),
     Column("status", String, nullable=False),
     Column("retry_group", String),
+    Column("attempt", Integer, nullable=False, default=0),
+    # parent_run_id is reserved for a future multi-row retry-chain model.
+    # The current implementation uses single-row attempt increment
+    # (run.attempt = ...) per the spec's "Retry State Machine" section,
+    # so this column is intentionally unused. Leave the FK in place so
+    # a future migration can start populating it without a schema change.
+    Column("parent_run_id", Integer, ForeignKey("runs.id", ondelete="SET NULL")),
+    Column("next_attempt_at", String),
+    Column("skip_reason", String),
     CheckConstraint(
-        "status IN ('running', 'success', 'failure', 'error', 'cancelled')",
+        "status IN ('running', 'success', 'failure', 'error', 'cancelled', "
+        "'skipped', 'pending', 'pending_retry')",
         name="runs_status_check",
     ),
     Index("idx_runs_script", "script_id"),

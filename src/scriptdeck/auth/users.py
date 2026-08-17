@@ -17,6 +17,7 @@ class User:
     role: str
     created_at: str
     last_login_at: str | None
+    timezone: str = "UTC"
 
 
 async def create_user(

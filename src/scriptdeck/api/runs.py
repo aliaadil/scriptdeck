@@ -48,22 +48,43 @@ class RunOut(BaseModel):
     ended_at: str | None
     exit_code: int | None
     status: str
+    # Retry-chain identity, so the UI can group a run with its sibling
+    # attempts via GET /api/runs?group=<retry_group>. Defaulted because
+    # _trigger_run builds RunOut by hand for a fresh (attempt 0) run.
+    attempt: int = 0
+    retry_group: str | None = None
 
 
 @router.get("")
-async def list_endpoint(request: Request, script_id: int | None = None,
-                        status_filter: str | None = None, since: str | None = None,
-                        limit: int = 50, user: User = Depends(current_user)) -> list[RunOut]:
+async def list_endpoint(
+    request: Request,
+    script_id: int | None = None,
+    status_filter: str | None = None,
+    since: str | None = None,
+    group: str | None = None,
+    limit: int = 50,
+    user: User = Depends(current_user),
+) -> list[RunOut]:
     sf = request.app.state.session_factory
     t = _runs_table()
-    stmt = select(t).order_by(t.c.id.desc()).limit(limit)
+    stmt = select(t).limit(limit)
+    # Retry-group lookup — order attempts ascending so callers see the chain
+    # in order (0, 1, 2, ...) rather than newest-first. All other filters
+    # and ownership scoping still apply.
+    if group is not None:
+        stmt = stmt.where(t.c.retry_group == group).order_by(
+            t.c.attempt.asc(), t.c.id.asc()
+        )
+    else:
+        stmt = stmt.order_by(t.c.id.desc())
     if script_id:
         stmt = stmt.where(t.c.script_id == script_id)
         # Enforce ownership when filtering by a specific script_id.
         async with sf() as s:
             await require_script_owner(s, script_id, user)
-    else:
-        # No script_id filter — non-admins see only their own scripts' runs.
+    elif group is None:
+        # No script_id filter and no retry_group — non-admins see only
+        # their own scripts' runs.
         if user.role != "admin":
             async with sf() as s:
                 own_script_ids = await run_service.own_script_ids(s, user.id)
@@ -76,6 +97,13 @@ async def list_endpoint(request: Request, script_id: int | None = None,
         stmt = stmt.where(t.c.started_at >= since)
     async with sf() as s:
         rows = (await s.execute(stmt)).mappings().all()
+    if group is not None and user.role != "admin":
+        # Per-run ownership re-check for group queries — a non-admin could
+        # guess another user's retry_group, so filter the response to rows
+        # whose script the caller actually owns.
+        async with sf() as s:
+            own_script_ids = set(await run_service.own_script_ids(s, user.id))
+        rows = [r for r in rows if r["script_id"] in own_script_ids]
     return [RunOut(**dict(r)) for r in rows]
 
 
@@ -103,7 +131,7 @@ async def _trigger_run(app, script_id: int, user: User) -> RunOut:
             raise HTTPException(
                 status.HTTP_409_CONFLICT, detail="another run is in progress"
             )
-        run_id, started = await run_service.create_run(
+        run_id, started, retry_group = await run_service.create_run(
             s, script_id=script.id, schedule_id=None
         )
         deps_row = (await s.execute(
@@ -130,7 +158,8 @@ async def _trigger_run(app, script_id: int, user: User) -> RunOut:
         env_nonce=env_nonce,
     )
     return RunOut(id=run_id, script_id=script.id, schedule_id=None,
-                  started_at=started, ended_at=None, exit_code=None, status="running")
+                  started_at=started, ended_at=None, exit_code=None, status="running",
+                  retry_group=retry_group)
 
 
 def _schedule_execution(

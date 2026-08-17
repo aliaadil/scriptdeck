@@ -1,11 +1,12 @@
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/api/client";
-import { cancelRun, getRun } from "@/api/runs";
+import { cancelRun, getRun, listRunGroup } from "@/api/runs";
 import { useLiveLogs } from "@/hooks/useLiveLogs";
 import { useAuth } from "@/auth/AuthProvider";
 import { AppShell } from "@/components/AppShell";
 import { StatusBadge } from "@/components/StatusBadge";
+import { AttemptList } from "@/components/runs/AttemptList";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,15 @@ export function RunView() {
   });
 
   const { events, ended } = useLiveLogs(Number.isFinite(runId) ? runId : null);
+
+  // Sibling attempts in this run's retry chain. Only meaningful once the run
+  // has loaded and reports a retry_group.
+  const retryGroup = run?.retry_group ?? null;
+  const { data: attempts = [] } = useQuery({
+    queryKey: ["run-group", retryGroup],
+    queryFn: () => listRunGroup(retryGroup as string),
+    enabled: retryGroup !== null,
+  });
   const liveText = events
     .filter((e) => e.kind === "line")
     .map((e) => (e as { kind: "line"; text: string }).text)
@@ -82,6 +92,8 @@ export function RunView() {
             <Field label="Exit code" value={run?.exit_code ?? "—"} />
           </CardContent>
         </Card>
+
+        <AttemptList runs={attempts} currentRunId={runId} />
 
         <Tabs defaultValue="output">
           <TabsList>

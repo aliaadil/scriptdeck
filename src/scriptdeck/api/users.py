@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr, Field
+from sqlalchemy import update
 
 from scriptdeck.auth.deps import current_user
 from scriptdeck.auth.invites import accept_invite, create_invite
@@ -12,6 +15,7 @@ from scriptdeck.auth.users import (
     list_users,
     update_role,
 )
+from scriptdeck.db.models import users as users_table
 from scriptdeck.services.audit import record as audit
 
 router = APIRouter(prefix="/users")
@@ -122,3 +126,43 @@ async def change_role(
     if not ok:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="not found")
     return {"ok": True}
+
+
+class UserMePatch(BaseModel):
+    timezone: str | None = None
+
+
+@router.patch("/me")
+async def patch_me(
+    body: UserMePatch,
+    request: Request,
+    user: User = Depends(current_user),
+) -> dict:
+    """Update the current user's mutable profile fields (currently timezone)."""
+    values: dict[str, str] = {}
+    if body.timezone is not None:
+        try:
+            ZoneInfo(body.timezone)
+        except ZoneInfoNotFoundError as exc:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"unknown timezone: {body.timezone}",
+            ) from exc
+        values["timezone"] = body.timezone
+    if values:
+        sf = request.app.state.session_factory
+        async with sf() as s:
+            await s.execute(
+                update(users_table).where(users_table.c.id == user.id).values(**values)
+            )
+            if "timezone" in values:
+                await audit(
+                    s,
+                    user.id,
+                    "timezone_updated",
+                    "user",
+                    user.id,
+                    {"timezone": values["timezone"]},
+                )
+            await s.commit()
+    return {"ok": True, "updated": list(values.keys())}

@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from "rea
 import { api, setToken, getToken } from "@/api/client";
 
 export type Role = "admin" | "editor" | "viewer";
-export type User = { id: number; email: string; role: Role };
+export type User = { id: number; email: string; role: Role; timezone?: string };
 
 type AuthState = {
   user: User | null;
