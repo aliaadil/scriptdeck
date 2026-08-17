@@ -256,6 +256,23 @@ Replace `<title>`, `<meta name="description">`, and `<meta name="theme-color">`:
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 ```
 
+- [ ] **Step 3.5: Sweep leftover `ScriptDeck` strings in `frontend/src/`**
+
+```bash
+grep -rln 'ScriptDeck' frontend/src | xargs sed -i '' 's/ScriptDeck/Kindling/g'
+```
+
+Files known to carry leftover strings (verified by Task 2 review):
+- `frontend/src/auth/LoginPage.tsx` — sign-in copy
+- `frontend/src/pages/Settings.tsx` — default instance name
+- Any other file flagged by the grep above.
+
+Verify:
+```bash
+grep -rE 'ScriptDeck' frontend/src
+```
+Expected: no output.
+
 - [ ] **Step 4: Update `frontend/src/router.tsx`**
 
 Find the `createBrowserRouter` (or equivalent) call and change the dashboard base path. Replace the existing route definitions:
