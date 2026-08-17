@@ -5,9 +5,9 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { api } from "@/api/client";
+import { ApiError, api } from "@/api/client";
 import { cancelRun } from "@/api/runs";
-import { listSchedules } from "@/api/schedules";
+import { listSchedules, type Schedule } from "@/api/schedules";
 import { useAuth } from "@/auth/AuthProvider";
 import { AppShell } from "@/components/AppShell";
 import {
@@ -66,16 +66,6 @@ type RunRow = {
   status: string;
 };
 
-type ScheduleRow = {
-  id: number;
-  expression: string;
-  script_id: number;
-  enabled: boolean;
-  next_run_at: string | null;
-  timezone: string | null;
-  run_count: number;
-};
-
 function runsUrl(opts: {
   schedule?: string;
   status?: Status;
@@ -92,9 +82,9 @@ function runsUrl(opts: {
     );
   if (opts.offset && opts.offset > 0)
     params.set("offset", String(opts.offset));
+  // limit is always set below so the URL always carries a query string.
   params.set("limit", String(opts.limit ?? PAGE_SIZE));
-  const qs = params.toString();
-  return qs ? `/api/runs?${qs}` : `/api/runs`;
+  return `/api/runs?${params.toString()}`;
 }
 
 function variantFor(
@@ -119,10 +109,10 @@ export function Runs() {
   const [status, setStatus] = useState<Status>("all");
   const [page, setPage] = useState(1);
 
-  const { data: schedules = [] } = useQuery({
+  const { data: schedules = [] } = useQuery<Schedule[]>({
     queryKey: ["schedules-for-runs"],
     queryFn: () => listSchedules(),
-  }) as { data: ScheduleRow[] };
+  });
 
   const offset = (page - 1) * PAGE_SIZE;
   const commonArgs = { schedule, status, limit: PAGE_SIZE };
@@ -135,6 +125,7 @@ export function Runs() {
     placeholderData: keepPreviousData,
   });
 
+  // Always queries status=running; the schedule filter alone changes behavior.
   const running = useQuery({
     queryKey: ["runs-running", schedule],
     queryFn: () =>
@@ -159,9 +150,8 @@ export function Runs() {
       toast.success("Run cancelled");
       invalidate();
     } catch (e) {
-      const msg = (e as Error).message;
-      if (/404/.test(msg)) toast.error("Already finished");
-      else toast.error(msg);
+      if (e instanceof ApiError && e.status === 404) toast.error("Already finished");
+      else toast.error((e as Error).message);
       invalidate();
     }
   }
@@ -220,7 +210,7 @@ export function Runs() {
           <Card>
             <CardHeader className="px-4 py-3">
               <CardTitle className="text-sm font-medium">
-                Currently running ({running.data!.length})
+                Currently running ({running.data?.length ?? 0})
               </CardTitle>
             </CardHeader>
             <Table>
@@ -236,7 +226,7 @@ export function Runs() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {running.data!.map((r) => (
+                {(running.data ?? []).map((r) => (
                   <TableRow
                     key={r.id}
                     tabIndex={0}

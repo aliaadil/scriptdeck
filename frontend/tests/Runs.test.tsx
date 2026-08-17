@@ -79,6 +79,7 @@ describe("Runs page", () => {
     expect(
       screen.getByRole("heading", { name: /Runs/i }),
     ).toBeInTheDocument();
+    expect(screen.getByText(/All schedules/i)).toBeInTheDocument();
   });
 
   it("fetches runs on mount", async () => {

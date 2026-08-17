@@ -19,7 +19,7 @@ def tmp_db(tmp_path):
 
 
 @pytest.fixture
-def monkeypatch_auth(monkeypatch):
+def monkeypatch_auth():
     """Returns a factory that fakes current_user for the duration of the test.
 
     Uses FastAPI's ``app.dependency_overrides`` so ``Depends(current_user)``
@@ -51,8 +51,5 @@ def monkeypatch_auth(monkeypatch):
                 last_login_at=None,
                 timezone="UTC",
             )
-        if app is not None:
-            app.dependency_overrides[auth_deps.current_user] = _fake
-        else:
-            monkeypatch.setattr(auth_deps, "current_user", _fake)
+        app.dependency_overrides[auth_deps.current_user] = _fake
     return _set

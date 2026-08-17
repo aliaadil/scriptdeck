@@ -88,11 +88,31 @@ async def test_schedule_id_returns_only_matching(app_ctx, monkeypatch_auth):
 
 
 @pytest.mark.asyncio
+async def test_script_name_populated(app_ctx, monkeypatch_auth):
+    ac, app = app_ctx
+    monkeypatch_auth(user_id=1, role="editor", app=app)
+    r = await ac.get("/api/runs", params={"schedule_id": 100})
+    assert r.status_code == 200, r.text
+    runs_out = r.json()
+    assert len(runs_out) > 0
+    # Every row in this fixture belongs to script "hello" (id=10).
+    assert all(x["script_name"] == "hello" for x in runs_out)
+
+
+@pytest.mark.asyncio
 async def test_schedule_id_owner_check(app_ctx, monkeypatch_auth):
     ac, app = app_ctx
     monkeypatch_auth(user_id=1, role="editor", app=app)
     r = await ac.get("/api/runs", params={"schedule_id": 200})  # belongs to bob
     assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_schedule_id_404(app_ctx, monkeypatch_auth):
+    ac, app = app_ctx
+    monkeypatch_auth(user_id=1, role="editor", app=app)
+    r = await ac.get("/api/runs", params={"schedule_id": 999})
+    assert r.status_code == 404
 
 
 @pytest.mark.asyncio
@@ -102,8 +122,8 @@ async def test_offset_and_limit(app_ctx, monkeypatch_auth):
     r = await ac.get("/api/runs", params={"schedule_id": 100, "limit": 2, "offset": 1})
     runs_out = r.json()
     assert len(runs_out) == 2
-    # Newest-first default ordering; offsets skip
-    assert runs_out[0]["id"] != runs_out[1]["id"]
+    # Newest-first default ordering; offset=1 skips id=1002, leaving ids 1001+1000.
+    assert [x["id"] for x in runs_out] == [1001, 1000]
 
 
 @pytest.mark.asyncio
