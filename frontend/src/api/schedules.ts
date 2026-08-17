@@ -8,6 +8,7 @@ export type Schedule = {
   include_days?: number[] | null;
   overlap_policy?: "skip" | "queue" | "parallel";
   queue_max?: number;
+  run_count: number;
 };
 
 export const listSchedules = (scriptId?: number) =>

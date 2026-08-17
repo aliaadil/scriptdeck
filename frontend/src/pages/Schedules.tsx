@@ -37,6 +37,7 @@ type ScheduleRow = {
   enabled: boolean;
   next_run_at: string | null;
   timezone: string | null;
+  run_count: number;
 };
 
 type Mode =
@@ -116,6 +117,7 @@ export function Schedules() {
                 <TableHead>Script</TableHead>
                 <TableHead>Timezone</TableHead>
                 <TableHead>Enabled</TableHead>
+                <TableHead>Runs</TableHead>
                 <TableHead>Next run</TableHead>
                 <TableHead className="w-24 text-right">Actions</TableHead>
               </TableRow>
@@ -132,6 +134,7 @@ export function Schedules() {
                       onCheckedChange={(v) => toggle.mutate({ id: s.id, enabled: v })}
                     />
                   </TableCell>
+                  <TableCell>{Number(s.run_count)}</TableCell>
                   <TableCell>
                     {s.next_run_at ? new Date(s.next_run_at).toLocaleString() : "—"}
                   </TableCell>
