@@ -1,6 +1,8 @@
-site_name: ScriptDeck
-site_description: Self-hosted scheduled script runner
-repo_url: https://github.com/aliaadil/scriptdeck
+site_name: Kindling
+site_description: Self-hosted scheduled script runner.
+site_url: https://aliaadil.github.io/kindling/
+repo_url: https://github.com/aliaadil/kindling
+repo_name: aliaadil/kindling
 theme:
   name: material
 nav:

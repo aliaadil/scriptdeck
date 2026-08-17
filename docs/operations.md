@@ -2,11 +2,11 @@
 
 ## Backup
 
-Stop writes, then copy `/data/scriptdeck.db` and `/storage`. For online SQLite backups, use `sqlite3 /data/scriptdeck.db ".backup /backup/scriptdeck.db"`.
+Stop writes, then copy `/data/kindling.db` and `/storage`. For online SQLite backups, use `sqlite3 /data/kindling.db ".backup /backup/kindling.db"`.
 
 ## Restore
 
-Stop ScriptDeck, restore both paths with ownership matching container UID/GID 10001, then restart and check `/health`.
+Stop Kindling, restore both paths with ownership matching container UID/GID 10001, then restart and check `/health`.
 
 ## Upgrade
 
@@ -17,7 +17,7 @@ Back up first, pull the desired immutable version tag, and recreate the containe
 Export `scripts.json`, `schedules.json`, and referenced script files into one directory, then run:
 
 ```bash
-scriptdeck import bugy-script-server /path/to/export
+kindling import bugy-script-server /path/to/export
 ```
 
 The importer creates records and copies source files. It never executes imported scripts; unsupported rows are logged and skipped.

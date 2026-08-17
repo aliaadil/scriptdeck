@@ -1,8 +1,8 @@
 # API reference
 
-The API uses JSON and HTTP Basic auth when `SCRIPTDECK_BASIC_AUTH` is configured. The reference below is generated from the server module docstrings.
+The API uses JSON and HTTP Basic auth when `KINDLING_BASIC_AUTH` is configured. The reference below is generated from the API router module docstrings.
 
-::: scriptrunner.server
+::: kindling.api
     options:
       show_source: false
       members_order: source

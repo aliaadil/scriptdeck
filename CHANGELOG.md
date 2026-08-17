@@ -1,8 +1,13 @@
 # Changelog
 
-All notable changes to ScriptDeck are documented here. The format follows
+All notable changes to Kindling are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## Unreleased
+
+### Changed
+- **Rebrand to Kindling.** GitHub repo, PyPI package, CLI command, dashboard URL, and env var prefix have all been renamed. v1 data still migrates via `kindling migrate-from-v1`.
 
 ## [2.0.0] — 2026-08-15
 
