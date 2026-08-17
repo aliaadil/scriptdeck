@@ -55,10 +55,12 @@ class RunOut(BaseModel):
     script_id: int
     script_name: str
     schedule_id: int | None
+    schedule_timezone: str | None = None
     started_at: str
     ended_at: str | None
     exit_code: int | None
     status: str
+    skip_reason: str | None = None
     # Retry-chain identity, so the UI can group a run with its sibling
     # attempts via GET /api/runs?group=<retry_group>. Defaulted because
     # _trigger_run builds RunOut by hand for a fresh (attempt 0) run.
@@ -87,8 +89,15 @@ async def list_endpoint(
     # defined as a Core table; joining on the explicit FK matches the
     # schema in models.py.
     stmt = (
-        select(t, scripts_t.c.name.label("script_name"))
-        .select_from(t.outerjoin(scripts_t, t.c.script_id == scripts_t.c.id))
+        select(
+            t,
+            scripts_t.c.name.label("script_name"),
+            sched_t.c.timezone.label("schedule_timezone"),
+        )
+        .select_from(
+            t.outerjoin(scripts_t, t.c.script_id == scripts_t.c.id)
+             .outerjoin(sched_t, t.c.schedule_id == sched_t.c.id)
+        )
         .limit(limit)
         .offset(offset)
     )

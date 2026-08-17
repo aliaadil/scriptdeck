@@ -43,6 +43,49 @@ import { toast } from "@/components/ui/sonner";
 import { RunningDuration } from "@/components/runs/RunningDuration";
 import { X } from "lucide-react";
 
+function StartedCell({ iso }: { iso: string }) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return <span>{iso}</span>;
+  const utc = d.toISOString().replace("T", " ").replace(/\.\d+Z$/, " UTC");
+  const local = d.toLocaleString();
+  return (
+    <span title={`UTC: ${utc}`} className="font-mono text-xs">
+      <span>{local}</span>
+      <span className="block text-[10px] text-muted-foreground">
+        UTC {utc}
+      </span>
+    </span>
+  );
+}
+
+function StatusBadge({ status, skip_reason }: { status: string; skip_reason?: string | null }) {
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <Badge variant={variantFor(status)}>{status}</Badge>
+      {skip_reason && (
+        <span
+          title={skip_reason}
+          className="max-w-[16ch] truncate text-[10px] text-muted-foreground"
+        >
+          {skip_reason}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function ScheduleCell({ id, timezone }: { id: number | null; timezone?: string | null }) {
+  if (!id) return <span>—</span>;
+  return (
+    <div className="flex flex-col items-start">
+      <span className="font-mono text-xs">#{id}</span>
+      {timezone && (
+        <span className="text-[10px] text-muted-foreground">{timezone}</span>
+      )}
+    </div>
+  );
+}
+
 const STATUSES = [
   "all",
   "running",
@@ -60,10 +103,12 @@ type RunRow = {
   script_id: number;
   script_name: string;
   schedule_id: number | null;
+  schedule_timezone?: string | null;
   started_at: string;
   ended_at: string | null;
   exit_code: number | null;
   status: string;
+  skip_reason?: string | null;
 };
 
 function runsUrl(opts: {
@@ -242,10 +287,10 @@ export function Runs() {
                     </TableCell>
                     <TableCell>{r.script_name}</TableCell>
                     <TableCell>
-                      <Badge>{r.status}</Badge>
+                      <StatusBadge status={r.status} skip_reason={r.skip_reason} />
                     </TableCell>
                     <TableCell>
-                      {new Date(r.started_at).toLocaleString()}
+                      <StartedCell iso={r.started_at} />
                     </TableCell>
                     <TableCell>
                       <RunningDuration
@@ -309,10 +354,10 @@ export function Runs() {
                   </TableCell>
                   <TableCell>{r.script_name}</TableCell>
                   <TableCell>
-                    <Badge variant={variantFor(r.status)}>{r.status}</Badge>
+                    <StatusBadge status={r.status} skip_reason={r.skip_reason} />
                   </TableCell>
                   <TableCell>
-                    {new Date(r.started_at).toLocaleString()}
+                    <StartedCell iso={r.started_at} />
                   </TableCell>
                   <TableCell>
                     <RunningDuration
@@ -323,7 +368,7 @@ export function Runs() {
                   </TableCell>
                   <TableCell>{r.exit_code ?? "—"}</TableCell>
                   <TableCell>
-                    {r.schedule_id ? `#${r.schedule_id}` : "—"}
+                    <ScheduleCell id={r.schedule_id} timezone={r.schedule_timezone} />
                   </TableCell>
                 </TableRow>
               ))}

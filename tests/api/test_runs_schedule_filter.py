@@ -50,13 +50,13 @@ async def app_ctx(tmp_path):
             id=100, script_id=10, kind="cron", expression="* * * * *",
             enabled=1, next_run_at="2030-01-01T00:00:00+00:00",
             retry_max=0, retry_backoff=0, overlap_policy="skip",
-            queue_max=10, queue_dropped=0,
+            queue_max=10, queue_dropped=0, timezone="UTC",
         ))
         await s.execute(insert(schedules).values(
             id=200, script_id=20, kind="cron", expression="* * * * *",
             enabled=1, next_run_at="2030-01-01T00:00:00+00:00",
             retry_max=0, retry_backoff=0, overlap_policy="skip",
-            queue_max=10, queue_dropped=0,
+            queue_max=10, queue_dropped=0, timezone="UTC",
         ))
         for i in range(3):
             await s.execute(insert(runs).values(
@@ -70,6 +70,13 @@ async def app_ctx(tmp_path):
                 started_at="2030-01-01T00:00:00+00:00", status="success",
                 exit_code=0, retry_group=str(i + 10),
             ))
+        # One skipped run with a reason — must round-trip to the API.
+        await s.execute(insert(runs).values(
+            id=3000, script_id=10, schedule_id=100,
+            started_at="2030-01-01T00:00:00+00:00", status="skipped",
+            exit_code=-1, retry_group="sk1",
+            skip_reason="previous run still in progress",
+        ))
         await s.commit()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://t") as ac:
@@ -84,7 +91,7 @@ async def test_schedule_id_returns_only_matching(app_ctx, monkeypatch_auth):
     assert r.status_code == 200, r.text
     runs_out = r.json()
     assert {x["script_id"] for x in runs_out} == {10}
-    assert len(runs_out) == 3
+    assert len(runs_out) == 4  # 3 success + 1 skipped (id 3000)
 
 
 @pytest.mark.asyncio
@@ -122,8 +129,9 @@ async def test_offset_and_limit(app_ctx, monkeypatch_auth):
     r = await ac.get("/api/runs", params={"schedule_id": 100, "limit": 2, "offset": 1})
     runs_out = r.json()
     assert len(runs_out) == 2
-    # Newest-first default ordering; offset=1 skips id=1002, leaving ids 1001+1000.
-    assert [x["id"] for x in runs_out] == [1001, 1000]
+    # Newest-first default ordering. Schedule 100 owns 4 rows now (1000-1002
+    # plus the skipped 3000); offset=1 skips 3000, leaving ids 1002+1001.
+    assert [x["id"] for x in runs_out] == [1002, 1001]
 
 
 @pytest.mark.asyncio
@@ -151,3 +159,27 @@ async def test_status_filter_returns_only_matching(app_ctx, monkeypatch_auth):
     runs_out = r.json()
     assert {x["id"] for x in runs_out} == {1000}
     assert all(x["status"] == "running" for x in runs_out)
+
+
+@pytest.mark.asyncio
+async def test_skip_reason_round_trips(app_ctx, monkeypatch_auth):
+    """RunOut exposes skip_reason so the UI can show why a run was skipped."""
+    ac, app = app_ctx
+    monkeypatch_auth(user_id=1, role="editor", app=app)
+    r = await ac.get("/api/runs", params={"status": "skipped"})
+    assert r.status_code == 200, r.text
+    runs_out = r.json()
+    assert len(runs_out) == 1
+    assert runs_out[0]["skip_reason"] == "previous run still in progress"
+
+
+@pytest.mark.asyncio
+async def test_schedule_timezone_round_trips(app_ctx, monkeypatch_auth):
+    """RunOut exposes schedule_timezone so the UI can show why a run fired
+    at the instant it did (UTC vs local timezone schedule)."""
+    ac, app = app_ctx
+    monkeypatch_auth(user_id=1, role="editor", app=app)
+    r = await ac.get("/api/runs", params={"schedule_id": 100})
+    assert r.status_code == 200, r.text
+    runs_out = r.json()
+    assert all(x["schedule_timezone"] == "UTC" for x in runs_out)
