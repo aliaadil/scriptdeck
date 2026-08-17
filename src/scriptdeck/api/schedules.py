@@ -6,7 +6,7 @@ from datetime import date as _date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import delete, insert, select, update
+from sqlalchemy import delete, func, insert, select, update
 
 from scriptdeck.api.deps import require_script_owner
 from scriptdeck.auth.deps import current_user
@@ -28,6 +28,11 @@ def _table():
 def _scripts_table():
     from scriptdeck.db.models import scripts
     return scripts
+
+
+def _runs_table():
+    from scriptdeck.db.models import runs
+    return runs
 
 
 class ScheduleCreate(BaseModel):
@@ -87,6 +92,7 @@ class ScheduleOut(BaseModel):
     overlap_policy: str
     queue_max: int
     queue_dropped: int
+    run_count: int = 0
 
 
 def _require(user: User) -> None:
@@ -94,7 +100,7 @@ def _require(user: User) -> None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="viewer cannot modify")
 
 
-def _row_to_out(row) -> ScheduleOut:
+def _row_to_out(row, run_count: int = 0) -> ScheduleOut:
     bo = json.loads(row["blackout_dates"]) if row["blackout_dates"] else None
     inc = json.loads(row["include_days"]) if row["include_days"] else None
     return ScheduleOut(
@@ -105,6 +111,7 @@ def _row_to_out(row) -> ScheduleOut:
         timezone=row["timezone"], blackout_dates=bo, include_days=inc,
         overlap_policy=row["overlap_policy"], queue_max=row["queue_max"],
         queue_dropped=row["queue_dropped"],
+        run_count=int(run_count),
     )
 
 
@@ -113,11 +120,21 @@ async def list_endpoint(request: Request, script_id: int | None = None,
                        user: User = Depends(current_user)) -> list[ScheduleOut]:
     sf = request.app.state.session_factory
     t = _table()
+    r = _runs_table()
+    # Count runs per schedule via LEFT JOIN + GROUP BY. LEFT JOIN keeps
+    # schedules with zero runs in the result set.
+    run_count_col = func.count(r.c.id).label("run_count")
     if script_id is not None:
         # Filter narrows to one script — verify caller owns it (admins pass).
         async with sf() as s:
             await require_script_owner(s, script_id, user)
-        stmt = select(t).where(t.c.script_id == script_id).order_by(t.c.id)
+        stmt = (
+            select(t, run_count_col)
+            .select_from(t.outerjoin(r, r.c.schedule_id == t.c.id))
+            .where(t.c.script_id == script_id)
+            .group_by(t.c.id)
+            .order_by(t.c.id)
+        )
     else:
         # No filter — non-admins see only their own scripts' schedules.
         if user.role != "admin":
@@ -129,12 +146,51 @@ async def list_endpoint(request: Request, script_id: int | None = None,
                 ).scalars().all()
             if not own_script_ids:
                 return []
-            stmt = select(t).where(t.c.script_id.in_(own_script_ids)).order_by(t.c.id)
+            stmt = (
+                select(t, run_count_col)
+                .select_from(t.outerjoin(r, r.c.schedule_id == t.c.id))
+                .where(t.c.script_id.in_(own_script_ids))
+                .group_by(t.c.id)
+                .order_by(t.c.id)
+            )
         else:
-            stmt = select(t).order_by(t.c.id)
+            stmt = (
+                select(t, run_count_col)
+                .select_from(t.outerjoin(r, r.c.schedule_id == t.c.id))
+                .group_by(t.c.id)
+                .order_by(t.c.id)
+            )
     async with sf() as s:
         rows = (await s.execute(stmt)).mappings().all()
-    return [_row_to_out(r) for r in rows]
+    return [_row_to_out(r, r["run_count"]) for r in rows]
+
+
+@router.get("/{schedule_id}")
+async def get_endpoint(schedule_id: int, request: Request,
+                      user: User = Depends(current_user)) -> ScheduleOut:
+    """Fetch a single schedule by id, with owner check.
+
+    Mirrors the list endpoint's ownership filtering: non-admin users
+    can only read schedules on scripts they own.
+    """
+    sf = request.app.state.session_factory
+    t = _table()
+    r = _runs_table()
+    run_count_col = func.count(r.c.id).label("run_count")
+    async with sf() as s:
+        row = (
+            await s.execute(
+                select(t, run_count_col)
+                .select_from(t.outerjoin(r, r.c.schedule_id == t.c.id))
+                .where(t.c.id == schedule_id)
+                .group_by(t.c.id)
+            )
+        ).mappings().one_or_none()
+        if row is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="schedule not found")
+        # Enforce ownership once the schedule's script_id is known.
+        await require_script_owner(s, int(row["script_id"]), user)
+    return _row_to_out(row, row["run_count"])
 
 
 @router.post("", status_code=201)
