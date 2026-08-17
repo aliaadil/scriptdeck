@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -52,9 +52,9 @@ def compute_next_run(
         raise ComputeError(f"unknown timezone: {tz_name}") from exc
 
     if after.tzinfo is None:
-        after_utc = after.replace(tzinfo=timezone.utc)
+        after_utc = after.replace(tzinfo=UTC)
     else:
-        after_utc = after.astimezone(timezone.utc)
+        after_utc = after.astimezone(UTC)
 
     after_local = after_utc.astimezone(tz)
     horizon_end_local = after_local + timedelta(days=_MAX_COMPUTE_HORIZON_DAYS)
@@ -78,7 +78,7 @@ def compute_next_run(
         if blackout_dates and date_iso in blackout_dates:
             continue
 
-        return candidate_local.astimezone(timezone.utc)
+        return candidate_local.astimezone(UTC)
 
 
 # ---- Existing functions below (unchanged) ----
