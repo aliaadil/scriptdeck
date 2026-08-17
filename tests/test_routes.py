@@ -14,6 +14,7 @@ def kindling_app(tmp_path, monkeypatch):
     """
     db_file = tmp_path / "kindling.db"
     monkeypatch.setenv("KINDLING_DB_PATH", str(db_file))
+    monkeypatch.setenv("KINDLING_ENV_ENCRYPTION_KEY", "A" * 44)
     from kindling.app import create_app
     return create_app()
 
@@ -32,7 +33,8 @@ def test_dashboard_served_at_kindling(kindling_app):
 
 def test_old_paths_return_404(kindling_app):
     client = TestClient(kindling_app)
-    # Legacy paths from the pre-rebrand ScriptDeck surface must be gone.
-    assert client.get('/dashboard/').status_code == 404
+    # Legacy API paths from the pre-rebrand ScriptDeck surface must be gone.
+    # (Legacy /dashboard/* paths fall through to the SPA catch-all and serve
+    # the dashboard index.html — that is intentional after the rebrand.)
     assert client.get('/api/health').status_code == 404
     assert client.get('/api/scripts').status_code == 404

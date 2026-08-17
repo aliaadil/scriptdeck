@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     jwt_secret: str | None = None
     env_encryption_key: str | None = None  # base64, 32 bytes
 
+    # Test-only escape hatch: skip the fail-fast check on missing
+    # env_encryption_key. Production code must never set this True.
+    allow_insecure_defaults_for_tests: bool = False
+
     @property
     def storage_dir_path(self) -> Path:
         return Path(self.storage_dir)

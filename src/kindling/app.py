@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import base64
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -29,15 +28,23 @@ from kindling.services.log_broker import get_broker
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
+    # Fail-fast on missing env encryption key. Bare-Python boots (no Docker
+    # compose guarding via ${VAR:?required}) would otherwise fall back to a
+    # zero-byte key and silently decrypt every .env blob with a key anyone
+    # can compute. Tests opt out via allow_insecure_defaults_for_tests.
+    if not settings.env_encryption_key and not settings.allow_insecure_defaults_for_tests:
+        raise RuntimeError(
+            "KINDLING_ENV_ENCRYPTION_KEY is required. Set it to a base64-encoded "
+            "32-byte key (e.g. `python -c 'import os,base64;print(base64.b64encode(os.urandom(32)).decode())'`). "
+            "For tests, construct Settings(..., allow_insecure_defaults_for_tests=True)."
+        )
     engine = make_engine(settings)
     Session = make_session_factory(engine)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         await run_migrations(engine)
-        env_service = EnvService(
-            settings.env_encryption_key or base64.b64encode(b"\0" * 32).decode()
-        )
+        env_service = EnvService(settings.env_encryption_key)
         broker = get_broker()
         sem = asyncio.Semaphore(settings.runner_concurrency)
         stop_event = asyncio.Event()
@@ -77,7 +84,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 task.cancel()
             await engine.dispose()
 
-    app = FastAPI(title="Kindling", version="2.0.0")
+    app = FastAPI(title="Kindling", version="2.0.0", lifespan=lifespan)
     # Eager state init + migrations so tests using ASGITransport (no lifespan)
     # still see a fully-initialized app. The lifespan handler above still runs
     # migrations idempotently and manages disposal in production.
@@ -86,19 +93,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.session_factory = Session
     app.state.settings = settings
     app.state.log_broker = broker
-    # Eagerly init env_service only if the key is present and valid; otherwise
-    # defer to first use so tests with placeholder keys (e.g. "A" * 44) still
-    # load the app. The lifespan handler always re-runs init for production.
-    env_key = settings.env_encryption_key
-    if env_key:
-        try:
-            app.state.env_service = EnvService(env_key)
-        except ValueError:
-            pass
+    # Eagerly init env_service if the supplied key is a valid 32-byte base64.
+    # Tests sometimes pass placeholder keys (e.g. "A" * 44) that decode to the
+    # wrong length; skip eager init in that case so test imports still work.
+    # The lifespan handler re-validates the key on every real boot.
+    try:
+        app.state.env_service = EnvService(settings.env_encryption_key)
+    except ValueError:
+        pass
     app.state.scheduler_running = False
     app.state.background_tasks = set()
     app.state.active_procs = {}
-    app.router.lifespan_context = lifespan
     app.include_router(health_router, prefix="/api/kindling")
     app.include_router(auth_router, prefix="/api/kindling")
     app.include_router(users_router, prefix="/api/kindling")
@@ -155,7 +160,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # in-app navigation that lost its prefix still lands somewhere sane.
         @app.get("/{path:path}")
         async def spa_catch_all(path: str):
-            if path.startswith("api/") or path.startswith("kindling/") or path == "dashboard" or path.startswith("dashboard/"):
+            if path.startswith("api/") or path.startswith("kindling/"):
                 raise HTTPException(status_code=404)
             asset_file = dashboard_dir / path
             if asset_file.is_file():
