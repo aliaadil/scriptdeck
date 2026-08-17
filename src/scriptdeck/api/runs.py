@@ -26,6 +26,11 @@ def _runs_table():
     return runs
 
 
+def _schedules_table():
+    from scriptdeck.db.models import schedules
+    return schedules
+
+
 def _deps_table():
     from scriptdeck.db.models import script_deps
     return script_deps
@@ -62,12 +67,15 @@ async def list_endpoint(
     status_filter: str | None = None,
     since: str | None = None,
     group: str | None = None,
-    limit: int = 50,
+    schedule_id: int | None = Query(default=None, ge=1),
+    offset: int = Query(default=0, ge=0, le=10000),
+    limit: int = Query(default=50, ge=1, le=100),
     user: User = Depends(current_user),
 ) -> list[RunOut]:
     sf = request.app.state.session_factory
     t = _runs_table()
-    stmt = select(t).limit(limit)
+    sched_t = _schedules_table()
+    stmt = select(t).limit(limit).offset(offset)
     # Retry-group lookup — order attempts ascending so callers see the chain
     # in order (0, 1, 2, ...) rather than newest-first. All other filters
     # and ownership scoping still apply.
@@ -91,6 +99,20 @@ async def list_endpoint(
             if not own_script_ids:
                 return []
             stmt = stmt.where(t.c.script_id.in_(own_script_ids))
+    if schedule_id is not None:
+        # Resolve schedule → script and owner-check before applying the
+        # filter, mirroring the script_id branch above. A non-owner gets
+        # 403 (via require_script_owner); an unknown schedule_id gets 404.
+        async with sf() as s:
+            sched_row = (
+                await s.execute(
+                    select(sched_t.c.script_id).where(sched_t.c.id == schedule_id)
+                )
+            ).one_or_none()
+            if sched_row is None:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, detail="schedule not found")
+            await require_script_owner(s, int(sched_row[0]), user)
+        stmt = stmt.where(t.c.schedule_id == schedule_id)
     if status_filter:
         stmt = stmt.where(t.c.status == status_filter)
     if since:
