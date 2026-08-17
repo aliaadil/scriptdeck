@@ -23,14 +23,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
       return;
     }
-    api<User>("/api/auth/me")
+    api<User>("/auth/me")
       .then((u) => setUser(u))
       .catch(() => setToken(null))
       .finally(() => setLoading(false));
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    const r = await api<{ token: string; user: User }>("/api/auth/login", {
+    const r = await api<{ token: string; user: User }>("/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     });
@@ -39,13 +39,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    await api("/api/auth/logout", { method: "POST" });
+    await api("/auth/logout", { method: "POST" });
     setToken(null);
     setUser(null);
   }, []);
 
   const setup = useCallback(async (email: string, password: string) => {
-    const r = await api<{ token: string; user: User }>("/api/auth/setup", {
+    const r = await api<{ token: string; user: User }>("/auth/setup", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     });

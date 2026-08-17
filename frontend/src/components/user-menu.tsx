@@ -35,7 +35,7 @@ export function UserMenu() {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => nav("/settings")}>
+        <DropdownMenuItem onClick={() => nav("/kindling/settings")}>
           <UserIcon className="mr-2 h-4 w-4" /> Profile
         </DropdownMenuItem>
         <DropdownMenuItem

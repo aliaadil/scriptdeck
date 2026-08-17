@@ -110,7 +110,7 @@ describe("ScriptEdit", () => {
       (c) => typeof c[0] === "string" && c[0].endsWith("/source"),
     );
     expect(sourceCall).toBeDefined();
-    expect(sourceCall?.[0]).toBe("/api/scripts/1/source");
+    expect(sourceCall?.[0]).toBe("/scripts/1/source");
   });
 
   it("save for new script sends name + source + language", async () => {
@@ -128,13 +128,13 @@ describe("ScriptEdit", () => {
     await user.click((await screen.findAllByRole("button", { name: /^save$/i }))[0]);
 
     await waitFor(() =>
-      expect(apiMock.mock.calls.some((c) => c[0] === "/api/scripts" && (c[1] as { method?: string })?.method === "POST")).toBe(true),
+      expect(apiMock.mock.calls.some((c) => c[0] === "/scripts" && (c[1] as { method?: string })?.method === "POST")).toBe(true),
     );
     const [url, opts] = apiMock.mock.calls.find(
-      (c) => c[0] === "/api/scripts" && (c[1] as { method?: string })?.method === "POST",
+      (c) => c[0] === "/scripts" && (c[1] as { method?: string })?.method === "POST",
     )!;
     const body = JSON.parse((opts as { body: string }).body);
-    expect(url).toBe("/api/scripts");
+    expect(url).toBe("/scripts");
     expect((opts as { method: string }).method).toBe("POST");
     expect(body).toMatchObject({
       name: "my-script",

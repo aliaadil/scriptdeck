@@ -120,28 +120,43 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # In dev (no build yet) the directory is absent and the mount is skipped.
     dashboard_dir = Path(__file__).parent / "dashboard_static"
     if dashboard_dir.exists():
-        app.mount("/kindling", StaticFiles(directory=str(dashboard_dir), html=True), name="kindling")
+        # SPA fallback: any 404 inside /kindling serves index.html so deep links
+        # like /kindling/dashboard or /kindling/runs/5 resolve client-side.
+        # Real assets on disk still 404 if genuinely missing.
+        from fastapi import HTTPException
+        from fastapi.responses import FileResponse
+
+        class KindlingSPA(StaticFiles):
+            async def get_response(self, path, scope):
+                # StaticFiles raises starlette.exceptions.HTTPException, which is
+                # NOT a subclass of fastapi.HTTPException — catch the parent class
+                # so we can intercept 404s and serve index.html instead.
+                from starlette.exceptions import HTTPException as StarletteHTTPException
+
+                try:
+                    return await super().get_response(path, scope)
+                except StarletteHTTPException as exc:
+                    if exc.status_code != 404:
+                        raise
+                    index = Path(self.directory) / "index.html"
+                    if not index.is_file():
+                        raise
+                    return FileResponse(index)
+
+        app.mount("/kindling", KindlingSPA(directory=str(dashboard_dir), html=True), name="kindling")
 
         @app.get("/")
         async def root_redirect():
             from fastapi.responses import RedirectResponse
             return RedirectResponse(url="/kindling/")
 
-        # SPA catch-all: serve index.html for any client-side path that did
-        # not match /api/* or /kindling/*. Routes are matched in registration
-        # order, so the explicit routes above take precedence.
-        from fastapi import HTTPException
-        from fastapi.responses import FileResponse
-
+        # Top-level SPA catch-all: any other unmatched path (excluding /api and
+        # /kindling, which are handled above) also serves index.html so an
+        # in-app navigation that lost its prefix still lands somewhere sane.
         @app.get("/{path:path}")
         async def spa_catch_all(path: str):
-            # Exclude any path that begins with api/ or kindling/ explicitly.
             if path.startswith("api/") or path.startswith("kindling/"):
                 raise HTTPException(status_code=404)
-            # Static assets (Vite emits /assets/index-*.js, /assets/index-*.css,
-            # /favicon.ico, etc.) live on disk under dashboard_static/. Serve
-            # them directly if the file exists; otherwise return index.html so
-            # client-side routing can take over.
             asset_file = dashboard_dir / path
             if asset_file.is_file():
                 return FileResponse(asset_file)

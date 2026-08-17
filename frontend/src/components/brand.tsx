@@ -1,12 +1,17 @@
 import { Link } from "react-router-dom";
 
+// Vite replaces import.meta.env.BASE_URL with the configured `base` value
+// at build time, so these assets resolve at /logo.svg in dev (no base) and
+// /kindling/logo.svg in production.
+const BASE = import.meta.env.BASE_URL;
+
 export function BrandLogo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
   const h = size === "sm" ? 28 : size === "lg" ? 56 : 36;
-  return <img src="/logo.svg" alt="Kindling" style={{ height: h }} />;
+  return <img src={`${BASE}logo.svg`} alt="Kindling" style={{ height: h }} />;
 }
 
 export function BrandMark({ size = 32 }: { size?: number }) {
-  return <img src="/logo-mark.svg" alt="" width={size} height={size} />;
+  return <img src={`${BASE}logo-mark.svg`} alt="" width={size} height={size} />;
 }
 
 export function Brand({ collapsed = false }: { collapsed?: boolean }) {
@@ -19,7 +24,9 @@ export function Brand({ collapsed = false }: { collapsed?: boolean }) {
       aria-label={collapsed ? "Kindling" : undefined}
     >
       <BrandLogo size="sm" />
-      {!collapsed && <span className="text-base">Kindling</span>}
+      {/* BrandLogo's SVG already renders the "kindling" wordmark; an
+          adjacent <span> would produce a visible double wordmark. The
+          `aria-label` above covers the collapsed case. */}
     </Link>
   );
 }

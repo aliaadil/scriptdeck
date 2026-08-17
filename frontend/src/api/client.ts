@@ -1,8 +1,31 @@
-const TOKEN_KEY = "scriptdeck_token";
-
+// Kindling runs all API routes under /api/kindling. Call sites pass paths
+// without the /api segment (e.g. "/auth/me"), and buildUrl() prepends
+// API_BASE so the FastAPI router — mounted at /api/kindling — receives them.
 export const API_BASE = "/api/kindling";
 
+const TOKEN_KEY = "kindling_token";
+const LEGACY_TOKEN_KEY = "scriptdeck_token";
+
+/**
+ * One-shot migration: copy any leftover token from the old key (set by the
+ * pre-rebrand ScriptDeck build) into the new key, then delete the old one.
+ * Lazy so it runs in a real browser context (where localStorage exists) and
+ * not at module-import time in jsdom tests that mock the storage layer.
+ */
+function migrateLegacyToken(): void {
+  try {
+    if (localStorage.getItem(TOKEN_KEY)) return;
+    const legacy = localStorage.getItem(LEGACY_TOKEN_KEY);
+    if (!legacy) return;
+    localStorage.setItem(TOKEN_KEY, legacy);
+    localStorage.removeItem(LEGACY_TOKEN_KEY);
+  } catch {
+    // localStorage unavailable (SSR, jsdom stub, etc.) — silently no-op.
+  }
+}
+
 export function getToken(): string | null {
+  migrateLegacyToken();
   return localStorage.getItem(TOKEN_KEY);
 }
 
@@ -18,10 +41,9 @@ export class ApiError extends Error {
 }
 
 function buildUrl(path: string): string {
-  // If path is absolute (starts with /) or already includes the API_BASE,
-  // pass it through; otherwise prefix with API_BASE.
+  // Pass through fully-qualified URLs as-is (e.g. EventSource targets).
   if (path.startsWith("http://") || path.startsWith("https://")) return path;
-  if (path.startsWith(API_BASE)) return path;
+  // Always prefix with API_BASE; call sites pass paths like "/auth/me".
   if (path.startsWith("/")) return `${API_BASE}${path}`;
   return `${API_BASE}/${path}`;
 }

@@ -9,6 +9,7 @@ import { Schedules } from "@/pages/Schedules";
 import { Runs } from "@/pages/Runs";
 import { RunView } from "@/pages/RunView";
 import { Settings } from "@/pages/Settings";
+import { NotFound } from "@/pages/NotFound";
 
 const router = createBrowserRouter([
   { path: "/kindling/*", element: <ProtectedRoute />, children: [
@@ -23,7 +24,10 @@ const router = createBrowserRouter([
   { path: "/kindling", element: <Navigate to="/kindling/dashboard" replace /> },
   { path: "/login", element: <LoginPage /> },
   { path: "/setup", element: <SetupPage /> },
-  { path: "*", element: <Navigate to="/kindling/dashboard" replace /> },
+  // Show an explicit 404 instead of silently bouncing every unknown path to
+  // /kindling/dashboard. The brief for this fix flagged that the catch-all
+  // was hiding navigation-target mismatches.
+  { path: "*", element: <NotFound /> },
 ]);
 
 export function AppRouter() {

@@ -5,6 +5,7 @@ import Editor from "@monaco-editor/react";
 import { Upload, FileCode2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { api } from "@/lib/api";
+import { API_BASE, getToken } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -60,8 +61,8 @@ export function ScriptEdit() {
   const { data: script } = useQuery({
     queryKey: ["script", id],
     queryFn: async () => {
-      const meta = await api<Omit<Script, "source">>(`/api/scripts/${id}`);
-      const sourceRes = await api<{ content: string }>(`/api/scripts/${id}/source`);
+      const meta = await api<Omit<Script, "source">>(`/scripts/${id}`);
+      const sourceRes = await api<{ content: string }>(`/scripts/${id}/source`);
       return { ...meta, source: sourceRes.content } as Script;
     },
     enabled: !isNew,
@@ -89,17 +90,17 @@ export function ScriptEdit() {
   const save = useMutation<Script, Error, { name?: string; description?: string | null; source?: string; language?: "python" | "node" }>({
     mutationFn: (body) =>
       isNew
-        ? api("/api/scripts", { method: "POST", body: JSON.stringify(body) })
-        : api(`/api/scripts/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+        ? api("/scripts", { method: "POST", body: JSON.stringify(body) })
+        : api(`/scripts/${id}`, { method: "PUT", body: JSON.stringify(body) }),
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["scripts"] });
       toast.success(isNew ? "Script created" : "Saved");
-      if (isNew && data?.id != null) nav(`/scripts/${data.id}`);
+      if (isNew && data?.id != null) nav(`/kindling/scripts/${data.id}`);
     },
     onError: (e) => toast.error(e.message),
   });
   const run = useMutation<RunInfo, Error, void>({
-    mutationFn: () => api<RunInfo>(`/api/scripts/${id}/run`, { method: "POST" }),
+    mutationFn: () => api<RunInfo>(`/scripts/${id}/run`, { method: "POST" }),
     onSuccess: () => toast.success("Run started"),
     onError: (e: Error) => toast.error(e.message ?? "Run failed to start"),
   });
@@ -118,7 +119,7 @@ export function ScriptEdit() {
 
   const runStatus = useQuery<RunInfo>({
     queryKey: ["run", currentRunId],
-    queryFn: () => api<RunInfo>(`/api/runs/${currentRunId}`),
+    queryFn: () => api<RunInfo>(`/runs/${currentRunId}`),
     enabled: currentRunId != null,
     refetchInterval: (q) => {
       const s = q.state.data;
@@ -144,8 +145,8 @@ export function ScriptEdit() {
     let cancelled = false;
     (async () => {
       try {
-        const token = localStorage.getItem("scriptdeck_token");
-        const res = await fetch(`/api/runs/${currentRunId}/log`, {
+        const token = getToken();
+        const res = await fetch(`${API_BASE}/runs/${currentRunId}/log`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
         if (!cancelled && res.ok) setRunLog(await res.text());
@@ -158,11 +159,11 @@ export function ScriptEdit() {
     };
   }, [currentRunId, runStatus.data?.status]);
   const del = useMutation({
-    mutationFn: () => api(`/api/scripts/${id}`, { method: "DELETE" }),
+    mutationFn: () => api(`/scripts/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["scripts"] });
       toast.success("Deleted");
-      nav("/scripts");
+      nav("/kindling/scripts");
     },
     onError: (e: Error) => toast.error(e.message),
   });

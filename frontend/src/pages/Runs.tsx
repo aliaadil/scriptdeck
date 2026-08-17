@@ -129,7 +129,7 @@ function runsUrl(opts: {
     params.set("offset", String(opts.offset));
   // limit is always set below so the URL always carries a query string.
   params.set("limit", String(opts.limit ?? PAGE_SIZE));
-  return `/api/runs?${params.toString()}`;
+  return `/runs?${params.toString()}`;
 }
 
 function variantFor(
@@ -275,10 +275,10 @@ export function Runs() {
                   <TableRow
                     key={r.id}
                     tabIndex={0}
-                    onClick={() => nav(`/runs/${r.id}`)}
+                    onClick={() => nav(`/kindling/runs/${r.id}`)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter")
-                        nav(`/runs/${r.id}`);
+                        nav(`/kindling/runs/${r.id}`);
                     }}
                     className="cursor-pointer hover:bg-muted/50"
                   >
@@ -343,9 +343,9 @@ export function Runs() {
                 <TableRow
                   key={r.id}
                   tabIndex={0}
-                  onClick={() => nav(`/runs/${r.id}`)}
+                  onClick={() => nav(`/kindling/runs/${r.id}`)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") nav(`/runs/${r.id}`);
+                    if (e.key === "Enter") nav(`/kindling/runs/${r.id}`);
                   }}
                   className="cursor-pointer hover:bg-muted/50"
                 >

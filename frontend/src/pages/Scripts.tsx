@@ -27,15 +27,15 @@ export function Scripts() {
   const nav = useNavigate();
   const { data: scripts = [] } = useQuery({
     queryKey: ["scripts"],
-    queryFn: () => api<unknown[]>("/api/scripts"),
+    queryFn: () => api<unknown[]>("/scripts"),
   });
   const run = useMutation({
-    mutationFn: (id: string) => api(`/api/scripts/${id}/run`, { method: "POST" }),
+    mutationFn: (id: string) => api(`/scripts/${id}/run`, { method: "POST" }),
     onSuccess: () => toast.success("Run started"),
     onError: (e: Error) => toast.error(e.message),
   });
   const del = useMutation({
-    mutationFn: (id: string) => api(`/api/scripts/${id}`, { method: "DELETE" }),
+    mutationFn: (id: string) => api(`/scripts/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["scripts"] });
       toast.success("Script deleted");
@@ -48,7 +48,7 @@ export function Scripts() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold">Scripts</h1>
-          <Button onClick={() => nav("/scripts/new")}>
+          <Button onClick={() => nav("/kindling/scripts/new")}>
             <Plus className="mr-2 h-4 w-4" /> New script
           </Button>
         </div>
@@ -68,7 +68,7 @@ export function Scripts() {
                 <TableRow key={s.id}>
                   <TableCell>
                     <Link
-                      to={`/scripts/${s.id}`}
+                      to={`/kindling/scripts/${s.id}`}
                       className="font-medium hover:underline"
                     >
                       {s.name}
@@ -94,7 +94,7 @@ export function Scripts() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => nav(`/scripts/${s.id}`)}
+                      onClick={() => nav(`/kindling/scripts/${s.id}`)}
                     >
                       Edit
                     </Button>

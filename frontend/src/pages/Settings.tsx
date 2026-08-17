@@ -62,7 +62,7 @@ export function Settings() {
 
   const timezoneMut = useMutation({
     mutationFn: (tz: string) =>
-      api("/api/users/me", { method: "PATCH", body: JSON.stringify({ timezone: tz }) }),
+      api("/users/me", { method: "PATCH", body: JSON.stringify({ timezone: tz }) }),
     onSuccess: (_data, tz) => {
       setTimezone(tz);
       qc.invalidateQueries({ queryKey: ["auth-me"] });

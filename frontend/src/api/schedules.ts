@@ -12,16 +12,16 @@ export type Schedule = {
 };
 
 export const listSchedules = (scriptId?: number) =>
-  api<Schedule[]>(`/api/schedules${scriptId ? `?script_id=${scriptId}` : ""}`);
+  api<Schedule[]>(`/schedules${scriptId ? `?script_id=${scriptId}` : ""}`);
 export const getSchedule = (id: number) =>
-  api<Schedule>(`/api/schedules/${id}`);
+  api<Schedule>(`/schedules/${id}`);
 export const createSchedule = (body: Omit<Schedule, "id" | "next_run_at">) =>
-  api<Schedule>("/api/schedules", { method: "POST", body: JSON.stringify(body) });
+  api<Schedule>("/schedules", { method: "POST", body: JSON.stringify(body) });
 export const updateSchedule = (id: number, body: Omit<Schedule, "id" | "next_run_at">) =>
-  api<Schedule>(`/api/schedules/${id}`, { method: "PUT", body: JSON.stringify(body) });
+  api<Schedule>(`/schedules/${id}`, { method: "PUT", body: JSON.stringify(body) });
 export const deleteSchedule = (id: number) =>
-  api<void>(`/api/schedules/${id}`, { method: "DELETE" });
+  api<void>(`/schedules/${id}`, { method: "DELETE" });
 export const enableSchedule = (id: number) =>
-  api(`/api/schedules/${id}/enable`, { method: "POST" });
+  api(`/schedules/${id}/enable`, { method: "POST" });
 export const disableSchedule = (id: number) =>
-  api(`/api/schedules/${id}/disable`, { method: "POST" });
+  api(`/schedules/${id}/disable`, { method: "POST" });
