@@ -178,13 +178,31 @@ export function ScheduleForm({
           )}
         </div>
         {nextRuns.length > 0 && (
-          <div className="mt-3 text-xs text-muted-foreground">
-            Next {nextRuns.length}:{" "}
-            {nextRuns.map((r) => (
-              <code key={r} className="mr-2">
-                {new Date(r).toLocaleString()}
-              </code>
-            ))}
+          <div className="mt-3 text-xs">
+            <div className="mb-1 text-muted-foreground">Next {nextRuns.length}</div>
+            <ul className="divide-y divide-border/60 rounded-md border font-mono">
+              {nextRuns.map((r) => {
+                const d = new Date(r);
+                const weekday = d.toLocaleDateString(undefined, {
+                  weekday: "short",
+                  month: "short",
+                  day: "numeric",
+                  timeZone: tz,
+                });
+                const clock = d.toLocaleTimeString(undefined, {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  hour12: false,
+                  timeZone: tz,
+                });
+                return (
+                  <li key={r} className="flex items-center justify-between px-2 py-1">
+                    <time dateTime={r} className="text-foreground/90">{weekday}</time>
+                    <span className="text-foreground">{clock}</span>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
         )}
       </section>
