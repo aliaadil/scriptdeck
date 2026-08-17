@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Repo path: `github.com/aliaadil/kindling` (rename after CI passes).
-- PyPI package: `kindling`. Verify availability before publish.
+- PyPI package: `kindling-runner`. The bare `kindling` name is taken on PyPI (v0.0.2, "Basic building blocks for pytorch"). CLI command, brand, and Python imports remain `kindling`; only the distribution name carries the `-runner` suffix.
 - Python module path: `kindling/` (was `scriptdeck/`).
 - CLI command: `kindling` (was `scriptdeck`).
 - HTTP port: `8765` (unchanged).

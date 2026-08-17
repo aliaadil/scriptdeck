@@ -54,7 +54,7 @@ Exposed as CSS custom properties in `frontend/src/index.css`.
 | Layer            | Old                       | New                          |
 |------------------|---------------------------|------------------------------|
 | GitHub repo      | `aliaadil/scriptdeck`     | `aliaadil/kindling`          |
-| PyPI package     | `scriptdeck`              | `kindling`                   |
+| PyPI package     | `scriptdeck`              | `kindling-runner` (name `kindling` taken on PyPI by an unrelated project; CLI command, brand, and Python imports remain `kindling`) |
 | Python module    | `scriptdeck/`             | `kindling/`                  |
 | CLI binary       | `scriptdeck`              | `kindling`                   |
 | CLI subcommands  | `serve`, `doctor`, `backup`, `restore`, `migrate-from-v1` | unchanged |
