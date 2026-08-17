@@ -1,3 +1,6 @@
+import { useState } from "react";
+import { ChevronDown } from "lucide-react";
+
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -77,7 +80,14 @@ export function CustomPicker({
   const timeValue = `${hour === "*" ? "00" : hour.padStart(2, "0")}:${
     minute.startsWith("*/") ? "00" : minute.padStart(2, "0")
   }`;
-  const timeEnabled = frequency === "daily" || frequency === "weekly";
+
+  // Minute-only value used by the hourly branch. Show "0" when the slot
+  // is a "*/N" wildcard or "*" so the number input always has something
+  // to render.
+  const minuteOnlyValue = (() => {
+    if (minute === "*" || minute.startsWith("*/")) return "0";
+    return minute;
+  })();
 
   const setFrequency = (next: Frequency) => {
     const hh = hour === "*" ? "9" : hour;
@@ -93,6 +103,11 @@ export function CustomPicker({
     onCronChange(`${Number(mm)} ${Number(hh)} ${dom} ${month} ${dow}`);
   };
 
+  const setMinuteOnly = (value: string) => {
+    const n = Math.max(0, Math.min(59, Number(value) || 0));
+    onCronChange(`${n} * * * *`);
+  };
+
   const toggleDay = (cronDay: number) => {
     const next = days.includes(cronDay)
       ? days.filter((d) => d !== cronDay)
@@ -102,62 +117,151 @@ export function CustomPicker({
     onCronChange(`${mm} ${hh} ${dom} ${month} ${next.length ? next.join(",") : "*"}`);
   };
 
-  return (
-    <div className="flex flex-wrap items-end gap-4">
-      <div>
-        <label className="mb-1 block text-xs text-muted-foreground">Repeats</label>
-        <Select value={frequency} onValueChange={(v) => setFrequency(v as Frequency)}>
-          <SelectTrigger className="w-[170px]" aria-label="Repeats">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {FREQUENCIES.map((f) => (
-              <SelectItem key={f.value} value={f.value}>
-                {f.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div>
-        <label className="mb-1 block text-xs text-muted-foreground">On these days</label>
-        <div className="flex gap-1">
-          {DAYS.map((d) => {
-            const active = days.includes(d.cron);
-            return (
-              <button
-                key={d.label}
-                type="button"
-                aria-pressed={active}
-                onClick={() => toggleDay(d.cron)}
-                className={cn(
-                  "rounded-md border px-2 py-1 text-xs",
-                  active
-                    ? "border-primary bg-primary/10"
-                    : "border-border opacity-60 hover:opacity-100",
-                )}
-              >
-                {d.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <div>
-        <label className="mb-1 block text-xs text-muted-foreground" htmlFor="cron-time">
-          At
-        </label>
+  // The "At" control changes shape per frequency. Daily/weekly get a full
+  // time picker; hourly gets a minute-only number; "minutes" has no
+  // meaningful minute slot (it's governed by the "*/N" wildcard).
+  const atControl = (() => {
+    if (frequency === "hourly") {
+      return (
+        <Input
+          id="cron-time"
+          type="number"
+          min={0}
+          max={59}
+          step={1}
+          value={minuteOnlyValue}
+          onChange={(e) => setMinuteOnly(e.target.value)}
+          className="w-[90px]"
+          aria-label="At minute"
+        />
+      );
+    }
+    if (frequency === "minutes") {
+      return (
         <Input
           id="cron-time"
           type="time"
           value={timeValue}
-          disabled={!timeEnabled}
-          onChange={(e) => setTime(e.target.value)}
+          disabled
           className="w-[130px]"
+          aria-label="At"
         />
+      );
+    }
+    return (
+      <Input
+        id="cron-time"
+        type="time"
+        value={timeValue}
+        onChange={(e) => setTime(e.target.value)}
+        className="w-[130px]"
+        aria-label="At"
+      />
+    );
+  })();
+
+  const atLabel =
+    frequency === "hourly" ? "At minute" : "At";
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-end gap-4">
+        <div>
+          <label className="mb-1 block text-xs text-muted-foreground">Repeats</label>
+          <Select value={frequency} onValueChange={(v) => setFrequency(v as Frequency)}>
+            <SelectTrigger className="w-[170px]" aria-label="Repeats">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {FREQUENCIES.map((f) => (
+                <SelectItem key={f.value} value={f.value}>
+                  {f.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs text-muted-foreground">On these days</label>
+          <div className="flex gap-1">
+            {DAYS.map((d) => {
+              const active = days.includes(d.cron);
+              return (
+                <button
+                  key={d.label}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => toggleDay(d.cron)}
+                  className={cn(
+                    "rounded-md border px-2 py-1 text-xs",
+                    active
+                      ? "border-primary bg-primary/10"
+                      : "border-border opacity-60 hover:opacity-100",
+                  )}
+                >
+                  {d.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs text-muted-foreground" htmlFor="cron-time">
+            {atLabel}
+          </label>
+          {atControl}
+        </div>
       </div>
+
+      <AdvancedCronSection cron={cron} onCronChange={onCronChange} />
+    </div>
+  );
+}
+
+/** Expandable raw-cron editor. Collapsed by default. */
+function AdvancedCronSection({
+  cron,
+  onCronChange,
+}: {
+  cron: string;
+  onCronChange: (c: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="border-t pt-3">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+      >
+        <ChevronDown
+          className={cn(
+            "h-3 w-3 transition-transform",
+            open ? "rotate-0" : "-rotate-90",
+          )}
+        />
+        <span className="font-medium">Advanced — edit cron directly</span>
+      </button>
+      {open && (
+        <div className="mt-2 space-y-1">
+          <Input
+            type="text"
+            value={cron}
+            onChange={(e) => onCronChange(e.target.value)}
+            placeholder="* * * * *"
+            spellCheck={false}
+            autoComplete="off"
+            className="w-[260px] font-mono"
+            aria-label="Raw cron expression"
+          />
+          <p className="text-[11px] text-muted-foreground">
+            Saving here overrides the friendly form below until you reopen this picker.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
