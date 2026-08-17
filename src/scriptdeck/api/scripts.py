@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from scriptdeck.api.deps import require_script_owner
@@ -150,7 +150,7 @@ async def get_source(script_id: int, request: Request, user: User = Depends(curr
     path = storage / row.source_path
     if not path.exists():
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="source missing")
-    return Response(content=path.read_text(encoding="utf-8"), media_type="text/plain")
+    return JSONResponse({"content": path.read_text(encoding="utf-8")})
 
 
 @router.post("/{script_id}/run", status_code=201)

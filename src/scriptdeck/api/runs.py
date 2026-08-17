@@ -26,6 +26,16 @@ def _runs_table():
     return runs
 
 
+def _schedules_table():
+    from scriptdeck.db.models import schedules
+    return schedules
+
+
+def _scripts_table():
+    from scriptdeck.db.models import scripts
+    return scripts
+
+
 def _deps_table():
     from scriptdeck.db.models import script_deps
     return script_deps
@@ -43,11 +53,14 @@ class RunTrigger(BaseModel):
 class RunOut(BaseModel):
     id: int
     script_id: int
+    script_name: str
     schedule_id: int | None
+    schedule_timezone: str | None = None
     started_at: str
     ended_at: str | None
     exit_code: int | None
     status: str
+    skip_reason: str | None = None
     # Retry-chain identity, so the UI can group a run with its sibling
     # attempts via GET /api/runs?group=<retry_group>. Defaulted because
     # _trigger_run builds RunOut by hand for a fresh (attempt 0) run.
@@ -59,15 +72,35 @@ class RunOut(BaseModel):
 async def list_endpoint(
     request: Request,
     script_id: int | None = None,
-    status_filter: str | None = None,
+    status_filter: str | None = Query(default=None, alias="status"),
     since: str | None = None,
     group: str | None = None,
-    limit: int = 50,
+    schedule_id: int | None = Query(default=None, ge=1),
+    offset: int = Query(default=0, ge=0, le=10000),
+    limit: int = Query(default=50, ge=1, le=100),
     user: User = Depends(current_user),
 ) -> list[RunOut]:
     sf = request.app.state.session_factory
     t = _runs_table()
-    stmt = select(t).limit(limit)
+    sched_t = _schedules_table()
+    scripts_t = _scripts_table()
+    # Outer-join scripts so we can populate script_name in one round trip.
+    # We use Table.outerjoin directly (no relationship) because runs is
+    # defined as a Core table; joining on the explicit FK matches the
+    # schema in models.py.
+    stmt = (
+        select(
+            t,
+            scripts_t.c.name.label("script_name"),
+            sched_t.c.timezone.label("schedule_timezone"),
+        )
+        .select_from(
+            t.outerjoin(scripts_t, t.c.script_id == scripts_t.c.id)
+             .outerjoin(sched_t, t.c.schedule_id == sched_t.c.id)
+        )
+        .limit(limit)
+        .offset(offset)
+    )
     # Retry-group lookup — order attempts ascending so callers see the chain
     # in order (0, 1, 2, ...) rather than newest-first. All other filters
     # and ownership scoping still apply.
@@ -91,6 +124,20 @@ async def list_endpoint(
             if not own_script_ids:
                 return []
             stmt = stmt.where(t.c.script_id.in_(own_script_ids))
+    if schedule_id is not None:
+        # Resolve schedule → script and owner-check before applying the
+        # filter, mirroring the script_id branch above. A non-owner gets
+        # 403 (via require_script_owner); an unknown schedule_id gets 404.
+        async with sf() as s:
+            sched_row = (
+                await s.execute(
+                    select(sched_t.c.script_id).where(sched_t.c.id == schedule_id)
+                )
+            ).one_or_none()
+            if sched_row is None:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, detail="schedule not found")
+            await require_script_owner(s, sched_row[0], user)
+        stmt = stmt.where(t.c.schedule_id == schedule_id)
     if status_filter:
         stmt = stmt.where(t.c.status == status_filter)
     if since:
@@ -157,7 +204,8 @@ async def _trigger_run(app, script_id: int, user: User) -> RunOut:
         env_ciphertext=env_ciphertext,
         env_nonce=env_nonce,
     )
-    return RunOut(id=run_id, script_id=script.id, schedule_id=None,
+    return RunOut(id=run_id, script_id=script.id, script_name=script.name,
+                  schedule_id=None,
                   started_at=started, ended_at=None, exit_code=None, status="running",
                   retry_group=retry_group)
 
@@ -233,9 +281,14 @@ async def detail(run_id: int, request: Request,
                  user: User = Depends(current_user)) -> RunOut:
     sf = request.app.state.session_factory
     t = _runs_table()
+    scripts_t = _scripts_table()
     async with sf() as s:
         await require_run_owner(s, run_id, user)
-        row = (await s.execute(select(t).where(t.c.id == run_id))).mappings().one_or_none()
+        row = (await s.execute(
+            select(t, scripts_t.c.name.label("script_name"))
+            .select_from(t.outerjoin(scripts_t, t.c.script_id == scripts_t.c.id))
+            .where(t.c.id == run_id)
+        )).mappings().one_or_none()
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="not found")
     return RunOut(**dict(row))
@@ -251,8 +304,8 @@ async def log_text(run_id: int, request: Request,
     log_path = storage / "logs" / f"{run_id}.log"
     if not log_path.exists():
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="log not found")
-    from fastapi.responses import PlainTextResponse
-    return PlainTextResponse(log_path.read_text(encoding="utf-8", errors="replace"))
+    from fastapi.responses import JSONResponse
+    return JSONResponse({"content": log_path.read_text(encoding="utf-8", errors="replace")})
 
 
 @router.get("/{run_id}/log/stream")

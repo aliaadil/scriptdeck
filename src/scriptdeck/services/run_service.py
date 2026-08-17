@@ -56,6 +56,7 @@ async def create_run(
     """
     t = _table()
     rg = retry_group or _new_ulid()
+    started_at = datetime.now(UTC).isoformat()
     stmt = (
         insert(t)
         .values(
@@ -64,6 +65,7 @@ async def create_run(
             status=status,
             skip_reason=skip_reason,
             retry_group=rg,
+            started_at=started_at,
         )
         .returning(t.c.id, t.c.started_at, t.c.retry_group)
     )

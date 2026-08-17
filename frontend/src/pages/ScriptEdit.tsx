@@ -61,12 +61,8 @@ export function ScriptEdit() {
     queryKey: ["script", id],
     queryFn: async () => {
       const meta = await api<Omit<Script, "source">>(`/api/scripts/${id}`);
-      const token = localStorage.getItem("scriptdeck_token");
-      const srcRes = await fetch(`/api/scripts/${id}/source`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      const source = srcRes.ok ? await srcRes.text() : "";
-      return { ...meta, source } as Script;
+      const sourceRes = await api<{ content: string }>(`/api/scripts/${id}/source`);
+      return { ...meta, source: sourceRes.content } as Script;
     },
     enabled: !isNew,
   });

@@ -49,7 +49,10 @@ export function RunView() {
   // before we subscribed), pull the recorded log once.
   const { data: fallbackText } = useQuery({
     queryKey: ["run-log", runId],
-    queryFn: () => api<string>(`/api/runs/${runId}/log`).catch(() => ""),
+    queryFn: async () => {
+      const r = await api<{ content: string }>(`/api/runs/${runId}/log`);
+      return r.content;
+    },
     enabled: Number.isFinite(runId) && liveText === "",
   });
 

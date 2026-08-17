@@ -52,13 +52,14 @@ function renderNew() {
   );
 }
 
-function renderExisting() {
+function renderExisting(sourceContent: string = "print('hi')") {
   apiMock.mockResolvedValueOnce({
     id: "1",
     name: "test",
     language: "python",
     description: "d",
   });
+  apiMock.mockResolvedValueOnce({ content: sourceContent });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
@@ -95,6 +96,21 @@ describe("ScriptEdit", () => {
     expect(await screen.findByRole("tab", { name: /editor/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /config/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /logs/i })).toBeInTheDocument();
+  });
+
+  it("loads source via api JSON wrapper", async () => {
+    renderExisting("print('hi')\n");
+    // The source text should appear in the Monaco editor (mocked textarea).
+    const editor = (await screen.findAllByTestId("monaco-mock"))[0];
+    await waitFor(() =>
+      expect((editor as HTMLTextAreaElement).value).toBe("print('hi')\n"),
+    );
+    // Verify the second api call was to the source endpoint and returned the JSON {content}.
+    const sourceCall = apiMock.mock.calls.find(
+      (c) => typeof c[0] === "string" && c[0].endsWith("/source"),
+    );
+    expect(sourceCall).toBeDefined();
+    expect(sourceCall?.[0]).toBe("/api/scripts/1/source");
   });
 
   it("save for new script sends name + source + language", async () => {
