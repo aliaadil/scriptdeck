@@ -99,17 +99,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.background_tasks = set()
     app.state.active_procs = {}
     app.router.lifespan_context = lifespan
-    app.include_router(health_router, prefix="/api")
-    app.include_router(auth_router, prefix="/api")
-    app.include_router(users_router, prefix="/api")
-    app.include_router(scripts_router, prefix="/api")
-    app.include_router(deps_router, prefix="/api")
-    app.include_router(envs_router, prefix="/api")
-    app.include_router(schedules_router, prefix="/api")
-    app.include_router(runs_router, prefix="/api")
-    app.include_router(stats_router, prefix="/api")
-    app.include_router(presets_router, prefix="/api")
-    app.include_router(admin_router, prefix="/api")
+    app.include_router(health_router, prefix="/api/kindling")
+    app.include_router(auth_router, prefix="/api/kindling")
+    app.include_router(users_router, prefix="/api/kindling")
+    app.include_router(scripts_router, prefix="/api/kindling")
+    app.include_router(deps_router, prefix="/api/kindling")
+    app.include_router(envs_router, prefix="/api/kindling")
+    app.include_router(schedules_router, prefix="/api/kindling")
+    app.include_router(runs_router, prefix="/api/kindling")
+    app.include_router(stats_router, prefix="/api/kindling")
+    app.include_router(presets_router, prefix="/api/kindling")
+    app.include_router(admin_router, prefix="/api/kindling")
 
     # Apply migrations eagerly so tests (which don't trigger lifespan) see the
     # schema. `run_migrations_sync` is idempotent. In production the lifespan
@@ -155,7 +155,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # in-app navigation that lost its prefix still lands somewhere sane.
         @app.get("/{path:path}")
         async def spa_catch_all(path: str):
-            if path.startswith("api/") or path.startswith("kindling/"):
+            if path.startswith("api/") or path.startswith("kindling/") or path == "dashboard" or path.startswith("dashboard/"):
                 raise HTTPException(status_code=404)
             asset_file = dashboard_dir / path
             if asset_file.is_file():
