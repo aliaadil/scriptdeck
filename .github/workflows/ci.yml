@@ -28,6 +28,8 @@ jobs:
             --exclude-dir=.superpowers \
             --exclude-dir=site \
             --exclude-dir=node_modules \
+            --exclude-dir=docs/superpowers \
+            --exclude-dir=.claude \
             --exclude=CHANGELOG.md \
             --exclude=.github/workflows/ci.yml \
             .
@@ -70,20 +72,20 @@ jobs:
       # registers the SPA catch-all when the directory is present.
       - name: Copy frontend dist into dashboard_static
         run: |
-          mkdir -p src/scriptdeck/dashboard_static
-          cp -r frontend/dist/. src/scriptdeck/dashboard_static/
-          ls -la src/scriptdeck/dashboard_static/
+          mkdir -p src/kindling/dashboard_static
+          cp -r frontend/dist/. src/kindling/dashboard_static/
+          ls -la src/kindling/dashboard_static/
       - name: Start backend
         env:
-          SCRIPTDECK_JWT_SECRET: test-secret
-          SCRIPTDECK_ENV_ENCRYPTION_KEY: ${{ steps.aesgcm-key.outputs.key }}
+          KINDLING_JWT_SECRET: test-secret
+          KINDLING_ENV_ENCRYPTION_KEY: ${{ steps.aesgcm-key.outputs.key }}
         run: |
-          uv run python -m scriptdeck serve &
+          uv run python -m kindling serve &
           curl --retry 10 --retry-delay 2 --retry-connrefused -sf http://127.0.0.1:8765/api/health
       - working-directory: frontend
         run: npm run test:e2e
       - name: Stop backend
         if: always()
         run: |
-          pkill -f "python -m scriptdeck serve" || true
+          pkill -f "python -m kindling serve" || true
           pkill -f "uvicorn" || true
