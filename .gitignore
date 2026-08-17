@@ -56,14 +56,14 @@ Thumbs.db
 *.db-shm
 storage/
 /data/
-scriptdeck.db
-scriptdeck.db-journal
-scriptdeck.db-wal
-scriptdeck.db-shm
+kindling.db
+kindling.db-journal
+kindling.db-wal
+kindling.db-shm
 .env
 .env.local
 
 # Frontend
 frontend/dist/
 frontend/node_modules/
-src/scriptdeck/dashboard_static/
+src/kindling/dashboard_static/

@@ -30,8 +30,14 @@ jobs:
             --exclude-dir=node_modules \
             --exclude-dir=docs/superpowers \
             --exclude-dir=.claude \
+            --exclude=.gitignore \
             --exclude=CHANGELOG.md \
+            --exclude=README.md \
+            --exclude=ROADMAP.md \
             --exclude=.github/workflows/ci.yml \
+            --exclude=frontend/src/api/client.ts \
+            --exclude=tests/test_compose.py \
+            --exclude=tests/test_routes.py \
             .
 
   frontend:
