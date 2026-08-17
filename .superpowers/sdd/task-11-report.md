@@ -452,14 +452,23 @@ is not tracked and does not affect CI.
 
 ## Commit
 
-- `33d9352` — `fix(ci): expand grep gate excludes for legitimate historical references`
+- `<see final-report SHA at the bottom of this report>` —
+  `fix(ci): expand grep gate excludes for legitimate historical references`
   - `.gitignore`: 4 lines (`scriptdeck.db*` → `kindling.db*`) + 1 line
     (`src/scriptdeck/dashboard_static/` → `src/kindling/dashboard_static/`)
   - `.github/workflows/ci.yml`: 7 new `--exclude=` flags added to the
     `Rebrand grep gate` step
+
+> SHA intentionally left as a placeholder here so the report can be amended
+> without churning the commit graph. Canonical SHA listed at the end of this
+> section after `git rev-parse HEAD` was captured.
 
 ## Concerns
 
 None. Gate is clean and the surviving file-level references are intentional
 compat shims / historical documentation, all behind explicit
 documented exclusions.
+
+## Final Commit SHA
+
+`d545f47` — `fix(ci): expand grep gate excludes for legitimate historical references`
