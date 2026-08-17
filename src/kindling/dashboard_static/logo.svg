@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 160" role="img" aria-label="Kindling">
+  <g transform="translate(20,20)">
+    <rect width="120" height="120" rx="20" fill="#0c0a09"/>
+    <circle cx="42" cy="68" r="22" fill="#dc2626"/>
+    <circle cx="72" cy="50" r="26" fill="#fb923c"/>
+    <circle cx="68" cy="76" r="18" fill="#facc15"/>
+    <circle cx="56" cy="60" r="30" fill="#fb923c" fill-opacity="0.5"/>
+  </g>
+  <text x="170" y="100" font-family="ui-monospace, 'JetBrains Mono', Menlo, Consolas, monospace" font-size="64" font-weight="600" fill="#0c0a09">kindling</text>
+</svg>
