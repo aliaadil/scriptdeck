@@ -7,7 +7,6 @@ from typing import Any
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
 DEFAULT_DB_PATH = Path('./data/kindling.db')
 DEFAULT_CONFIG_FILE = Path('kindling.toml')
 ENV_PREFIX = 'KINDLING_'

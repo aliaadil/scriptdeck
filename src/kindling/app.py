@@ -35,7 +35,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     if not settings.env_encryption_key and not settings.allow_insecure_defaults_for_tests:
         raise RuntimeError(
             "KINDLING_ENV_ENCRYPTION_KEY is required. Set it to a base64-encoded "
-            "32-byte key (e.g. `python -c 'import os,base64;print(base64.b64encode(os.urandom(32)).decode())'`). "
+            "32-byte key (e.g. `python -c 'import os,base64;"
+            "print(base64.b64encode(os.urandom(32)).decode())'`). "
             "For tests, construct Settings(..., allow_insecure_defaults_for_tests=True)."
         )
     engine = make_engine(settings)
