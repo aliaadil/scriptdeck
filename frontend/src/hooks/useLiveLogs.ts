@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { API_BASE, getToken } from "@/api/client";
 
 export type LogEvent =
   | { kind: "line"; offset: number; text: string }
@@ -14,9 +15,9 @@ export function useLiveLogs(runId: number | null): {
 
   useEffect(() => {
     if (runId == null) return;
-    const token = localStorage.getItem("scriptdeck_token");
+    const token = getToken();
     // EventSource can't set Authorization header — pass token via query.
-    const url = `/api/runs/${runId}/log/stream?token=${encodeURIComponent(token ?? "")}`;
+    const url = `${API_BASE}/runs/${runId}/log/stream?token=${encodeURIComponent(token ?? "")}`;
     const es = new EventSource(url);
     esRef.current = es;
 

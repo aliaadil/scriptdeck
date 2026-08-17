@@ -1,9 +1,9 @@
-name: scriptdeck
+name: kindling
 services:
-  scriptdeck:
+  kindling:
     build: .
-    image: ghcr.io/aliaadil/scriptdeck:2.0.0
-    container_name: scriptdeck
+    image: aliaadil/kindling
+    container_name: kindling
     restart: unless-stopped
     ports:
       - "8765:8765"
@@ -13,17 +13,17 @@ services:
       - SYS_CHROOT
       - SYS_ADMIN
     environment:
-      SCRIPTDECK_DB_PATH: /data/scriptdeck.db
-      SCRIPTDECK_STORAGE_DIR: /storage
-      SCRIPTDECK_JWT_SECRET: ${SCRIPTDECK_JWT_SECRET:?required}
-      SCRIPTDECK_ENV_ENCRYPTION_KEY: ${SCRIPTDECK_ENV_ENCRYPTION_KEY:?required}
-      SCRIPTDECK_RUNNER_CONCURRENCY: "4"
-      SCRIPTDECK_SCHEDULER_INTERVAL: "5"
+      KINDLING_DB_PATH: /data/kindling.db
+      KINDLING_STORAGE_DIR: /storage
+      KINDLING_JWT_SECRET: ${KINDLING_JWT_SECRET:?required}
+      KINDLING_ENV_ENCRYPTION_KEY: ${KINDLING_ENV_ENCRYPTION_KEY:?required}
+      KINDLING_RUNNER_CONCURRENCY: "4"
+      KINDLING_SCHEDULER_INTERVAL: "5"
     volumes:
-      - scriptdeck-data:/data
-      - scriptdeck-storage:/storage
+      - kindling-data:/data
+      - kindling-storage:/storage
 volumes:
-  scriptdeck-data:
-    name: scriptdeck-data
-  scriptdeck-storage:
-    name: scriptdeck-storage
+  kindling-data:
+    name: kindling-data
+  kindling-storage:
+    name: kindling-storage

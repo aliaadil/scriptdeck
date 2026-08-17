@@ -8,13 +8,13 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from sqlalchemy import insert, text
 
-from scriptdeck.config import Settings
-from scriptdeck.db.engine import make_engine, session_factory
-from scriptdeck.db.migrations import run_migrations
-from scriptdeck.scheduler.tick import _execute_and_finalize, _tick
-from scriptdeck.runner.executor import Script
-from scriptdeck.services.log_broker import LogBroker
-from scriptdeck.services.run_service import create_run
+from kindling.config import Settings
+from kindling.db.engine import make_engine, session_factory
+from kindling.db.migrations import run_migrations
+from kindling.scheduler.tick import _execute_and_finalize, _tick
+from kindling.runner.executor import Script
+from kindling.services.log_broker import LogBroker
+from kindling.services.run_service import create_run
 
 
 @pytest.mark.asyncio
@@ -30,7 +30,7 @@ async def test_pending_retry_runs_after_next_attempt_at(tmp_path):
     await run_migrations(engine)
     Sf = session_factory(engine)
 
-    from scriptdeck.db.models import runs, schedules, scripts, users
+    from kindling.db.models import runs, schedules, scripts, users
     past = (datetime.now(timezone.utc) - timedelta(seconds=10)).isoformat()
     future = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()
 
@@ -93,7 +93,7 @@ async def test_failure_with_retry_marks_pending_retry(tmp_path):
     await run_migrations(engine)
     Sf = session_factory(engine)
 
-    from scriptdeck.db.models import runs, schedules, scripts, users
+    from kindling.db.models import runs, schedules, scripts, users
     now = datetime.now(timezone.utc).isoformat()
 
     work = tmp_path / "s" / "scripts" / "1"
@@ -161,7 +161,7 @@ async def test_failure_with_retry_exhausted_marks_failure(tmp_path):
     await run_migrations(engine)
     Sf = session_factory(engine)
 
-    from scriptdeck.db.models import runs, schedules, scripts, users
+    from kindling.db.models import runs, schedules, scripts, users
     now = datetime.now(timezone.utc).isoformat()
 
     work = tmp_path / "s" / "scripts" / "1"
@@ -218,7 +218,7 @@ async def test_failure_with_retry_exhausted_marks_failure(tmp_path):
 async def test_create_run_returns_nonempty_retry_group(tmp_path):
     """create_run returns a non-empty retry_group ULID; the DB row stores it.
 
-    Chain identity so GET /api/runs?group=<retry_group> finds the run.
+    Chain identity so GET /api/kindling/runs?group=<retry_group> finds the run.
     """
     settings = Settings(
         db_path=str(tmp_path / "t.db"),
@@ -231,7 +231,7 @@ async def test_create_run_returns_nonempty_retry_group(tmp_path):
     await run_migrations(engine)
     Sf = session_factory(engine)
 
-    from scriptdeck.db.models import runs, scripts, users
+    from kindling.db.models import runs, scripts, users
     now = datetime.now(timezone.utc).isoformat()
 
     work = tmp_path / "s" / "scripts" / "1"
@@ -280,7 +280,7 @@ async def test_create_run_explicit_retry_group_is_preserved(tmp_path):
     await run_migrations(engine)
     Sf = session_factory(engine)
 
-    from scriptdeck.db.models import runs, scripts, users
+    from kindling.db.models import runs, scripts, users
     now = datetime.now(timezone.utc).isoformat()
 
     work = tmp_path / "s" / "scripts" / "1"

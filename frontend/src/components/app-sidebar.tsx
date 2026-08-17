@@ -11,10 +11,10 @@ import { Brand } from "./brand";
 import { cn } from "@/lib/utils";
 
 const items = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/scripts", label: "Scripts", icon: FileCode2 },
-  { to: "/schedules", label: "Schedules", icon: Calendar },
-  { to: "/runs", label: "Runs", icon: Activity },
+  { to: "/kindling/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/kindling/scripts", label: "Scripts", icon: FileCode2 },
+  { to: "/kindling/schedules", label: "Schedules", icon: Calendar },
+  { to: "/kindling/runs", label: "Runs", icon: Activity },
 ];
 
 export function AppSidebar() {
@@ -44,7 +44,7 @@ export function AppSidebar() {
         ))}
         {user?.role === "admin" && (
           <NavLink
-            to="/settings"
+            to="/kindling/settings"
             className={({ isActive }) =>
               cn(
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",

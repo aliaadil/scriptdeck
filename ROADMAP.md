@@ -1,4 +1,4 @@
-# ScriptDeck Roadmap
+# Kindling Roadmap
 
 The path from "scaffold on a laptop" to "polished self-hosted product." Each milestone is sized to ship as a single Kanban card, with the worker branching off the current `main` and opening a PR per card. As cards land, the merge target moves: v0.7 was developed and merged first on its own branch because the dependency chain (`runs.log_path`, the runner status field) was needed by v0.5; subsequent cards stack on top.
 
@@ -9,8 +9,8 @@ Single-host dashboard rewrite. See CHANGELOG.md.
 ## Future (v2.1+)
 
 - Per-user sandbox (chroot + bind-mount into /storage/users/<uid>/) behind
-  `SCRIPTDECK_SANDBOX_ENABLED` flag. Storage migration CLI
-  `scriptdeck migrate-users`. See `docs/superpowers/specs/2026-08-16-user-isolation-design.md`.
+  `KINDLING_SANDBOX_ENABLED` flag. Storage migration CLI
+  `kindling migrate-users`. See `docs/superpowers/specs/2026-08-16-user-isolation-design.md`.
 - Language #3 (Ruby or Go runner).
 - `EnvProvider` protocol for Vault/Infisical integration.
 - Webhook trigger via n8n in front.
@@ -79,6 +79,6 @@ Single-host dashboard rewrite. See CHANGELOG.md.
 ## Out of scope (still)
 
 - Multi-host execution (use Kubernetes + Argo Workflows instead)
-- Workflow DAGs (use Temporal, Prefect, or Airflow instead — ScriptDeck is intentionally a single cron row per script)
-- Webhook triggers (use n8n in front of ScriptDeck's HTTP API instead)
+- Workflow DAGs (use Temporal, Prefect, or Airflow instead — Kindling is intentionally a single cron row per script)
+- Webhook triggers (use n8n in front of Kindling's HTTP API instead)
 - Secret management beyond environment variables (use HashiCorp Vault or Infisical in front)

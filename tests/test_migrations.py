@@ -1,9 +1,9 @@
 """Tests for migration runner."""
 import pytest
 
-from scriptdeck.db.engine import make_engine
-from scriptdeck.db.migrations import run_migrations
-from scriptdeck.config import Settings
+from kindling.db.engine import make_engine
+from kindling.db.migrations import run_migrations
+from kindling.config import Settings
 
 
 @pytest.mark.asyncio
@@ -42,7 +42,7 @@ async def test_migration_012_backfills_naive_started_at_to_iso_utc(tmp_db):
     engine = make_engine(s)
     # Apply migrations 1..11 first, insert rows with naive + tz-aware values,
     # then apply migration 012 so its UPDATE backfill sees the rows.
-    from scriptdeck.db.migrations import run_migrations_sync
+    from kindling.db.migrations import run_migrations_sync
     run_migrations_sync(str(tmp_db))
     async with engine.begin() as conn:
         await conn.exec_driver_sql(

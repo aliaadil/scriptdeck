@@ -1,7 +1,7 @@
 """Shared pytest fixtures."""
 import pytest
 
-from scriptdeck.auth import deps as auth_deps
+from kindling.auth import deps as auth_deps
 
 
 @pytest.fixture
@@ -41,7 +41,7 @@ def monkeypatch_auth():
         app=None,
     ):
         async def _fake():
-            from scriptdeck.auth.users import User
+            from kindling.auth.users import User
             return User(
                 id=user_id,
                 email=email,

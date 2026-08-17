@@ -50,7 +50,7 @@ export function RunView() {
   const { data: fallbackText } = useQuery({
     queryKey: ["run-log", runId],
     queryFn: async () => {
-      const r = await api<{ content: string }>(`/api/runs/${runId}/log`);
+      const r = await api<{ content: string }>(`/runs/${runId}/log`);
       return r.content;
     },
     enabled: Number.isFinite(runId) && liveText === "",

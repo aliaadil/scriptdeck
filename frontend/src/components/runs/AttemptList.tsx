@@ -55,7 +55,7 @@ export function AttemptList({
               {r.id === currentRunId ? (
                 <span className="text-xs font-medium">current</span>
               ) : (
-                <Link to={`/runs/${r.id}`} className="text-xs underline">
+                <Link to={`/kindling/runs/${r.id}`} className="text-xs underline">
                   view
                 </Link>
               )}

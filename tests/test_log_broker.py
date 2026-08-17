@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from scriptdeck.services.log_broker import (
+from kindling.services.log_broker import (
     LogBroker,
     encode_heartbeat,
     encode_sse,

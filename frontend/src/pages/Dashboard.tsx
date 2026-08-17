@@ -24,15 +24,15 @@ type Run = {
 export function Dashboard() {
   const { data: scripts = [] } = useQuery({
     queryKey: ["scripts"],
-    queryFn: () => api<unknown[]>("/api/scripts"),
+    queryFn: () => api<unknown[]>("/scripts"),
   });
   const { data: runs = [] } = useQuery({
     queryKey: ["runs"],
-    queryFn: () => api<Run[]>("/api/runs"),
+    queryFn: () => api<Run[]>("/runs"),
   });
   const { data: schedules = [] } = useQuery({
     queryKey: ["schedules"],
-    queryFn: () => api<unknown[]>("/api/schedules"),
+    queryFn: () => api<unknown[]>("/schedules"),
   });
 
   const todayRuns = runs.filter((r) => isToday(r.started_at));

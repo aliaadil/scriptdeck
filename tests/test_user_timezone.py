@@ -6,11 +6,11 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import insert, select
 
-from scriptdeck.app import create_app
-from scriptdeck.auth.jwt import encode_jwt
-from scriptdeck.auth.passwords import hash_password
-from scriptdeck.config import Settings
-from scriptdeck.db.models import users
+from kindling.app import create_app
+from kindling.auth.jwt import encode_jwt
+from kindling.auth.passwords import hash_password
+from kindling.config import Settings
+from kindling.db.models import users
 
 
 @pytest.fixture
@@ -40,7 +40,7 @@ async def test_patch_user_me_timezone_round_trips(app_and_token):
     app, token = app_and_token
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
         r = await ac.patch(
-            "/api/users/me",
+            "/api/kindling/users/me",
             headers={"Authorization": f"Bearer {token}"},
             json={"timezone": "America/Los_Angeles"},
         )
@@ -58,7 +58,7 @@ async def test_invalid_timezone_rejected(app_and_token):
     app, token = app_and_token
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
         r = await ac.patch(
-            "/api/users/me",
+            "/api/kindling/users/me",
             headers={"Authorization": f"Bearer {token}"},
             json={"timezone": "Not/AZone"},
         )

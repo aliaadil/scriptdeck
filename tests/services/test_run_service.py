@@ -1,4 +1,4 @@
-"""Tests for scriptdeck.services.run_service.
+"""Tests for kindling.services.run_service.
 
 Task 2 of feat/run-logs runs-page refresh: ``create_run`` must write a
 tz-aware ISO-8601 ``started_at`` rather than relying on the SQL default.
@@ -11,10 +11,10 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlalchemy import insert
 
-from scriptdeck.app import create_app
-from scriptdeck.config import Settings
-from scriptdeck.db.models import scripts, users
-from scriptdeck.services.run_service import create_run
+from kindling.app import create_app
+from kindling.config import Settings
+from kindling.db.models import scripts, users
+from kindling.services.run_service import create_run
 
 
 @pytest.fixture

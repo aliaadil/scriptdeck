@@ -21,6 +21,34 @@ jobs:
       - run: uv run ruff check src/
       - run: uv run mypy src/
       - run: uv run pytest
+      - name: Rebrand grep gate
+        run: |
+          # grep --exclude-dir matches by directory basename; --exclude matches
+          # by filename basename. Paths under docs/superpowers are historical
+          # design + plan docs from before the rebrand; .venv/ contains uv's
+          # absolute paths baked into the editable install; the legacy token
+          # key in client.ts is a v1-compat shim; tests for the rebrand gate
+          # must reference the old name to assert it stays gone.
+          ! grep -rIE 'scriptdeck|ScriptDeck|SCRIPTDECK' \
+            --exclude-dir=.git \
+            --exclude-dir=.superpowers \
+            --exclude-dir=site \
+            --exclude-dir=node_modules \
+            --exclude-dir=.venv \
+            --exclude-dir=.claude \
+            --exclude-dir=superpowers \
+            --exclude=.git \
+            --exclude=.gitignore \
+            --exclude=CHANGELOG.md \
+            --exclude=README.md \
+            --exclude=ROADMAP.md \
+            --exclude=ci.yml \
+            --exclude=client.ts \
+            --exclude=test_compose.py \
+            --exclude=test_routes.py \
+            --exclude=*.pth \
+            --exclude=*.egg-info \
+            .
 
   frontend:
     runs-on: ubuntu-latest
@@ -60,20 +88,20 @@ jobs:
       # registers the SPA catch-all when the directory is present.
       - name: Copy frontend dist into dashboard_static
         run: |
-          mkdir -p src/scriptdeck/dashboard_static
-          cp -r frontend/dist/. src/scriptdeck/dashboard_static/
-          ls -la src/scriptdeck/dashboard_static/
+          mkdir -p src/kindling/dashboard_static
+          cp -r frontend/dist/. src/kindling/dashboard_static/
+          ls -la src/kindling/dashboard_static/
       - name: Start backend
         env:
-          SCRIPTDECK_JWT_SECRET: test-secret
-          SCRIPTDECK_ENV_ENCRYPTION_KEY: ${{ steps.aesgcm-key.outputs.key }}
+          KINDLING_JWT_SECRET: test-secret
+          KINDLING_ENV_ENCRYPTION_KEY: ${{ steps.aesgcm-key.outputs.key }}
         run: |
-          uv run python -m scriptdeck serve &
-          curl --retry 10 --retry-delay 2 --retry-connrefused -sf http://127.0.0.1:8765/api/health
+          uv run python -m kindling serve &
+          curl --retry 10 --retry-delay 2 --retry-connrefused -sf http://127.0.0.1:8765/api/kindling/health
       - working-directory: frontend
         run: npm run test:e2e
       - name: Stop backend
         if: always()
         run: |
-          pkill -f "python -m scriptdeck serve" || true
+          pkill -f "python -m kindling serve" || true
           pkill -f "uvicorn" || true

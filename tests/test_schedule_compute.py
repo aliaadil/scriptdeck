@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from scriptdeck.services.schedule_service import ComputeError, compute_next_run
+from kindling.services.schedule_service import ComputeError, compute_next_run
 
 
 def test_basic_cron_utc():

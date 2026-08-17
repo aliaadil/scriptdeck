@@ -4,11 +4,11 @@ from datetime import datetime, timezone
 import pytest
 from sqlalchemy import insert, text
 
-from scriptdeck.config import Settings
-from scriptdeck.db.engine import make_engine, session_factory
-from scriptdeck.db.migrations import run_migrations
-from scriptdeck.scheduler.tick import _tick
-from scriptdeck.services.log_broker import LogBroker
+from kindling.config import Settings
+from kindling.db.engine import make_engine, session_factory
+from kindling.db.migrations import run_migrations
+from kindling.scheduler.tick import _tick
+from kindling.services.log_broker import LogBroker
 
 
 @pytest.mark.asyncio
@@ -24,7 +24,7 @@ async def test_tick_due_schedule_dispatches(tmp_path):
     Sf = session_factory(engine)
     now = datetime.now(timezone.utc).isoformat()
 
-    from scriptdeck.db.models import schedules, scripts
+    from kindling.db.models import schedules, scripts
 
     async with Sf() as s:
         await s.execute(

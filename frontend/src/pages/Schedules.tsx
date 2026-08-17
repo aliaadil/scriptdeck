@@ -52,12 +52,12 @@ export function Schedules() {
 
   const { data: schedules = [] } = useQuery({
     queryKey: ["schedules"],
-    queryFn: () => api<ScheduleRow[]>("/api/schedules"),
+    queryFn: () => api<ScheduleRow[]>("/schedules"),
   });
 
   const toggle = useMutation({
     mutationFn: ({ id, enabled }: { id: number; enabled: boolean }) =>
-      api(`/api/schedules/${id}/${enabled ? "enable" : "disable"}`, { method: "POST" }),
+      api(`/schedules/${id}/${enabled ? "enable" : "disable"}`, { method: "POST" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["schedules"] }),
     onError: (e: Error) => toast.error(e.message),
   });
@@ -66,7 +66,7 @@ export function Schedules() {
 
   const create = useMutation({
     mutationFn: (payload: SchedulePayload) =>
-      api("/api/schedules", { method: "POST", body: JSON.stringify(payload) }),
+      api("/schedules", { method: "POST", body: JSON.stringify(payload) }),
     onSuccess: () => {
       invalidate();
       setMode(null);
@@ -77,7 +77,7 @@ export function Schedules() {
 
   const update = useMutation({
     mutationFn: ({ id, payload }: { id: number; payload: SchedulePayload }) =>
-      api(`/api/schedules/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+      api(`/schedules/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
     onSuccess: () => {
       invalidate();
       setMode(null);
@@ -88,7 +88,7 @@ export function Schedules() {
 
   const remove = useMutation({
     mutationFn: (id: number) =>
-      api(`/api/schedules/${id}`, { method: "DELETE" }),
+      api(`/schedules/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       invalidate();
       setDeleting(null);

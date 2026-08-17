@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Kindling mark">
+  <rect width="64" height="64" rx="12" fill="#0c0a09"/>
+  <circle cx="22" cy="36" r="11" fill="#dc2626"/>
+  <circle cx="38" cy="26" r="14" fill="#fb923c"/>
+  <circle cx="36" cy="40" r="9" fill="#facc15"/>
+  <circle cx="30" cy="32" r="16" fill="#fb923c" fill-opacity="0.5"/>
+</svg>

@@ -83,7 +83,7 @@ describe("Runs page", () => {
   });
 
   it("fetches runs on mount", async () => {
-    // Brief asserts `apiMock("/api/runs")` exactly. The runsUrl()
+    // Brief asserts `apiMock("/api/kindling/runs")` exactly. The runsUrl()
     // implementation in Runs.tsx queries `/runs?limit=20` (the api
     // helper is a thin fetch wrapper that forwards the path verbatim
     // — see `@/api/client`). Assert the path is used, allowing query.
@@ -210,7 +210,7 @@ describe("Runs page", () => {
   });
 
   it("hides Cancel button when running-section row is not status=running", async () => {
-    // Regression: backend was returning all rows for /api/runs?status=running
+    // Regression: backend was returning all rows for /api/kindling/runs?status=running
     // because the param was misnamed, so the running section showed success
     // and skipped rows with a stray Cancel button. With server-side filter
     // + status guard, only status=running rows render the X.

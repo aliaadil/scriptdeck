@@ -1,4 +1,4 @@
-from scriptdeck.services.dep_detect import detect_node_deps, detect_python_deps
+from kindling.services.dep_detect import detect_node_deps, detect_python_deps
 
 
 def test_python_basic_imports():

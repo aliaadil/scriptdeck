@@ -1,19 +1,14 @@
-# ScriptDeck v2.0
+# Kindling
 
-[![CI](https://github.com/aliaadil/scriptdeck/actions/workflows/ci.yml/badge.svg)](https://github.com/aliaadil/scriptdeck/actions/workflows/ci.yml)
+[![CI](https://github.com/aliaadil/kindling/actions/workflows/ci.yml/badge.svg)](https://github.com/aliaadil/kindling/actions)
 ![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-Self-hosted scheduled script runner. Upload Python or Node scripts, attach a
-cron or interval, watch runs and live logs in the dashboard. Single Docker
-container, single SQLite file, multi-user with roles, per-script isolated
-environments, encrypted `.env` files, auto dependency detection.
-
-## Quickstart
+Self-hosted scheduled script runner.
 
 ```bash
 docker compose up -d
-open http://localhost:8765/dashboard/
+open http://localhost:8765/kindling/
 ```
 
 First boot redirects to `/setup` to create the first admin.
@@ -21,10 +16,10 @@ First boot redirects to `/setup` to create the first admin.
 ## Migrate from v1
 
 ```bash
-scriptdeck migrate-from-v1 \
+kindling migrate-from-v1 \
   --v1-db-path=./old/scriptdeck.db \
   --v1-storage-path=./old/storage \
-  --v2-db-path=./data/scriptdeck.db \
+  --v2-db-path=./data/kindling.db \
   --v2-storage-path=./storage
 ```
 
@@ -32,7 +27,7 @@ v1.x receives security fixes until 2027-02-14, then archived.
 
 ## Why
 
-Cron + logrotate + ad-hoc shell wrappers work — until you have a dozen jobs that need conflicting Python versions, structured run history, and a record of *what actually ran and when*. ScriptDeck gives you that without dragging in Postgres, Redis, or a workflow engine.
+Cron + logrotate + ad-hoc shell wrappers work — until you have a dozen jobs that need conflicting Python versions, structured run history, and a record of *what actually ran and when*. Kindling gives you that without dragging in Postgres, Redis, or a workflow engine.
 
 ## What ships in v2.0
 
@@ -64,64 +59,66 @@ interface is in place. Once a runner writes lines to
 value (`success`, `failure`, `error`, `cancelled`), you can tail it in a
 browser:
 
-- `GET /logs` — last 50 runs (id, script, status badge, duration, started).
-- `GET /logs/<run_id>` — vanilla-JS EventSource viewer that streams lines in
+- `GET /kindling/logs` — last 50 runs (id, script, status badge, duration, started).
+- `GET /kindling/logs/<run_id>` — vanilla-JS EventSource viewer that streams lines in
   real time and updates a status badge when the run ends.
-- `GET /api/logs/<run_id>/stream` — the raw SSE endpoint, also usable from
+- `GET /api/kindling/logs/<run_id>/stream` — the raw SSE endpoint, also usable from
   `curl -N` or any EventSource client.
 
-See [`ROADMAP.md`](ROADMAP.md) and the [Operator Runbook](https://github.com/aliaadil/scriptdeck/wiki) for detail.
+See [`ROADMAP.md`](ROADMAP.md) and the [Operator Runbook](https://github.com/aliaadil/kindling/wiki) for detail.
 
 ## Install & run
 
 ```bash
-git clone https://github.com/aliaadil/scriptdeck
-cd scriptdeck
+git clone https://github.com/aliaadil/kindling
+cd kindling
 pip install -e .
 
-scriptdeck                 # boots on http://127.0.0.1:8765
+kindling                      # boots on http://127.0.0.1:8765
 # or
-python -m scriptrunner
+python -m kindling
 ```
 
 ### Quickstart
 
 ```bash
 # 1. Health check
-curl -s http://127.0.0.1:8765/health
+curl -s http://127.0.0.1:8765/api/kindling/health
 # -> {"status": "ok"}
 
 # 2. Register a script
-curl -s -X POST http://127.0.0.1:8765/api/scripts \
+curl -s -X POST http://127.0.0.1:8765/api/kindling/scripts \
   -H 'Content-Type: application/json' \
   -d '{"name":"hello","language":"python","source_path":"./storage/scripts/hello.py"}'
 
 # 3. Attach a schedule
-curl -s -X POST http://127.0.0.1:8765/api/schedules \
+curl -s -X POST http://127.0.0.1:8765/api/kindling/schedules \
   -H 'Content-Type: application/json' \
   -d '{"script_id":1,"kind":"interval","expression":"15m","enabled":true}'
 
 # 4. Inspect
-curl -s http://127.0.0.1:8765/api/scripts
-curl -s http://127.0.0.1:8765/api/schedules
+curl -s http://127.0.0.1:8765/api/kindling/scripts
+curl -s http://127.0.0.1:8765/api/kindling/schedules
 ```
 
-> **Note:** the runner is not built yet, so no `runs` rows will appear on their own until the scheduler-tick Kanban task lands. Until then, you can manually insert a run row via `POST /api/runs` for testing.
+> **Note:** the runner is not built yet, so no `runs` rows will appear on their own until the scheduler-tick Kanban task lands. Until then, you can manually insert a run row via `POST /api/kindling/runs` for testing.
 
 ## Configuration
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `SCRIPTDECK_DB_PATH` | `scriptdeck.db` | SQLite file path. Backup this one file. |
-| `SCRIPTDECK_STORAGE_DIR` | `storage` | Per-script source + per-run logs live here. |
-| `SCRIPTDECK_HOST` | `127.0.0.1` | Bind address. Set to `0.0.0.0` if fronted by a reverse proxy. |
-| `SCRIPTDECK_PORT` | `8765` | TCP port. |
-| `SCRIPTDECK_BASIC_AUTH` | unset | Optional single-user Basic auth in `username:bcrypt_hash` format. |
+| `KINDLING_DB_PATH` | `./data/kindling.db` | SQLite file path. Backup this one file. |
+| `KINDLING_STORAGE_DIR` | `storage` | Per-script source + per-run logs live here. |
+| `KINDLING_HOST` | `127.0.0.1` | Bind address. Set to `0.0.0.0` if fronted by a reverse proxy. |
+| `KINDLING_PORT` | `8765` | TCP port. |
+| `KINDLING_JWT_SECRET` | unset | Required. Random secret for JWT signing. |
+| `KINDLING_ENV_ENCRYPTION_KEY` | unset | Required. Base64 32-byte key for AES-GCM .env encryption. |
+| `KINDLING_BASIC_AUTH` | unset | Optional single-user Basic auth in `username:bcrypt_hash` format. |
 
 ### HTTP Basic auth
 
-Authentication is disabled when `SCRIPTDECK_BASIC_AUTH` is unset. When it is
-set, `/health`, `/`, `/logs`, and every `/api/*` route require HTTP Basic auth.
+Authentication is disabled when `KINDLING_BASIC_AUTH` is unset. When it is
+set, `/api/kindling/health`, `/`, `/kindling/logs`, and every `/api/kindling/*` route require HTTP Basic auth.
 The configured password must be a bcrypt hash; plaintext passwords are not
 accepted. Install the optional dependency with:
 
@@ -139,7 +136,7 @@ Set the resulting value in Coolify as an environment variable. For example,
 if the generated hash is `$2a$12$...`, set:
 
 ```text
-SCRIPTDECK_BASIC_AUTH=scriptdeck:$2a$12$...
+KINDLING_BASIC_AUTH=kindling:$2a$12$...
 ```
 
 Keep the value in Coolify's secret/environment-variable store and do not put
@@ -149,7 +146,7 @@ it in the repository. Restart or redeploy the service after changing it.
 
 ```
 .
-├── scriptdeck.db                # ← backup this one file
+├── data/kindling.db            # ← backup this one file
 └── storage/
     ├── users/<user_id>/
     │   ├── scripts/<id>/<file>      # source uploaded per script
@@ -160,16 +157,16 @@ it in the repository. Restart or redeploy the service after changing it.
     └── locks/<id>.lock
 ```
 
-Backing up `scriptdeck.db` plus `storage/` is a complete disaster-recovery snapshot.
+Backing up `data/kindling.db` plus `storage/` is a complete disaster-recovery snapshot.
 
 ## Security model
 
-When `SCRIPTDECK_SANDBOX_ENABLED=true`, every script runs in a private mount
+When `KINDLING_SANDBOX_ENABLED=true`, every script runs in a private mount
 namespace chrooted into its user's subtree. Other users' files are not
 mounted and therefore `open('/storage/users/<other>/...')` returns `ENOENT`.
 Env vars are scrubbed to a small whitelist plus the script's own decrypted
-env. The parent process's `os.environ` (which contains `SCRIPTDECK_JWT_SECRET`
-and `SCRIPTDECK_ENV_ENCRYPTION_KEY`) is never copied into the child.
+env. The parent process's `os.environ` (which contains `KINDLING_JWT_SECRET`
+and `KINDLING_ENV_ENCRYPTION_KEY`) is never copied into the child.
 
 This is **good-citizen** isolation: it stops accidental cross-reads and
 defends against a curious user, but does not claim to defeat a knowledgeable
@@ -178,8 +175,8 @@ attacker. For hardening beyond this, see the Roadmap.
 ## Development
 
 ```bash
-git clone https://github.com/aliaadil/scriptdeck
-cd scriptdeck
+git clone https://github.com/aliaadil/kindling
+cd kindling
 pip install -e ".[dev]"          # if/when dev extras exist; for now: pip install pytest ruff
 pytest                          # runs the migration + repository test suite
 ruff check src/ tests/          # lint
@@ -188,22 +185,49 @@ ruff check src/ tests/          # lint
 ## Project layout
 
 ```
-scriptdeck/
-├── src/scriptrunner/            # the package (kept as `scriptrunner` for the console script)
-│   ├── __init__.py
-│   ├── __main__.py              # `python -m scriptrunner` entry
+kindling/
+├── src/kindling/                # the package
+│   ├── api/                     # FastAPI routers (auth, scripts, runs, ...)
+│   ├── auth/                    # JWT + bcrypt helpers
+│   ├── cli_commands/            # subcommand implementations
+│   ├── db/                      # engine + SQLAlchemy models
+│   ├── migrations/              # versioned SQL migrations
+│   ├── runner/                  # subprocess execution + sandboxing
+│   ├── scheduler/               # cron/interval tick loop
+│   ├── services/                # EnvService, log broker, retention, ...
+│   ├── app.py                   # FastAPI factory + lifespan
+│   ├── cli.py                   # argparse entry
 │   ├── config.py                # Settings dataclass + env-var loader
-│   ├── db.py                    # SQLite connect + versioned migrations
-│   ├── repository.py            # typed CRUD over the schema
-│   └── server.py                # stdlib HTTP/JSON API
+│   └── dashboard_static/        # Vite build output (mounted at /kindling)
 ├── tests/
-│   ├── test_db.py               # migrations + smoke
-│   ├── test_repository.py       # CRUD invariants
-│   └── test_server.py           # end-to-end HTTP contract
+│   ├── api/                     # HTTP contract tests
+│   ├── services/                # service-layer tests
+│   ├── test_app.py
+│   ├── test_auth.py / test_auth_api.py
+│   ├── test_branding.py
+│   ├── test_compose.py
+│   ├── test_config.py
+│   ├── test_db.py / test_migrations.py
+│   ├── test_env_service.py
+│   ├── test_executor.py / test_executor_sandbox_wiring.py
+│   ├── test_kindling_spa_fallback.py
+│   ├── test_log_broker.py
+│   ├── test_migrate_from_v1.py
+│   ├── test_migrate_users.py
+│   ├── test_retention.py
+│   ├── test_routes.py
+│   ├── test_runner_protocol.py / test_runner_sandbox_view.py
+│   ├── test_sandbox.py / test_sandbox_view.py
+│   ├── test_schedule_api.py / test_schedule_compute.py
+│   ├── test_scheduler.py / test_scheduler_tick_v2.py
+│   └── test_*.py                # many more focused suites
+├── frontend/                    # Vite + React SPA
+│   ├── src/api / src/auth / src/components / src/pages
+│   └── index.html
+├── docs/                        # install, operations, troubleshooting
 ├── pyproject.toml
-├── README.md
-├── ROADMAP.md
-├── LICENSE
+├── docker-compose.yml / Dockerfile
+├── README.md / ROADMAP.md / CHANGELOG.md / LICENSE
 └── .github/workflows/ci.yml
 ```
 
