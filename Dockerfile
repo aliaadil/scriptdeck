@@ -15,9 +15,9 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 COPY src/ ./src/
-COPY --from=frontend /app/frontend/dist ./src/scriptdeck/dashboard_static/
+COPY --from=frontend /app/frontend/dist ./src/kindling/dashboard_static/
 EXPOSE 8765
-ENV SCRIPTDECK_HOST=0.0.0.0 SCRIPTDECK_PORT=8765
+ENV KINDLING_HOST=0.0.0.0 KINDLING_PORT=8765
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD python -c "import urllib.request, sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8765/api/health', timeout=3).status == 200 else 1)"
-CMD ["uv", "run", "python", "-m", "scriptdeck"]
+    CMD python -c "import urllib.request, sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8765/api/kindling/health', timeout=3).status == 200 else 1)"
+CMD ["kindling", "serve"]
