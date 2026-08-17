@@ -14,4 +14,5 @@ def test_compose_env_uses_kindling_prefix():
     env = data['services']['kindling'].get('environment', {})
     keys = list(env.keys()) if isinstance(env, dict) else [k.split('=')[0] for k in env]
     assert any(k.startswith('KINDLING_') for k in keys)
-    assert not any(k.startswith('KINDLING_') for k in keys)
+    # Source file must not still carry the legacy SCRIPTDECK prefix anywhere.
+    assert 'SCRIPTDECK' not in Path('docker-compose.yml').read_text()

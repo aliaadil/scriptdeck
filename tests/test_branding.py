@@ -5,17 +5,11 @@ import pytest
 
 
 def test_package_imports_as_kindling():
-    # NOTE: tests/conftest.py still imports `kindling.auth` (Task 9 owns
-    # that sweep). To run this file standalone under the normal pytest
-    # collection, skip when conftest fails to import; otherwise the
-    # collection error masks this assertion.
     try:
         import kindling
     except ImportError:
         pytest.skip(
-            "kindling not importable in this collection context "
-            "(conftest.py still references kindling; run with --noconftest "
-            "until Task 9 lands)"
+            "kindling not importable in this collection context"
         )
     assert kindling.__name__ == 'kindling'
 

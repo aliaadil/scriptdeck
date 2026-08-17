@@ -1,4 +1,6 @@
 """Tests for config + async engine."""
+from pathlib import Path
+
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
 
@@ -10,7 +12,7 @@ def test_settings_defaults():
     s = Settings()
     assert s.host == "127.0.0.1"
     assert s.port == 8765
-    assert s.db_path == "kindling.db"
+    assert s.db_path == Path('./data/kindling.db')
     assert s.storage_dir == "storage"
     assert s.runner_concurrency == 4
     assert s.scheduler_interval == 5
