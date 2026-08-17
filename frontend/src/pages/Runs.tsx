@@ -248,7 +248,11 @@ export function Runs() {
                       {new Date(r.started_at).toLocaleString()}
                     </TableCell>
                     <TableCell>
-                      <RunningDuration started_at={r.started_at} />
+                      <RunningDuration
+                        started_at={r.started_at}
+                        ended_at={r.ended_at}
+                        status={r.status}
+                      />
                     </TableCell>
                     <TableCell>{r.exit_code ?? "—"}</TableCell>
                     <TableCell className="text-right">
@@ -311,17 +315,11 @@ export function Runs() {
                     {new Date(r.started_at).toLocaleString()}
                   </TableCell>
                   <TableCell>
-                    {r.ended_at ? (
-                      <span className="font-mono tabular-nums">
-                        {((new Date(r.ended_at).getTime() -
-                          new Date(r.started_at).getTime()) /
-                          1000) |
-                          0}
-                        s
-                      </span>
-                    ) : (
-                      <RunningDuration started_at={r.started_at} />
-                    )}
+                    <RunningDuration
+                      started_at={r.started_at}
+                      ended_at={r.ended_at}
+                      status={r.status}
+                    />
                   </TableCell>
                   <TableCell>{r.exit_code ?? "—"}</TableCell>
                   <TableCell>

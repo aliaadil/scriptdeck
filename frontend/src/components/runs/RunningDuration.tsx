@@ -13,15 +13,28 @@ function format(ms: number): string {
   return `${s}s`;
 }
 
-export function RunningDuration({ started_at }: { started_at: string }) {
+type Props = {
+  started_at: string;
+  ended_at?: string | null;
+  status: string;
+};
+
+export function RunningDuration({ started_at, ended_at, status }: Props) {
+  const isRunning = status === "running";
   const [, setTick] = useState(0);
 
   useEffect(() => {
+    if (!isRunning) return;
     const id = setInterval(() => setTick((n) => n + 1), 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [isRunning]);
 
   const started = new Date(started_at).getTime();
-  const now = Date.now();
-  return <span className="font-mono tabular-nums">{format(now - started)}</span>;
+  const elapsed = isRunning
+    ? Date.now() - started
+    : ended_at
+      ? new Date(ended_at).getTime() - started
+      : NaN;
+
+  return <span className="font-mono tabular-nums">{format(elapsed)}</span>;
 }
