@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   keepPreviousData,
@@ -94,7 +94,7 @@ function runsUrl(opts: {
     params.set("offset", String(opts.offset));
   params.set("limit", String(opts.limit ?? PAGE_SIZE));
   const qs = params.toString();
-  return qs ? `/runs?${qs}` : `/runs`;
+  return qs ? `/api/runs?${qs}` : `/api/runs`;
 }
 
 function variantFor(
@@ -147,25 +147,6 @@ export function Runs() {
         : false,
     refetchIntervalInBackground: false,
   });
-
-  // Pause polling when tab hidden — TanStack Query already does this when
-  // refetchIntervalInBackground is false, so no manual listener needed.
-  useEffect(() => {
-    function onVis() {
-      /* react-query handles pause */
-    }
-    document.addEventListener("visibilitychange", onVis);
-    return () =>
-      document.removeEventListener("visibilitychange", onVis);
-  }, []);
-
-  const totalPages = useMemo(() => {
-    return Math.max(
-      1,
-      page +
-        ((history.data?.length ?? 0) === PAGE_SIZE ? 1 : 0),
-    );
-  }, [history.data, page]);
 
   function invalidate() {
     qc.invalidateQueries({ queryKey: ["runs-history"] });

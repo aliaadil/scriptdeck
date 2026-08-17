@@ -179,6 +179,10 @@ describe("Runs page", () => {
       return Promise.resolve([]);
     });
     cancelMock.mockResolvedValue({ ok: true });
+    const invalidateSpy = vi.spyOn(
+      QueryClient.prototype,
+      "invalidateQueries",
+    );
     const qc = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
@@ -191,7 +195,16 @@ describe("Runs page", () => {
     );
     const user = userEvent.setup();
     const cancelBtn = await screen.findByLabelText(/Cancel run 1/i);
+    invalidateSpy.mockClear();
     await user.click(cancelBtn);
     await waitFor(() => expect(cancelMock).toHaveBeenCalledWith(1));
+    await waitFor(() => {
+      const calledKeys = invalidateSpy.mock.calls.flatMap(
+        (call) => (call[0] as { queryKey: string[] })?.queryKey ?? [],
+      );
+      expect(calledKeys).toContain("runs-history");
+      expect(calledKeys).toContain("runs-running");
+    });
+    invalidateSpy.mockRestore();
   });
 });
