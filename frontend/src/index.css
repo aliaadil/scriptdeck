@@ -4,6 +4,13 @@
 
 @layer base {
   :root {
+    /* Kindling brand palette */
+    --kindling-ember: #dc2626;
+    --kindling-spark: #fb923c;
+    --kindling-flame: #facc15;
+    --kindling-charcoal: #0c0a09;
+    --kindling-text: #f5f5f4;
+
     --background: 0 0% 100%;
     --foreground: 222 47% 11%;
     --card: 0 0% 100%;
