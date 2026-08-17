@@ -20,7 +20,7 @@ vi.mock("@/api/runs", () => ({
 }));
 
 vi.mock("@/api/client", () => ({
-  api: vi.fn().mockResolvedValue("hello from log\n"),
+  api: vi.fn().mockResolvedValue({ content: "hello from log\n" }),
 }));
 
 vi.mock("@/hooks/useLiveLogs", () => ({
@@ -61,5 +61,10 @@ describe("RunView", () => {
     expect(await screen.findByText("Run #42")).toBeInTheDocument();
     expect(await screen.findByText("success")).toBeInTheDocument();
     expect(await screen.findByText("3.0s")).toBeInTheDocument();
+  });
+
+  it("renders fallback log content from JSON wrapper", async () => {
+    renderRunView();
+    expect(await screen.findByText(/hello from log/)).toBeInTheDocument();
   });
 });
