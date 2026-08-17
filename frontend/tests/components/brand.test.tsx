@@ -1,31 +1,46 @@
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect } from 'vitest';
-import { Brand } from '@/components/brand';
-
-function renderBrand(collapsed: boolean) {
-  return render(
-    <MemoryRouter>
-      <Brand collapsed={collapsed} />
-    </MemoryRouter>,
-  );
-}
+import { Brand, BrandLogo, BrandMark } from '@/components/brand';
 
 describe('Brand', () => {
-  it('exposes an accessible name when expanded', () => {
-    renderBrand(false);
+  it('renders a link with an accessible name', () => {
+    render(
+      <MemoryRouter>
+        <Brand />
+      </MemoryRouter>,
+    );
     expect(screen.getByRole('link', { name: /kindling/i })).toBeInTheDocument();
   });
 
-  it('exposes an accessible name when collapsed to the mark only', () => {
-    renderBrand(true);
-    // The mark is decorative (alt=""), so without an explicit label the link
-    // would be announced as just "link" with no destination.
-    expect(screen.getByRole('link', { name: /kindling/i })).toBeInTheDocument();
+  it('does not render a visible wordmark (mark-only in the sidebar)', () => {
+    // The wordmark is illegible at sidebar height; the brand link uses the
+    // mark image only and exposes the name via aria-label.
+    render(
+      <MemoryRouter>
+        <Brand />
+      </MemoryRouter>,
+    );
+    // The wordmark would render as an <img> with alt="Kindling"; the mark
+    // uses alt="" (decorative). Confirm only one image is in the tree.
+    const images = screen.getAllByRole('img');
+    expect(images).toHaveLength(1);
+    expect(images[0]).not.toHaveAccessibleName(/kindling/i);
   });
+});
 
-  it('does not render the retired Kindling name', () => {
-    renderBrand(false);
-    expect(screen.queryByText(/kindling/i)).not.toBeInTheDocument();
+describe('BrandLogo', () => {
+  it('renders the combined mark + wordmark image', () => {
+    render(<BrandLogo size="lg" />);
+    const img = screen.getByRole('img', { name: /kindling/i });
+    expect(img).toBeInTheDocument();
+  });
+});
+
+describe('BrandMark', () => {
+  it('renders just the mark, decorative (no accessible name)', () => {
+    render(<BrandMark size={32} />);
+    const img = screen.getByRole('img');
+    expect(img).not.toHaveAccessibleName();
   });
 });

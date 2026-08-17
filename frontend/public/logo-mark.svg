@@ -1,7 +1,22 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Kindling mark">
-  <rect width="64" height="64" rx="12" fill="#0c0a09"/>
-  <circle cx="22" cy="36" r="11" fill="#dc2626"/>
-  <circle cx="38" cy="26" r="14" fill="#fb923c"/>
-  <circle cx="36" cy="40" r="9" fill="#facc15"/>
-  <circle cx="30" cy="32" r="16" fill="#fb923c" fill-opacity="0.5"/>
+  <rect width="64" height="64" rx="14" fill="#0c0a09"/>
+  <!-- Three kindling sticks in a teepee, meeting at the base center -->
+  <g transform="translate(32 50)">
+    <g transform="rotate(-26)">
+      <rect x="-3" y="-40" width="6" height="38" rx="3" fill="#92400e"/>
+      <rect x="-3" y="-40" width="2" height="38" rx="1" fill="#fbbf24" fill-opacity="0.55"/>
+    </g>
+    <g transform="rotate(0)">
+      <rect x="-3" y="-42" width="6" height="40" rx="3" fill="#92400e"/>
+      <rect x="-3" y="-42" width="2" height="40" rx="1" fill="#fbbf24" fill-opacity="0.55"/>
+    </g>
+    <g transform="rotate(26)">
+      <rect x="-3" y="-40" width="6" height="38" rx="3" fill="#92400e"/>
+      <rect x="-3" y="-40" width="2" height="38" rx="1" fill="#fbbf24" fill-opacity="0.55"/>
+    </g>
+  </g>
+  <!-- Single flame above the teepee, layered ember → spark → flame -->
+  <path d="M32 6 C38 14 40 22 32 30 C24 22 26 14 32 6 Z" fill="#dc2626"/>
+  <path d="M32 10 C36 16 38 22 32 28 C26 22 28 16 32 10 Z" fill="#fb923c"/>
+  <path d="M32 14 C34 18 36 22 32 26 C28 22 30 18 32 14 Z" fill="#facc15"/>
 </svg>

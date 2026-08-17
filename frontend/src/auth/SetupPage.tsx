@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { useAuth } from "./AuthProvider";
-import { Brand } from "@/components/brand";
+import { BrandLogo as Brand } from "@/components/brand";
 
 const schema = z.object({
   email: z.string().email(),
@@ -41,7 +41,7 @@ export function SetupPage() {
       <Card className="w-full max-w-sm">
         <CardHeader className="space-y-2 text-center">
           <div className="flex justify-center">
-            <Brand />
+            <Brand size="lg" />
           </div>
           <CardTitle>Welcome</CardTitle>
           <CardDescription>Create the first admin account.</CardDescription>

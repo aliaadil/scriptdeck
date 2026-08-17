@@ -1,10 +1,27 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 160" role="img" aria-label="Kindling">
-  <g transform="translate(20,20)">
-    <rect width="120" height="120" rx="20" fill="#0c0a09"/>
-    <circle cx="42" cy="68" r="22" fill="#dc2626"/>
-    <circle cx="72" cy="50" r="26" fill="#fb923c"/>
-    <circle cx="68" cy="76" r="18" fill="#facc15"/>
-    <circle cx="56" cy="60" r="30" fill="#fb923c" fill-opacity="0.5"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 160" role="img" aria-label="Kindling">
+  <!-- Mark on the left: teepee of three kindling sticks + flame above -->
+  <g transform="translate(20 20)">
+    <rect width="120" height="120" rx="22" fill="#0c0a09"/>
+    <g transform="translate(60 94)">
+      <g transform="rotate(-26)">
+        <rect x="-5.6" y="-74" width="11.2" height="70" rx="5.6" fill="#92400e"/>
+        <rect x="-5.6" y="-74" width="3.7" height="70" rx="1.8" fill="#fbbf24" fill-opacity="0.55"/>
+      </g>
+      <g transform="rotate(0)">
+        <rect x="-5.6" y="-78" width="11.2" height="74" rx="5.6" fill="#92400e"/>
+        <rect x="-5.6" y="-78" width="3.7" height="74" rx="1.8" fill="#fbbf24" fill-opacity="0.55"/>
+      </g>
+      <g transform="rotate(26)">
+        <rect x="-5.6" y="-74" width="11.2" height="70" rx="5.6" fill="#92400e"/>
+        <rect x="-5.6" y="-74" width="3.7" height="70" rx="1.8" fill="#fbbf24" fill-opacity="0.55"/>
+      </g>
+    </g>
+    <path d="M60 12 C75 30 80 50 60 68 C40 50 45 30 60 12 Z" fill="#dc2626"/>
+    <path d="M60 22 C71 36 76 50 60 64 C44 50 49 36 60 22 Z" fill="#fb923c"/>
+    <path d="M60 32 C67 42 70 50 60 60 C50 50 53 42 60 32 Z" fill="#facc15"/>
   </g>
-  <text x="170" y="100" font-family="ui-monospace, 'JetBrains Mono', Menlo, Consolas, monospace" font-size="64" font-weight="600" fill="#0c0a09">kindling</text>
+  <!-- Wordmark: lowercase mono, larger + bolder than the previous version.
+       fill=currentColor lets the host element (CSS color property) decide
+       ink color — light on dark surfaces, dark on light surfaces. -->
+  <text x="180" y="112" font-family="ui-monospace, 'JetBrains Mono', Menlo, Consolas, monospace" font-size="88" font-weight="700" fill="currentColor" letter-spacing="-3">kindling</text>
 </svg>

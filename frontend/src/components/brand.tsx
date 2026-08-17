@@ -5,28 +5,43 @@ import { Link } from "react-router-dom";
 // /kindling/logo.svg in production.
 const BASE = import.meta.env.BASE_URL;
 
+// Combined mark + wordmark, for surfaces that have room (login, setup).
+// `currentColor` lets the host's CSS color property drive the wordmark ink.
 export function BrandLogo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
-  const h = size === "sm" ? 28 : size === "lg" ? 56 : 36;
-  return <img src={`${BASE}logo.svg`} alt="Kindling" style={{ height: h }} />;
+  const h = size === "sm" ? 32 : size === "lg" ? 72 : 48;
+  return (
+    <img
+      src={`${BASE}logo.svg`}
+      alt="Kindling"
+      style={{ height: h }}
+      className="text-foreground"
+    />
+  );
 }
 
-export function BrandMark({ size = 32 }: { size?: number }) {
-  return <img src={`${BASE}logo-mark.svg`} alt="" width={size} height={size} />;
+// Just the mark, for surfaces where the wordmark would be illegible at the
+// available size (sidebar at h-14). Sized in px so callers can override.
+export function BrandMark({ size = 28 }: { size?: number }) {
+  return (
+    <img
+      src={`${BASE}logo-mark.svg`}
+      alt=""
+      width={size}
+      height={size}
+    />
+  );
 }
 
-export function Brand({ collapsed = false }: { collapsed?: boolean }) {
+// Sidebar / collapsed nav: mark only. The brand link gets an explicit
+// accessible name because the image is decorative.
+export function Brand() {
   return (
     <Link
       to="/kindling/dashboard"
       className="flex items-center gap-2 font-semibold"
-      // The mark is decorative, so when the label is hidden the link needs an
-      // explicit name or it is announced as an unlabelled "link".
-      aria-label={collapsed ? "Kindling" : undefined}
+      aria-label="Kindling"
     >
-      <BrandLogo size="sm" />
-      {/* BrandLogo's SVG already renders the "kindling" wordmark; an
-          adjacent <span> would produce a visible double wordmark. The
-          `aria-label` above covers the collapsed case. */}
+      <BrandMark />
     </Link>
   );
 }
