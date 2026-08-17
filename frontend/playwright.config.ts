@@ -13,7 +13,7 @@ export default defineConfig({
   webServer: process.env.CI
     ? undefined
     : {
-        command: "uv run python -m scriptdeck serve",
+        command: "uv run python -m kindling serve",
         url: "http://127.0.0.1:8765/api/health",
         reuseExistingServer: true,
         timeout: 60_000,
