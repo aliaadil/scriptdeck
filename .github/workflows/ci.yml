@@ -87,7 +87,7 @@ jobs:
           KINDLING_ENV_ENCRYPTION_KEY: ${{ steps.aesgcm-key.outputs.key }}
         run: |
           uv run python -m kindling serve &
-          curl --retry 10 --retry-delay 2 --retry-connrefused -sf http://127.0.0.1:8765/api/health
+          curl --retry 10 --retry-delay 2 --retry-connrefused -sf http://127.0.0.1:8765/api/kindling/health
       - working-directory: frontend
         run: npm run test:e2e
       - name: Stop backend
