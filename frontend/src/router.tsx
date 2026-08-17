@@ -20,9 +20,7 @@ const router = createBrowserRouter([
     { path: "/schedules", element: <Schedules /> },
     { path: "/runs", element: <Runs /> },
     { path: "/runs/:id", element: <RunView /> },
-    { element: <ProtectedRoute roles={["admin"]} />, children: [
-      { path: "/settings", element: <Settings /> },
-    ] },
+    { path: "/settings", element: <Settings /> },
   ] },
   { path: "*", element: <Navigate to="/dashboard" replace /> },
 ]);
