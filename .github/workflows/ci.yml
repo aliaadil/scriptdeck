@@ -21,6 +21,16 @@ jobs:
       - run: uv run ruff check src/
       - run: uv run mypy src/
       - run: uv run pytest
+      - name: Rebrand grep gate
+        run: |
+          ! grep -rIE 'scriptdeck|ScriptDeck|SCRIPTDECK' \
+            --exclude-dir=.git \
+            --exclude-dir=.superpowers \
+            --exclude-dir=site \
+            --exclude-dir=node_modules \
+            --exclude=CHANGELOG.md \
+            --exclude=.github/workflows/ci.yml \
+            .
 
   frontend:
     runs-on: ubuntu-latest
