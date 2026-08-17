@@ -4,7 +4,9 @@
 
 @layer base {
   :root {
-    /* Kindling brand palette */
+    /* Kindling brand palette — hex kept for non-shadcn consumers (artwork,
+       marketing site). The shadcn tokens below are wired to the same hue
+       so the dashboard actually reflects the rebrand. */
     --kindling-ember: #dc2626;
     --kindling-spark: #fb923c;
     --kindling-flame: #facc15;
@@ -12,19 +14,22 @@
     --kindling-text: #f5f5f4;
 
     --background: 0 0% 100%;
-    --foreground: 222 47% 11%;
+    --foreground: 20 14% 4%;
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 20 14% 4%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-    --primary: 221 83% 53%;
+    --popover-foreground: 20 14% 4%;
+    /* ember red — primary action / active link */
+    --primary: 0 72% 51%;
     --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222 47% 11%;
+    /* spark orange — secondary call-to-action */
+    --secondary: 27 96% 61%;
+    --secondary-foreground: 20 14% 4%;
     --muted: 210 40% 96%;
     --muted-foreground: 215 16% 47%;
-    --accent: 210 40% 96%;
-    --accent-foreground: 222 47% 11%;
+    /* flame yellow — accent / highlight */
+    --accent: 48 96% 53%;
+    --accent-foreground: 20 14% 4%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 210 40% 98%;
     --success: 142 71% 45%;
@@ -33,38 +38,39 @@
     --warning-foreground: 222 47% 11%;
     --border: 214 32% 91%;
     --input: 214 32% 91%;
-    --ring: 221 83% 53%;
-    --chart-1: 221 83% 53%;
-    --chart-2: 142 71% 45%;
-    --chart-3: 38 92% 50%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+    --ring: 0 72% 51%;
+    --chart-1: 0 72% 51%;    /* ember */
+    --chart-2: 27 96% 61%;   /* spark */
+    --chart-3: 48 96% 53%;   /* flame */
+    --chart-4: 142 71% 45%;  /* success */
+    --chart-5: 280 65% 60%;
     --sidebar: 0 0% 98%;
-    --sidebar-foreground: 222 47% 11%;
-    --sidebar-primary: 221 83% 53%;
+    --sidebar-foreground: 20 14% 4%;
+    --sidebar-primary: 0 72% 51%;
     --sidebar-primary-foreground: 210 40% 98%;
-    --sidebar-accent: 210 40% 96%;
-    --sidebar-accent-foreground: 222 47% 11%;
+    --sidebar-accent: 48 96% 53%;
+    --sidebar-accent-foreground: 20 14% 4%;
     --sidebar-border: 214 32% 91%;
-    --sidebar-ring: 221 83% 53%;
+    --sidebar-ring: 0 72% 51%;
     --radius: 0.5rem;
   }
 
   .dark {
-    --background: 222 47% 6%;
+    --background: 20 14% 4%;
     --foreground: 210 40% 98%;
-    --card: 222 47% 8%;
+    --card: 20 14% 6%;
     --card-foreground: 210 40% 98%;
-    --popover: 222 47% 8%;
+    --popover: 20 14% 6%;
     --popover-foreground: 210 40% 98%;
-    --primary: 217 91% 60%;
-    --primary-foreground: 222 47% 11%;
-    --secondary: 217 33% 17%;
-    --secondary-foreground: 210 40% 98%;
+    /* lighter ember so dark-theme buttons stay legible */
+    --primary: 0 72% 58%;
+    --primary-foreground: 20 14% 4%;
+    --secondary: 27 96% 61%;
+    --secondary-foreground: 20 14% 4%;
     --muted: 217 33% 17%;
     --muted-foreground: 215 20% 65%;
-    --accent: 217 33% 17%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 48 96% 53%;
+    --accent-foreground: 20 14% 4%;
     --destructive: 0 63% 50%;
     --destructive-foreground: 210 40% 98%;
     --success: 142 71% 45%;
@@ -73,20 +79,20 @@
     --warning-foreground: 222 47% 11%;
     --border: 217 33% 17%;
     --input: 217 33% 17%;
-    --ring: 217 91% 60%;
-    --chart-1: 217 91% 60%;
-    --chart-2: 142 71% 45%;
-    --chart-3: 38 92% 50%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
-    --sidebar: 222 47% 8%;
+    --ring: 0 72% 58%;
+    --chart-1: 0 72% 58%;
+    --chart-2: 27 96% 61%;
+    --chart-3: 48 96% 53%;
+    --chart-4: 142 71% 45%;
+    --chart-5: 280 65% 60%;
+    --sidebar: 20 14% 6%;
     --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 217 91% 60%;
-    --sidebar-primary-foreground: 222 47% 11%;
-    --sidebar-accent: 217 33% 17%;
-    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-primary: 0 72% 58%;
+    --sidebar-primary-foreground: 210 40% 98%;
+    --sidebar-accent: 48 96% 53%;
+    --sidebar-accent-foreground: 20 14% 4%;
     --sidebar-border: 217 33% 17%;
-    --sidebar-ring: 217 91% 60%;
+    --sidebar-ring: 0 72% 58%;
   }
 }
 

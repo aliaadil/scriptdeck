@@ -14,7 +14,13 @@ const LEGACY_TOKEN_KEY = "scriptdeck_token";
  */
 function migrateLegacyToken(): void {
   try {
-    if (localStorage.getItem(TOKEN_KEY)) return;
+    // If the new key is already populated, the new app is in use; just sweep
+    // any leftover legacy key (which can coexist if the old app was loaded
+    // in another tab and wrote its key after the new app loaded).
+    if (localStorage.getItem(TOKEN_KEY)) {
+      localStorage.removeItem(LEGACY_TOKEN_KEY);
+      return;
+    }
     const legacy = localStorage.getItem(LEGACY_TOKEN_KEY);
     if (!legacy) return;
     localStorage.setItem(TOKEN_KEY, legacy);
