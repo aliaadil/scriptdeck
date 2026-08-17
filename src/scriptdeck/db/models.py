@@ -148,6 +148,11 @@ runs = Table(
     Column("status", String, nullable=False),
     Column("retry_group", String),
     Column("attempt", Integer, nullable=False, default=0),
+    # parent_run_id is reserved for a future multi-row retry-chain model.
+    # The current implementation uses single-row attempt increment
+    # (run.attempt = ...) per the spec's "Retry State Machine" section,
+    # so this column is intentionally unused. Leave the FK in place so
+    # a future migration can start populating it without a schema change.
     Column("parent_run_id", Integer, ForeignKey("runs.id", ondelete="SET NULL")),
     Column("next_attempt_at", String),
     Column("skip_reason", String),

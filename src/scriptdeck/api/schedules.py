@@ -35,8 +35,8 @@ class ScheduleCreate(BaseModel):
     kind: str = Field(pattern="^(cron|interval)$")
     expression: str = Field(min_length=1)
     enabled: bool = True
-    retry_max: int = 0
-    retry_backoff: int = 0
+    retry_max: int = Field(default=0, ge=0)
+    retry_backoff: int = Field(default=0, ge=0)
     timezone: str | None = None
     blackout_dates: list[str] | None = None
     include_days: list[int] | None = None

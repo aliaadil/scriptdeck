@@ -1,4 +1,5 @@
-"""Scheduler tick: pending_retry pickup (Task 5). Task 7 adds executor retry."""
+"""Scheduler tick: pending_retry pickup (Task 5). Task 7 adds executor retry.
+Final-review fix: C1 — retry_group ULID chain identity."""
 from __future__ import annotations
 
 import asyncio
@@ -13,6 +14,7 @@ from scriptdeck.db.migrations import run_migrations
 from scriptdeck.scheduler.tick import _execute_and_finalize, _tick
 from scriptdeck.runner.executor import Script
 from scriptdeck.services.log_broker import LogBroker
+from scriptdeck.services.run_service import create_run
 
 
 @pytest.mark.asyncio
@@ -208,3 +210,103 @@ async def test_failure_with_retry_exhausted_marks_failure(tmp_path):
             "SELECT status FROM runs WHERE id=:i"
         ), {"i": run_id})).first()[0]
     assert status == "failure"
+
+
+# ---- Final-review fix C1: retry_group ULID chain identity ----
+
+@pytest.mark.asyncio
+async def test_create_run_returns_nonempty_retry_group(tmp_path):
+    """create_run returns a non-empty retry_group ULID; the DB row stores it.
+
+    Chain identity so GET /api/runs?group=<retry_group> finds the run.
+    """
+    settings = Settings(
+        db_path=str(tmp_path / "t.db"),
+        storage_dir=str(tmp_path / "s"),
+        scheduler_interval=1,
+        runner_concurrency=2,
+        feature_schedules_v2=True,
+    )
+    engine = make_engine(settings)
+    await run_migrations(engine)
+    Sf = session_factory(engine)
+
+    from scriptdeck.db.models import runs, scripts, users
+    now = datetime.now(timezone.utc).isoformat()
+
+    work = tmp_path / "s" / "scripts" / "1"
+    work.mkdir(parents=True)
+    (work / "main.py").write_text("print('ok')\n")
+
+    async with Sf() as s:
+        await s.execute(insert(users).values(
+            id=1, email="owner@example.com", password_hash="x" * 32,
+            role="admin", created_at=now,
+        ))
+        await s.execute(insert(scripts).values(
+            id=1, name="t", language="python",
+            source_path="scripts/1/main.py", user_id=1,
+        ))
+        await s.commit()
+
+    async with Sf() as s:
+        run_id, _started, retry_group = await create_run(
+            s, script_id=1, schedule_id=None
+        )
+        await s.commit()
+
+    assert retry_group is not None
+    assert isinstance(retry_group, str)
+    assert len(retry_group) > 0
+
+    async with Sf() as s:
+        row = (await s.execute(text(
+            "SELECT retry_group FROM runs WHERE id=:i"
+        ), {"i": run_id})).first()
+    assert row[0] == retry_group
+
+
+@pytest.mark.asyncio
+async def test_create_run_explicit_retry_group_is_preserved(tmp_path):
+    """When caller passes retry_group, the row gets that exact value."""
+    settings = Settings(
+        db_path=str(tmp_path / "t.db"),
+        storage_dir=str(tmp_path / "s"),
+        scheduler_interval=1,
+        runner_concurrency=2,
+        feature_schedules_v2=True,
+    )
+    engine = make_engine(settings)
+    await run_migrations(engine)
+    Sf = session_factory(engine)
+
+    from scriptdeck.db.models import runs, scripts, users
+    now = datetime.now(timezone.utc).isoformat()
+
+    work = tmp_path / "s" / "scripts" / "1"
+    work.mkdir(parents=True)
+    (work / "main.py").write_text("print('ok')\n")
+
+    async with Sf() as s:
+        await s.execute(insert(users).values(
+            id=1, email="owner@example.com", password_hash="x" * 32,
+            role="admin", created_at=now,
+        ))
+        await s.execute(insert(scripts).values(
+            id=1, name="t", language="python",
+            source_path="scripts/1/main.py", user_id=1,
+        ))
+        await s.commit()
+
+    async with Sf() as s:
+        run_id, _started, retry_group = await create_run(
+            s, script_id=1, schedule_id=None, retry_group="CHAIN-123"
+        )
+        await s.commit()
+
+    assert retry_group == "CHAIN-123"
+    async with Sf() as s:
+        row = (await s.execute(text(
+            "SELECT retry_group FROM runs WHERE id=:i"
+        ), {"i": run_id})).first()
+    assert row[0] == "CHAIN-123"

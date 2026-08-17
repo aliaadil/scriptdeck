@@ -177,3 +177,63 @@ async def test_queue_dropped_visible_in_schedule_out(app_and_token):
     body = r.json()
     assert len(body) == 1
     assert body[0]["queue_dropped"] == 0
+
+
+# ---- Final-review fix M11: retry_max / retry_backoff bounds ----
+
+@pytest.mark.asyncio
+async def test_create_schedule_rejects_negative_retry_max(app_and_token):
+    app, token = app_and_token
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
+        r = await ac.post(
+            "/api/schedules",
+            json={
+                "script_id": 1, "kind": "cron", "expression": "0 9 * * *",
+                "retry_max": -1,
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert r.status_code == 422, r.text
+
+
+@pytest.mark.asyncio
+async def test_create_schedule_rejects_negative_retry_backoff(app_and_token):
+    app, token = app_and_token
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
+        r = await ac.post(
+            "/api/schedules",
+            json={
+                "script_id": 1, "kind": "cron", "expression": "0 9 * * *",
+                "retry_backoff": -5,
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert r.status_code == 422, r.text
+
+
+@pytest.mark.asyncio
+async def test_update_schedule_rejects_negative_retry_max(app_and_token):
+    app, token = app_and_token
+    # Create a schedule first.
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
+        r = await ac.post(
+            "/api/schedules",
+            json={
+                "script_id": 1, "kind": "cron", "expression": "0 9 * * *",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert r.status_code == 201, r.text
+    sched_id = r.json()["id"]
+    # Update with negative retry_max — must be rejected.
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
+        r = await ac.put(
+            f"/api/schedules/{sched_id}",
+            json={
+                "script_id": 1, "kind": "cron", "expression": "0 9 * * *",
+                "retry_max": -1,
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert r.status_code == 422, r.text
+

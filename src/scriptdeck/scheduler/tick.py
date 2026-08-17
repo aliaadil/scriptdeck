@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
@@ -18,7 +19,13 @@ from scriptdeck.services.run_service import (
     pick_due_retries,
     promote_oldest_pending,
 )
-from scriptdeck.services.schedule_service import advance, advance_next_run, list_due
+from scriptdeck.services.schedule_service import (
+    ComputeError,
+    advance,
+    advance_next_run,
+    compute_next_run,
+    list_due,
+)
 
 log = logging.getLogger(__name__)
 
@@ -26,6 +33,25 @@ log = logging.getLogger(__name__)
 def _table():
     from scriptdeck.db.models import runs as _runs
     return _runs
+
+
+def _parse_json_list(raw: str | None) -> list[str] | None:
+    """Decode a JSON-or-NULL string column into a list[str] or None."""
+    if not raw:
+        return None
+    try:
+        v = json.loads(raw)
+    except (ValueError, TypeError):
+        return None
+    return v if isinstance(v, list) else None
+
+
+def _parse_json_list_int(raw: str | None) -> list[int] | None:
+    """Decode a JSON-or-NULL string column into a list[int] or None."""
+    v = _parse_json_list(raw)
+    if v is None:
+        return None
+    return [int(x) for x in v]
 
 
 async def scheduler_loop(
@@ -77,14 +103,37 @@ async def _tick(
             queue_max = row.get("queue_max", 10)
 
             # Advance schedule cursor before dispatching, so skipped fires
-            # still move the schedule forward.
-            new_next = advance_next_run(row["kind"], row["expression"], row["next_run_at"])
+            # still move the schedule forward. Use the tz-aware compute_next_run
+            # for cron schedules so the timezone / blackout_dates / include_days
+            # columns are honored; fall back to advance_next_run for interval
+            # schedules (which only support time-delta semantics).
+            if row["kind"] == "cron":
+                try:
+                    prev = datetime.fromisoformat(row["next_run_at"])
+                    if prev.tzinfo is None:
+                        prev = prev.replace(tzinfo=UTC)
+                    cur = compute_next_run(
+                        cron_expr=row["expression"],
+                        tz_name=row.get("timezone") or "UTC",
+                        blackout_dates=_parse_json_list(row.get("blackout_dates")),
+                        include_days=_parse_json_list_int(row.get("include_days")),
+                        after=prev,
+                    )
+                    new_next = cur.isoformat()
+                except ComputeError:
+                    # Bad cron / no fire within horizon — leave the schedule
+                    # cursor where it is so the next tick can re-evaluate.
+                    new_next = row["next_run_at"]
+            else:
+                new_next = advance_next_run(
+                    row["kind"], row["expression"], row["next_run_at"]
+                )
             await advance(s, row["id"], new_next)
             await s.commit()
 
             overlap = await has_active_run(s, sid)
             if overlap and policy == "skip":
-                run_id, _ = await create_run(
+                run_id, _, _ = await create_run(
                     s,
                     script_id=sid,
                     schedule_id=row["id"],
@@ -99,7 +148,7 @@ async def _tick(
             if overlap and policy == "queue":
                 pending = await count_pending(s, sid)
                 if pending >= queue_max:
-                    run_id, _ = await create_run(
+                    run_id, _, _ = await create_run(
                         s,
                         script_id=sid,
                         schedule_id=row["id"],
@@ -128,7 +177,7 @@ async def _tick(
                 continue
 
             # No overlap OR overlap_policy='parallel' (best-effort dispatch).
-            run_id, _ = await create_run(s, script_id=sid, schedule_id=row["id"])
+            run_id, _, _ = await create_run(s, script_id=sid, schedule_id=row["id"])
             await s.commit()
 
             script = Script(
@@ -274,7 +323,9 @@ async def _execute_and_finalize(
     async with session_factory() as s:
         if status == "failure":
             from sqlalchemy import select as _select
-            from scriptdeck.db.models import runs as _runs_t, schedules as _sched_t
+
+            from scriptdeck.db.models import runs as _runs_t
+            from scriptdeck.db.models import schedules as _sched_t
             sched_row = (
                 await s.execute(
                     _select(_sched_t.c.retry_max, _sched_t.c.retry_backoff)

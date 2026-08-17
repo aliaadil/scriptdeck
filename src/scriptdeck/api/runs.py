@@ -131,7 +131,7 @@ async def _trigger_run(app, script_id: int, user: User) -> RunOut:
             raise HTTPException(
                 status.HTTP_409_CONFLICT, detail="another run is in progress"
             )
-        run_id, started = await run_service.create_run(
+        run_id, started, retry_group = await run_service.create_run(
             s, script_id=script.id, schedule_id=None
         )
         deps_row = (await s.execute(
@@ -158,7 +158,8 @@ async def _trigger_run(app, script_id: int, user: User) -> RunOut:
         env_nonce=env_nonce,
     )
     return RunOut(id=run_id, script_id=script.id, schedule_id=None,
-                  started_at=started, ended_at=None, exit_code=None, status="running")
+                  started_at=started, ended_at=None, exit_code=None, status="running",
+                  retry_group=retry_group)
 
 
 def _schedule_execution(

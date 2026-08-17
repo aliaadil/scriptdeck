@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from datetime import UTC, datetime
 
 from sqlalchemy import insert, select, update
@@ -11,6 +12,30 @@ def _table():
     return _runs
 
 
+def _new_ulid() -> str:
+    """Generate a 26-char Crockford ULID without an external dependency.
+
+    Layout: 6-byte big-endian time (ms since epoch) + 10-byte random.
+    Base32-encoded with the Crockford alphabet (excludes I, L, O, U for
+    readability).
+    """
+    import secrets
+
+    _CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+    ms = int(time.time() * 1000) & 0xFFFFFFFFFFFF
+    time_chars = ["0"] * 10
+    for i in range(9, -1, -1):
+        time_chars[i] = _CROCKFORD[ms % 32]
+        ms //= 32
+    rand = secrets.token_bytes(10)
+    rand_int = int.from_bytes(rand, "big")
+    rand_chars = ["0"] * 16
+    for i in range(15, -1, -1):
+        rand_chars[i] = _CROCKFORD[rand_int % 32]
+        rand_int //= 32
+    return "".join(time_chars + rand_chars)
+
+
 async def create_run(
     session: AsyncSession,
     *,
@@ -18,9 +43,19 @@ async def create_run(
     schedule_id: int | None,
     status: str = "running",
     skip_reason: str | None = None,
-) -> tuple[int, str]:
-    """Insert a new run row and return (run_id, started_at)."""
+    retry_group: str | None = None,
+) -> tuple[int, str, str]:
+    """Insert a new run row and return (run_id, started_at, retry_group).
+
+    ``retry_group`` is the chain identity used by GET /api/runs?group=.
+    If ``None``, a new ULID is generated so the row has a chain identity
+    from the moment it's created (a single-row attempt chain — the
+    spec's "Retry State Machine" semantics — still needs the column
+    populated so the API can group the run with its sibling attempts).
+    Pass an existing ULID to thread an existing chain.
+    """
     t = _table()
+    rg = retry_group or _new_ulid()
     stmt = (
         insert(t)
         .values(
@@ -28,11 +63,12 @@ async def create_run(
             schedule_id=schedule_id,
             status=status,
             skip_reason=skip_reason,
+            retry_group=rg,
         )
-        .returning(t.c.id, t.c.started_at)
+        .returning(t.c.id, t.c.started_at, t.c.retry_group)
     )
     row = (await session.execute(stmt)).one()
-    return int(row[0]), row[1]
+    return int(row[0]), row[1], row[2]
 
 
 async def has_active_run(session: AsyncSession, script_id: int) -> bool:
@@ -129,12 +165,13 @@ async def mark_pending_retry(
 ) -> bool:
     """If retries remain, set status=pending_retry + next_attempt_at and return True.
     Otherwise return False (caller should mark terminal failure)."""
-    from datetime import datetime as _dt, timedelta, timezone
+    from datetime import UTC, timedelta
+    from datetime import datetime as _dt
     t = _table()
     if attempt >= schedule_retry_max:
         return False
     delay = timedelta(seconds=schedule_retry_backoff * (2 ** attempt))
-    next_at = (_dt.now(timezone.utc) + delay).isoformat()
+    next_at = (_dt.now(UTC) + delay).isoformat()
     await session.execute(
         update(t)
         .where(t.c.id == run_id)
