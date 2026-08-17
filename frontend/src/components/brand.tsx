@@ -5,10 +5,10 @@ import { Link } from "react-router-dom";
 // /kindling/logo.svg in production.
 const BASE = import.meta.env.BASE_URL;
 
-// Combined mark + wordmark, for surfaces that have room (login, setup).
-// `currentColor` lets the host's CSS color property drive the wordmark ink.
+// Full lockup (mark + wordmark + tagline) for the auth screens where there
+// is room and the tagline adds context.
 export function BrandLogo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
-  const h = size === "sm" ? 32 : size === "lg" ? 72 : 48;
+  const h = size === "sm" ? 32 : size === "lg" ? 96 : 56;
   return (
     <img
       src={`${BASE}logo.svg`}
@@ -19,8 +19,21 @@ export function BrandLogo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
   );
 }
 
-// Just the mark, for surfaces where the wordmark would be illegible at the
-// available size (sidebar at h-14). Sized in px so callers can override.
+// Compact lockup (mark + wordmark, no tagline) for the app sidebar. The
+// wordmark uses the same amber→cream→red gradient as the auth screen, baked
+// into the SVG so the gradient renders correctly even on the dark sidebar.
+export function BrandSidebar({ height = 40 }: { height?: number }) {
+  return (
+    <img
+      src={`${BASE}logo-sidebar.svg`}
+      alt="Kindling"
+      style={{ height }}
+    />
+  );
+}
+
+// Just the mark, for callers that want mark-only (rare — sidebar uses the
+// compact lockup instead so the wordmark is always visible).
 export function BrandMark({ size = 28 }: { size?: number }) {
   return (
     <img
@@ -32,16 +45,17 @@ export function BrandMark({ size = 28 }: { size?: number }) {
   );
 }
 
-// Sidebar / collapsed nav: mark only. The brand link gets an explicit
-// accessible name because the image is decorative.
+// Sidebar / collapsed nav: compact mark + wordmark lockup. The brand link
+// gets an explicit accessible name; the image alt is redundant but
+// preserved for assistive tech that doesn't traverse the wrapping link.
 export function Brand() {
   return (
     <Link
       to="/kindling/dashboard"
-      className="flex items-center gap-2 font-semibold"
+      className="flex items-center"
       aria-label="Kindling"
     >
-      <BrandMark />
+      <BrandSidebar height={40} />
     </Link>
   );
 }
