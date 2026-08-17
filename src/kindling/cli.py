@@ -24,6 +24,24 @@ def main() -> int:
         default="./storage",
         help="Path to the v2 storage directory (default: ./storage)",
     )
+    mig.add_argument(
+        "--v1-env-encryption-key",
+        default=None,
+        help=(
+            "Base64-encoded AES-GCM key the v1 process booted with. Required "
+            "if the v1 DB contains any script_envs rows; otherwise migration "
+            "refuses to proceed."
+        ),
+    )
+    mig.add_argument(
+        "--v2-env-encryption-key",
+        default=None,
+        help=(
+            "Base64-encoded AES-GCM key the v2 process will boot with. When "
+            "supplied, env blobs are re-encrypted under this key during "
+            "migration. Defaults to --v1-env-encryption-key when omitted."
+        ),
+    )
 
     mu = sub.add_parser("migrate-users", help="Move flat storage into per-user subtrees")
     mu.add_argument("--storage-dir", required=True)
@@ -49,6 +67,8 @@ def main() -> int:
         return mig_run(
             v1_db=args.v1_db_path, v1_storage=args.v1_storage_path,
             v2_db=args.v2_db_path, v2_storage=args.v2_storage_path,
+            v1_env_encryption_key=args.v1_env_encryption_key,
+            v2_env_encryption_key=args.v2_env_encryption_key,
         )
     if args.cmd == "migrate-users":
         from kindling.cli_commands.migrate_users import migrate_users_run
