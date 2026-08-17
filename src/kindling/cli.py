@@ -14,8 +14,16 @@ def main() -> int:
     mig = sub.add_parser("migrate-from-v1", help="Copy v1 DB rows into a fresh v2 DB")
     mig.add_argument("--v1-db-path", required=True)
     mig.add_argument("--v1-storage-path", required=True)
-    mig.add_argument("--v2-db-path", required=True)
-    mig.add_argument("--v2-storage-path", required=True)
+    mig.add_argument(
+        "--v2-db-path",
+        default="./data/kindling.db",
+        help="Path to the v2 SQLite DB (default: ./data/kindling.db)",
+    )
+    mig.add_argument(
+        "--v2-storage-path",
+        default="./storage",
+        help="Path to the v2 storage directory (default: ./storage)",
+    )
 
     mu = sub.add_parser("migrate-users", help="Move flat storage into per-user subtrees")
     mu.add_argument("--storage-dir", required=True)
