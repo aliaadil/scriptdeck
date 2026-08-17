@@ -295,8 +295,8 @@ async def log_text(run_id: int, request: Request,
     log_path = storage / "logs" / f"{run_id}.log"
     if not log_path.exists():
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="log not found")
-    from fastapi.responses import PlainTextResponse
-    return PlainTextResponse(log_path.read_text(encoding="utf-8", errors="replace"))
+    from fastapi.responses import JSONResponse
+    return JSONResponse({"content": log_path.read_text(encoding="utf-8", errors="replace")})
 
 
 @router.get("/{run_id}/log/stream")
