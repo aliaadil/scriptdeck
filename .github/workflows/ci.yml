@@ -23,21 +23,31 @@ jobs:
       - run: uv run pytest
       - name: Rebrand grep gate
         run: |
+          # grep --exclude-dir matches by directory basename; --exclude matches
+          # by filename basename. Paths under docs/superpowers are historical
+          # design + plan docs from before the rebrand; .venv/ contains uv's
+          # absolute paths baked into the editable install; the legacy token
+          # key in client.ts is a v1-compat shim; tests for the rebrand gate
+          # must reference the old name to assert it stays gone.
           ! grep -rIE 'scriptdeck|ScriptDeck|SCRIPTDECK' \
             --exclude-dir=.git \
             --exclude-dir=.superpowers \
             --exclude-dir=site \
             --exclude-dir=node_modules \
-            --exclude-dir=docs/superpowers \
+            --exclude-dir=.venv \
             --exclude-dir=.claude \
+            --exclude-dir=superpowers \
+            --exclude=.git \
             --exclude=.gitignore \
             --exclude=CHANGELOG.md \
             --exclude=README.md \
             --exclude=ROADMAP.md \
-            --exclude=.github/workflows/ci.yml \
-            --exclude=frontend/src/api/client.ts \
-            --exclude=tests/test_compose.py \
-            --exclude=tests/test_routes.py \
+            --exclude=ci.yml \
+            --exclude=client.ts \
+            --exclude=test_compose.py \
+            --exclude=test_routes.py \
+            --exclude=*.pth \
+            --exclude=*.egg-info \
             .
 
   frontend:

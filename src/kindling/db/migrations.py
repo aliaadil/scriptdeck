@@ -6,6 +6,7 @@ import re
 import sqlite3
 from pathlib import Path
 
+from sqlalchemy.engine.url import make_url
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 log = logging.getLogger(__name__)
@@ -36,7 +37,12 @@ def run_migrations_sync(db_path: str) -> None:
     event loop, so tests using ASGITransport (no lifespan) see the schema.
     Idempotent.
     """
-    conn = sqlite3.connect(db_path)
+    db_file = Path(db_path)
+    # sqlite3.connect will not create the parent directory; bare-Python
+    # boots (no Docker compose volume mount prepping ./data) would fail
+    # with `unable to open database file`. Idempotent.
+    db_file.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(db_file)
     try:
         conn.executescript(
             "CREATE TABLE IF NOT EXISTS schema_version ("
@@ -61,6 +67,11 @@ def run_migrations_sync(db_path: str) -> None:
 
 async def run_migrations(engine: AsyncEngine) -> None:
     """Apply pending migrations in order, tracked in schema_version table."""
+    # Mirror run_migrations_sync: ensure the parent directory exists. aiosqlite
+    # won't create it and aiosqlite connect also fails on missing dirs.
+    parsed = make_url(engine.url.render_as_string(hide_password=False))
+    if parsed.drivername.startswith("sqlite") and parsed.database:
+        Path(parsed.database).parent.mkdir(parents=True, exist_ok=True)
     async with engine.begin() as conn:
         await conn.exec_driver_sql(
             "CREATE TABLE IF NOT EXISTS schema_version ("
