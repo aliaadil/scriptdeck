@@ -197,3 +197,44 @@ def test_seed_template_raises_for_unsupported(tmp_path):
     script_dir = tmp_path / "scripts" / "1"
     with pytest.raises(ValueError):
         seed_template("ruby", script_dir)
+
+
+def test_bash_template_runs_in_bash(tmp_path):
+    """The seeded bash starter must execute cleanly under bash (no syntax errors).
+
+    Guards against bash syntax errors like ``${#VAR:-default}`` (length with default
+    expansion is not a valid form in bash). Runs the template with and without
+    ``API_KEY`` set.
+    """
+    import subprocess
+
+    from kindling.script_templates import BASH_MAIN, seed_template
+
+    script_dir = tmp_path / "scripts" / "bash-run"
+    entrypoint = seed_template("bash", script_dir)
+    assert entrypoint == "main.sh"
+    main_sh = script_dir / "main.sh"
+    assert main_sh.read_text(encoding="utf-8") == BASH_MAIN
+
+    env_without = {"PATH": "/usr/bin:/bin"}
+    env_with = {"PATH": "/usr/bin:/bin", "API_KEY": "abc"}
+
+    r = subprocess.run(
+        ["bash", str(main_sh)],
+        capture_output=True,
+        text=True,
+        env=env_without,
+        timeout=10,
+    )
+    assert r.returncode == 0, f"bash failed (no API_KEY): {r.stderr}"
+    assert r.stdout.strip() == "Hello from Kindling (api_key length: 0)"
+
+    r = subprocess.run(
+        ["bash", str(main_sh)],
+        capture_output=True,
+        text=True,
+        env=env_with,
+        timeout=10,
+    )
+    assert r.returncode == 0, f"bash failed (with API_KEY): {r.stderr}"
+    assert r.stdout.strip() == "Hello from Kindling (api_key length: 3)"

@@ -28,7 +28,8 @@ console.log(`Hello from Kindling (api_key length: ${apiKey.length})`);
 
 BASH_MAIN = '''#!/usr/bin/env bash
 set -euo pipefail
-echo "Hello from Kindling (api_key length: ${#API_KEY:-0})"
+API_KEY="${API_KEY:-}"
+echo "Hello from Kindling (api_key length: ${#API_KEY})"
 '''
 
 ENTRYPOINTS: dict[str, str] = {
