@@ -61,7 +61,10 @@ async def test_executor_sandbox_path_runs_user_script(tmp_path: Path, monkeypatc
     runner = get_runner("python")
     script = Script(
         id=1, user_id=1, name="hello", language="python",
-        source_path=src, requirements=[],
+        source_path=src,
+        entrypoint="hello.py",
+        scripts_dir=src_dir,
+        requirements=[],
     )
     broker = LogBroker()
     semaphore = asyncio.Semaphore(1)

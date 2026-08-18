@@ -130,6 +130,8 @@ async def test_failure_with_retry_marks_pending_retry(tmp_path):
     script = Script(
         id=1, user_id=1, name="t", language="python",
         source_path=tmp_path / "s" / "scripts" / "1" / "main.py",
+        entrypoint="main.py",
+        scripts_dir=tmp_path / "s" / "scripts" / "1",
         requirements=[],
     )
     await _execute_and_finalize(
@@ -197,6 +199,8 @@ async def test_failure_with_retry_exhausted_marks_failure(tmp_path):
     script = Script(
         id=1, user_id=1, name="t", language="python",
         source_path=tmp_path / "s" / "scripts" / "1" / "main.py",
+        entrypoint="main.py",
+        scripts_dir=tmp_path / "s" / "scripts" / "1",
         requirements=[],
     )
     await _execute_and_finalize(

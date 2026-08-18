@@ -186,6 +186,8 @@ async def _tick(
                 name=row["name"],
                 language=row["language"],
                 source_path=storage_dir / row["source_path"],
+                entrypoint=row["entrypoint"],
+                scripts_dir=storage_dir / "scripts" / str(sid),
                 requirements=[],
             )
             _schedule(
@@ -218,6 +220,8 @@ async def _tick(
                 name=row["name"],
                 language=row["language"],
                 source_path=storage_dir / row["source_path"],
+                entrypoint=row["entrypoint"],
+                scripts_dir=storage_dir / "scripts" / str(sid),
                 requirements=[],
             )
             _schedule(

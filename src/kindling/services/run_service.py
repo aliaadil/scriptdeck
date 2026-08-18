@@ -134,6 +134,7 @@ async def pick_due_retries(session: AsyncSession, now: datetime) -> list[dict]:
             scripts.c.language,
             scripts.c.source_path,
             scripts.c.user_id,
+            scripts.c.entrypoint,
         )
         .where(
             t.c.status == "pending_retry",

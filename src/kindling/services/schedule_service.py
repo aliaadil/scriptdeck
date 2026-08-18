@@ -99,7 +99,7 @@ async def list_due(session: AsyncSession, now: datetime) -> list[dict[str, Any]]
     s = _scripts()
     stmt = (
         select(
-            t, s.c.language, s.c.name, s.c.source_path, s.c.user_id,
+            t, s.c.language, s.c.name, s.c.source_path, s.c.user_id, s.c.entrypoint,
             t.c.overlap_policy, t.c.queue_max,
             t.c.timezone, t.c.blackout_dates, t.c.include_days,
         )

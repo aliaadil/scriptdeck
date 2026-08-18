@@ -195,6 +195,8 @@ async def _trigger_run(app, script_id: int, user: User) -> RunOut:
     runner_script = Script(
         id=script.id, user_id=script.user_id, name=script.name, language=script.language,
         source_path=(storage / script.source_path).resolve(),
+        entrypoint=script.entrypoint,
+        scripts_dir=storage / "scripts" / str(script.id),
         requirements=deps,
     )
     _schedule_execution(
