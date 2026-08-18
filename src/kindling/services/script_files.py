@@ -30,10 +30,18 @@ def validate_path(path: str) -> str:
 
 
 def _resolve(script_dir: Path, path: str) -> Path:
+    """Validate `path` and return its resolved absolute path inside `script_dir`.
+
+    The returned path is **not** confirmed to exist — use `resolve(strict=True)`
+    at the call site when performing read/delete so a symlink cannot be
+    swapped in between validation and use (TOCTOU).
+    """
     validated = validate_path(path)
-    target = (script_dir / validated).resolve()
-    # Ensure target is inside script_dir
-    if not str(target).startswith(str(script_dir.resolve())):
+    script_root = script_dir.resolve()
+    target = (script_root / validated).resolve()
+    # is_relative_to handles the prefix-bypass case
+    # (e.g. /tmp/foo vs /tmp/foo_bar/x) that startswith misses.
+    if not target.is_relative_to(script_root):
         raise ValueError("path escapes script directory")
     return target
 
@@ -51,16 +59,17 @@ def list_files(script_dir: Path, *, entrypoint: str) -> list[FileEntry]:
         except ValueError:
             continue
         stat = p.stat()
-        entries.append(FileEntry(path=rel, size=stat.st_size, updated_at=stat.st_mtime.__str__()))
+        entries.append(FileEntry(path=rel, size=stat.st_size, updated_at=str(stat.st_mtime)))
     # Entrypoint first
     entries.sort(key=lambda e: (e.path != entrypoint, e.path))
     return entries
 
 
 def read_file(script_dir: Path, path: str) -> str:
-    target = _resolve(script_dir, path)
-    if not target.exists():
-        raise FileNotFoundError(path)
+    # resolve(strict=True) raises FileNotFoundError if the path doesn't
+    # exist, and crucially resolves symlinks atomically — closing the
+    # TOCTOU window between validation and the read.
+    target = _resolve(script_dir, path).resolve(strict=True)
     return target.read_text(encoding="utf-8")
 
 
@@ -68,7 +77,13 @@ def write_file(script_dir: Path, path: str, content: str) -> FileEntry:
     target = _resolve(script_dir, path)
     if len(content.encode("utf-8")) > MAX_FILE_BYTES:
         raise ValueError(f"file exceeds {MAX_FILE_BYTES} bytes")
-    target.parent.mkdir(parents=True, exist_ok=True)
+    # Resolve the parent directory so that any symlink swap below this
+    # point redirects into content the user didn't intend. We then
+    # create the file (don't follow a pre-existing symlink at `target`).
+    parent = target.parent.resolve()
+    parent.mkdir(parents=True, exist_ok=True)
+    if target.exists() or target.is_symlink():
+        target.unlink()
     target.write_text(content, encoding="utf-8")
     stat = target.stat()
     return FileEntry(path=path, size=stat.st_size, updated_at=str(stat.st_mtime))
@@ -77,7 +92,12 @@ def write_file(script_dir: Path, path: str, content: str) -> FileEntry:
 def delete_file(script_dir: Path, path: str, *, entrypoint: str) -> None:
     if path == entrypoint:
         raise ValueError("cannot delete entrypoint file")
-    target = _resolve(script_dir, path)
-    if not target.exists():
-        raise FileNotFoundError(path)
+    # resolve(strict=True) raises FileNotFoundError if the path doesn't
+    # exist, and resolves symlinks atomically (closing the TOCTOU window).
+    target = _resolve(script_dir, path).resolve(strict=True)
+    # Re-validate after the final resolve in case the symlink now points
+    # outside script_dir (defense-in-depth against race).
+    script_root = script_dir.resolve()
+    if not target.is_relative_to(script_root):
+        raise ValueError("path escapes script directory")
     target.unlink()
