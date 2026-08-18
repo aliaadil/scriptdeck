@@ -41,6 +41,12 @@ Cron + logrotate + ad-hoc shell wrappers work — until you have a dozen jobs th
 - CLI subcommands: `serve`, `doctor`, `backup`, `restore`, `migrate-from-v1`.
 - Full audit log of every mutating action.
 
+## Script editor
+
+The script editor supports multi-file scripts. When you create a new script, pick a language card (Python / Node.js / Bash) to seed `main.<ext>` and `.env`. The file tree sidebar lists all files in `storage/scripts/<id>/`. Add, delete, or upload files. The Config tab lets you change the entrypoint — the file the runner executes.
+
+Files are saved automatically 1.5 seconds after the last edit. The Run button executes the entrypoint file in the script's directory.
+
 ## What's tracked but not yet built
 
 These are the next Kanban tasks the steward will pick up. None are shipped yet:
