@@ -1,9 +1,26 @@
 """Tests for migration runner."""
+import importlib.resources
+
 import pytest
 
 from kindling.db.engine import make_engine
 from kindling.db.migrations import run_migrations
 from kindling.config import Settings
+
+import re
+
+_VERSION_RE = re.compile(r"^(\d{3})_.*\.sql$")
+
+
+def _highest_migration_version() -> int:
+    """Return the largest migration version visible to the package."""
+    files = importlib.resources.files("kindling.migrations")
+    versions = []
+    for entry in files.iterdir():
+        m = _VERSION_RE.match(entry.name)
+        if m:
+            versions.append(int(m.group(1)))
+    return max(versions)
 
 
 @pytest.mark.asyncio
@@ -31,7 +48,7 @@ async def test_run_migrations_idempotent(tmp_db):
         result = await conn.exec_driver_sql(
             "SELECT COUNT(*) FROM schema_version"
         )
-        assert result.scalar() == 13
+    assert result.scalar() == _highest_migration_version()
 
 
 @pytest.mark.asyncio

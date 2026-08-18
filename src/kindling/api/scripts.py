@@ -10,6 +10,7 @@ from kindling.api.deps import require_script_owner
 from kindling.api.runs import RunOut, _trigger_run
 from kindling.auth.deps import current_user
 from kindling.auth.users import User
+from kindling.script_templates import seed_template
 from kindling.services import script_service
 from kindling.services.script_files import (
     FileEntry,
@@ -22,10 +23,14 @@ from kindling.services.script_files import (
 router = APIRouter(prefix="/scripts")
 
 
+SUPPORTED_LANGUAGES = r"^(python|node|bash)$"
+
+
 class ScriptCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
-    language: str = Field(pattern="^(python|node)$")
-    source: str = Field(min_length=1)
+    language: str = Field(pattern=SUPPORTED_LANGUAGES)
+    source: str | None = Field(default=None, min_length=1)
+    template: str | None = Field(default=None, pattern=SUPPORTED_LANGUAGES)
     description: str | None = None
 
 
@@ -42,6 +47,7 @@ class ScriptUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
     source: str | None = None
+    entrypoint: str | None = None
 
 
 class FileListOut(BaseModel):
@@ -90,17 +96,36 @@ async def create(
     sf = request.app.state.session_factory
     storage: Path = request.app.state.settings.storage_dir_path
     async with sf() as s:
+        # Insert row first with a benign placeholder source_path; we'll
+        # rewrite it after we've written the on-disk files using the
+        # row's id.
         row = await script_service.create_script(
             s, name=body.name, language=body.language,
-            source_path="scripts/PLACEHOLDER", description=body.description,
+            source_path="scripts/PENDING", description=body.description,
             user_id=user.id,
         )
         script_dir = storage / "scripts" / str(row.id)
         script_dir.mkdir(parents=True, exist_ok=True)
-        ext = "py" if body.language == "python" else "js"
-        path = script_dir / f"main.{ext}"
-        path.write_text(body.source, encoding="utf-8")
-        await script_service.update_script(s, row.id, source_path=str(path.relative_to(storage)))
+        if body.template:
+            entrypoint = seed_template(body.template, script_dir)
+        else:
+            if body.source is None:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    detail="either `template` or `source` is required",
+                )
+            entrypoint = (
+                "main.py" if body.language == "python"
+                else "main.js" if body.language == "node"
+                else "main.sh"
+            )
+            (script_dir / entrypoint).write_text(body.source, encoding="utf-8")
+        rel_script_dir = script_dir.relative_to(storage)
+        await script_service.update_script(
+            s, row.id,
+            source_path=str(rel_script_dir / entrypoint),
+            entrypoint=entrypoint,
+        )
         await s.commit()
         new = await script_service.get_script(s, row.id)
     assert new is not None
@@ -133,13 +158,18 @@ async def update(
         await require_script_owner(s, script_id, user)
         await script_service.update_script(
             s, script_id, name=body.name, description=body.description,
+            entrypoint=body.entrypoint,
         )
         if body.source is not None:
             row = await script_service.get_script(s, script_id)
             if row is None:
                 raise HTTPException(status.HTTP_404_NOT_FOUND, detail="not found")
             storage: Path = request.app.state.settings.storage_dir_path
-            (storage / row.source_path).write_text(body.source, encoding="utf-8")
+            script_dir = storage / Path(row.source_path).parent
+            try:
+                write_file(script_dir, row.entrypoint, body.source)
+            except ValueError as e:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(e))
         await s.commit()
         new = await script_service.get_script(s, script_id)
     if new is None:
