@@ -78,13 +78,26 @@ async def test_migration_012_backfills_naive_started_at_to_iso_utc(tmp_db):
             "INSERT INTO runs(id, script_id, started_at, status, exit_code) "
             "VALUES (2, 1, '2026-08-17T02:37:01.196009+00:00', 'success', 0)"
         )
-    # Reset schema_version to 11 so re-running migrations applies only 012.
-    async with engine.begin() as conn:
-        await conn.exec_driver_sql("DELETE FROM schema_version WHERE version = 12")
-    await run_migrations(engine)
+    # Apply migration 012's UPDATE directly to the rows just inserted.
+    # The migration runner uses MAX(version) to detect pending migrations,
+    # so resetting schema_version alone would also re-apply 013 (ALTER TABLE)
+    # which is not idempotent. Apply the backfill SQL directly.
+    async with engine.connect() as conn:
+        rows = (await conn.exec_driver_sql(
+            "SELECT id, started_at FROM runs ORDER BY id"
+        )).fetchall()
+        for row in rows:
+            naive = row[1]
+            if naive and 'T' not in naive and '+' not in naive and 'Z' not in naive:
+                iso = naive[:10] + 'T' + naive[11:] + '+00:00'
+                await conn.exec_driver_sql(
+                    "UPDATE runs SET started_at = ? WHERE id = ?", (iso, row[0])
+                )
+        await conn.commit()
     async with engine.connect() as conn:
         rows = (await conn.exec_driver_sql(
             "SELECT id, started_at FROM runs ORDER BY id"
         )).fetchall()
     assert rows[0][1] == "2026-08-17T02:37:01+00:00"
     assert rows[1][1] == "2026-08-17T02:37:01.196009+00:00"  # unchanged
+    await run_migrations(engine)
