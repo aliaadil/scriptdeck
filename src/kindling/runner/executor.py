@@ -20,6 +20,8 @@ class Script:
     name: str
     language: str
     source_path: Path
+    entrypoint: str
+    scripts_dir: Path
     requirements: list[str]
 
 

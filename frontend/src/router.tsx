@@ -5,6 +5,7 @@ import { SetupPage } from "@/auth/SetupPage";
 import { Dashboard } from "@/pages/Dashboard";
 import { Scripts } from "@/pages/Scripts";
 import { ScriptEdit } from "@/pages/ScriptEdit";
+import { ScriptNew } from "@/pages/ScriptNew";
 import { Schedules } from "@/pages/Schedules";
 import { Runs } from "@/pages/Runs";
 import { RunView } from "@/pages/RunView";
@@ -15,6 +16,9 @@ const router = createBrowserRouter([
   { path: "/kindling/*", element: <ProtectedRoute />, children: [
     { path: "dashboard", element: <Dashboard /> },
     { path: "scripts", element: <Scripts /> },
+    // Static segment must be declared before the dynamic one for readability;
+    // react-router ranks static routes higher regardless of order.
+    { path: "scripts/new", element: <ScriptNew /> },
     { path: "scripts/:id", element: <ScriptEdit /> },
     { path: "schedules", element: <Schedules /> },
     { path: "runs", element: <Runs /> },

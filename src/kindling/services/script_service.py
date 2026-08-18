@@ -18,6 +18,7 @@ class ScriptRow:
     updated_at: str
     description: str | None
     user_id: int | None
+    entrypoint: str
 
 
 def _table():
@@ -76,9 +77,11 @@ async def list_scripts(
 async def update_script(
     session: AsyncSession, script_id: int, *, name: str | None = None,
     description: str | None = None, source_path: str | None = None,
+    entrypoint: str | None = None,
 ) -> bool:
     values = {k: v for k, v in (
-        ("name", name), ("description", description), ("source_path", source_path),
+        ("name", name), ("description", description),
+        ("source_path", source_path), ("entrypoint", entrypoint),
     ) if v is not None}
     if not values:
         return True

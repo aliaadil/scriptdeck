@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -8,10 +8,33 @@ import { ScriptEdit } from "../ScriptEdit";
 const apiMock = vi.fn();
 vi.mock("@/lib/api", () => ({
   api: (...args: unknown[]) => apiMock(...args),
+  getToken: () => null,
+}));
+
+const listScriptsFiles = vi.fn();
+const getScriptFile = vi.fn();
+const deleteScriptFile = vi.fn();
+const createScriptFile = vi.fn();
+const updateScriptEntrypoint = vi.fn();
+const updateScript = vi.fn();
+
+vi.mock("@/api/scripts", () => ({
+  listScriptsFiles: (...a: unknown[]) => listScriptsFiles(...a),
+  getScriptFile: (...a: unknown[]) => getScriptFile(...a),
+  putScriptFile: vi.fn(),
+  deleteScriptFile: (...a: unknown[]) => deleteScriptFile(...a),
+  createScriptFile: (...a: unknown[]) => createScriptFile(...a),
+  updateScriptEntrypoint: (...a: unknown[]) => updateScriptEntrypoint(...a),
+  updateScript: (...a: unknown[]) => updateScript(...a),
 }));
 
 vi.mock("@/components/ui/sonner", () => ({
-  toast: { success: vi.fn(), error: vi.fn() },
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    warning: vi.fn(),
+  },
 }));
 
 vi.mock("@/auth/AuthProvider", () => ({
@@ -39,27 +62,21 @@ vi.mock("@monaco-editor/react", () => ({
   ),
 }));
 
-function renderNew() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={["/scripts/new"]}>
-        <Routes>
-          <Route path="/scripts/:id" element={<ScriptEdit />} />
-        </Routes>
-      </MemoryRouter>
-    </QueryClientProvider>,
-  );
-}
+const mockScript = {
+  id: 1,
+  name: "test",
+  language: "python",
+  source_path: "scripts/1",
+  entrypoint: "main.py",
+  description: "d",
+};
 
-function renderExisting(sourceContent: string = "print('hi')") {
-  apiMock.mockResolvedValueOnce({
-    id: "1",
-    name: "test",
-    language: "python",
-    description: "d",
-  });
-  apiMock.mockResolvedValueOnce({ content: sourceContent });
+const mockFiles = [
+  { path: "main.py", size: 10, updated_at: "2026-01-01T00:00:00Z" },
+  { path: "lib/util.py", size: 20, updated_at: "2026-01-01T00:00:00Z" },
+];
+
+function renderEditor() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
@@ -72,18 +89,32 @@ function renderExisting(sourceContent: string = "print('hi')") {
   );
 }
 
+/** The Editor tab content, which is the one holding the file tree. */
+const tree = () => screen.getByTestId("file-tree");
+
 describe("ScriptEdit", () => {
   beforeEach(() => {
     apiMock.mockReset();
+    apiMock.mockImplementation((path: string) => {
+      if (path === "/scripts/1") return Promise.resolve(mockScript);
+      return Promise.resolve({});
+    });
+    listScriptsFiles.mockReset().mockResolvedValue(mockFiles);
+    getScriptFile.mockReset().mockImplementation((_id: number, path: string) =>
+      Promise.resolve(`# ${path}`),
+    );
+    deleteScriptFile.mockReset().mockResolvedValue(undefined);
+    createScriptFile.mockReset().mockResolvedValue({
+      path: "extra.py",
+      size: 0,
+      updated_at: "2026-01-01T00:00:00Z",
+    });
+    updateScriptEntrypoint.mockReset().mockResolvedValue(mockScript);
+    updateScript.mockReset().mockResolvedValue(mockScript);
+    vi.stubGlobal("confirm", vi.fn(() => true));
     vi.stubGlobal(
       "fetch",
-      vi.fn((input: RequestInfo | URL) => {
-        const url = typeof input === "string" ? input : (input as URL).toString();
-        if (url.endsWith("/source")) {
-          return Promise.resolve(new Response("print('hi')", { status: 200 }));
-        }
-        return Promise.resolve(new Response("", { status: 404 }));
-      }) as unknown as typeof fetch,
+      vi.fn(() => Promise.resolve(new Response("", { status: 404 }))) as unknown as typeof fetch,
     );
   });
 
@@ -91,70 +122,112 @@ describe("ScriptEdit", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders tabs", async () => {
-    renderExisting();
+  it("renders the three tabs once the script loads", async () => {
+    renderEditor();
     expect(await screen.findByRole("tab", { name: /editor/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /config/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /logs/i })).toBeInTheDocument();
   });
 
-  it("loads source via api JSON wrapper", async () => {
-    renderExisting("print('hi')\n");
-    // The source text should appear in the Monaco editor (mocked textarea).
-    const editor = (await screen.findAllByTestId("monaco-mock"))[0];
-    await waitFor(() =>
-      expect((editor as HTMLTextAreaElement).value).toBe("print('hi')\n"),
-    );
-    // Verify the second api call was to the source endpoint and returned the JSON {content}.
-    const sourceCall = apiMock.mock.calls.find(
-      (c) => typeof c[0] === "string" && c[0].endsWith("/source"),
-    );
-    expect(sourceCall).toBeDefined();
-    expect(sourceCall?.[0]).toBe("/scripts/1/source");
+  it("renders the file tree with every file", async () => {
+    renderEditor();
+    await waitFor(() => expect(tree()).toBeInTheDocument());
+    expect(await within(tree()).findByRole("button", { name: "main.py" })).toBeInTheDocument();
+    expect(within(tree()).getByRole("button", { name: "util.py" })).toBeInTheDocument();
+    // Directory grouping header for the nested file.
+    expect(within(tree()).getByText("lib/")).toBeInTheDocument();
   });
 
-  it("save for new script sends name + source + language", async () => {
-    apiMock.mockResolvedValueOnce({ id: "42" }); // POST /api/scripts
+  it("opens the entrypoint by default and loads its content", async () => {
+    renderEditor();
+    await waitFor(() => expect(getScriptFile).toHaveBeenCalledWith(1, "main.py"));
+    const editor = (await screen.findAllByTestId("monaco-mock"))[0] as HTMLTextAreaElement;
+    await waitFor(() => expect(editor.value).toBe("# main.py"));
+  });
+
+  it("opens a file in the editor when clicked in the tree", async () => {
     const user = userEvent.setup();
-    renderNew();
-
-    const nameInput = await screen.findByLabelText(/name/i);
-    await user.type(nameInput, "my-script");
-
-    await user.click((await screen.findAllByRole("tab", { name: /editor/i }))[0]);
-    const editor = (await screen.findAllByTestId("monaco-mock"))[0];
-    await user.type(editor, "print('hello')");
-
-    await user.click((await screen.findAllByRole("button", { name: /^save$/i }))[0]);
-
-    await waitFor(() =>
-      expect(apiMock.mock.calls.some((c) => c[0] === "/scripts" && (c[1] as { method?: string })?.method === "POST")).toBe(true),
-    );
-    const [url, opts] = apiMock.mock.calls.find(
-      (c) => c[0] === "/scripts" && (c[1] as { method?: string })?.method === "POST",
-    )!;
-    const body = JSON.parse((opts as { body: string }).body);
-    expect(url).toBe("/scripts");
-    expect((opts as { method: string }).method).toBe("POST");
-    expect(body).toMatchObject({
-      name: "my-script",
-      source: "print('hello')",
-      language: "python",
+    renderEditor();
+    const target = await within(await screen.findByTestId("file-tree")).findByRole("button", {
+      name: "util.py",
     });
+    await user.click(target);
+
+    await waitFor(() => expect(getScriptFile).toHaveBeenCalledWith(1, "lib/util.py"));
+    const editor = (await screen.findAllByTestId("monaco-mock"))[0] as HTMLTextAreaElement;
+    await waitFor(() => expect(editor.value).toBe("# lib/util.py"));
   });
 
-  it("accepts a dropped .py file and populates editor", async () => {
-    renderNew();
+  it("fires the entrypoint update when the select changes", async () => {
+    const user = userEvent.setup();
+    renderEditor();
+    await user.click(await screen.findByRole("tab", { name: /config/i }));
 
-    const dropZones = await screen.findAllByTestId("script-dropzone");
-    // Pick the visible one (Radix Tabs renders inactive contents but hides them).
-    const visible = dropZones.find((el) => !el.closest('[data-state="inactive"]')) ?? dropZones[0];
-    const file = new File(["print(1)"], "hello.py", { type: "text/x-python" });
-    fireEvent.drop(visible, { dataTransfer: { files: [file] } });
+    const select = (await screen.findByTestId("entrypoint-select")) as HTMLSelectElement;
+    await waitFor(() => expect(select.options.length).toBe(2));
+    expect(select.value).toBe("main.py");
 
-    const editors = await screen.findAllByTestId("monaco-mock");
+    fireEvent.change(select, { target: { value: "lib/util.py" } });
+    await waitFor(() => expect(updateScriptEntrypoint).toHaveBeenCalledWith(1, "lib/util.py"));
+  });
+
+  it("creates a file through the add dialog", async () => {
+    const user = userEvent.setup();
+    renderEditor();
+    await waitFor(() => expect(tree()).toBeInTheDocument());
+
+    await user.click(within(tree()).getByTitle("Add file"));
+    await user.type(await screen.findByTestId("file-path-input"), "extra.py");
+    await user.click(screen.getByTestId("file-path-submit"));
+
+    await waitFor(() => expect(createScriptFile).toHaveBeenCalledWith(1, "extra.py", ""));
+  });
+
+  it("deletes a file from the tree after confirmation", async () => {
+    const user = userEvent.setup();
+    renderEditor();
+    await waitFor(() => expect(tree()).toBeInTheDocument());
+
+    await user.click(await within(tree()).findByLabelText("Delete util.py"));
+    await waitFor(() => expect(deleteScriptFile).toHaveBeenCalledWith(1, "lib/util.py"));
+  });
+
+  it("saves name and description from the Config tab", async () => {
+    const user = userEvent.setup();
+    renderEditor();
+    await user.click(await screen.findByRole("tab", { name: /config/i }));
+
+    const nameInput = (await screen.findByLabelText("Name")) as HTMLInputElement;
+    await waitFor(() => expect(nameInput.value).toBe("test"));
+    await user.clear(nameInput);
+    await user.type(nameInput, "renamed");
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+
     await waitFor(() =>
-      expect(editors.some((e) => (e as HTMLTextAreaElement).value === "print(1)")).toBe(true),
+      expect(updateScript).toHaveBeenCalledWith(1, { name: "renamed", description: "d" }),
     );
+  });
+
+  it("starts a run and switches to the Logs tab", async () => {
+    const user = userEvent.setup();
+    apiMock.mockImplementation((path: string) => {
+      if (path === "/scripts/1") return Promise.resolve(mockScript);
+      if (path === "/scripts/1/run") {
+        return Promise.resolve({ id: 5, script_id: 1, status: "running", exit_code: null });
+      }
+      if (path === "/runs/5") {
+        return Promise.resolve({ id: 5, script_id: 1, status: "success", exit_code: 0 });
+      }
+      return Promise.resolve({});
+    });
+    renderEditor();
+
+    await user.click(await screen.findByRole("button", { name: /run/i }));
+
+    await waitFor(() =>
+      expect(apiMock).toHaveBeenCalledWith("/scripts/1/run", { method: "POST" }),
+    );
+    expect(await screen.findByText("Run #5")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("tab", { name: /logs/i })).toHaveAttribute("aria-selected", "true"));
   });
 });

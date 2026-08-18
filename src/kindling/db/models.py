@@ -93,7 +93,8 @@ scripts = Table(
     Column("updated_at", Text, nullable=False),
     Column("description", Text),
     Column("user_id", Integer, ForeignKey("users.id", ondelete="CASCADE")),
-    CheckConstraint("language IN ('python', 'node')", name="scripts_language_check"),
+    Column("entrypoint", String, nullable=False, server_default="main.py"),
+    CheckConstraint("language IN ('python', 'node', 'bash')", name="scripts_language_check"),
     Index("idx_scripts_name", "name"),
     Index("idx_scripts_user", "user_id", "id"),
 )
