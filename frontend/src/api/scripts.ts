@@ -59,8 +59,14 @@ export const createScript = (body: {
   description?: string | null;
 }) => api<ScriptOut>("/scripts", { method: "POST", body: JSON.stringify(body) });
 
+export const updateScript = (
+  id: number,
+  body: {
+    name?: string;
+    description?: string | null;
+    entrypoint?: string;
+  },
+) => api<ScriptOut>(`/scripts/${id}`, { method: "PUT", body: JSON.stringify(body) });
+
 export const updateScriptEntrypoint = (id: number, entrypoint: string) =>
-  api<ScriptOut>(`/scripts/${id}`, {
-    method: "PUT",
-    body: JSON.stringify({ entrypoint }),
-  });
+  updateScript(id, { entrypoint });

@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState, type DragEvent, type ChangeEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import Editor from "@monaco-editor/react";
-import { Upload, FileCode2 } from "lucide-react";
+import { Save, Play, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { api } from "@/lib/api";
 import { API_BASE, getToken } from "@/api/client";
@@ -13,9 +12,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/sonner";
-import { Save, Play, Trash2 } from "lucide-react";
-
-type Script = { id: string; name: string; language: string; source: string; description?: string };
+import { FileTree } from "@/components/editor/FileTree";
+import { EditorPanel } from "@/components/editor/EditorPanel";
+import { FileDialog } from "@/components/editor/FileDialog";
+import {
+  listScriptsFiles,
+  getScriptFile,
+  deleteScriptFile,
+  createScriptFile,
+  updateScriptEntrypoint,
+  updateScript,
+  type FileEntry,
+  type ScriptOut,
+} from "@/api/scripts";
 
 type RunInfo = {
   id: number;
@@ -25,6 +34,30 @@ type RunInfo = {
   started_at: string;
   ended_at: string | null;
 };
+
+type EditorLanguage = "python" | "node" | "bash";
+
+/** Extensions that can serve as a script entrypoint. */
+const ENTRYPOINT_EXTENSIONS = [".py", ".js", ".ts", ".mjs", ".cjs", ".sh"];
+
+function isEntrypointCandidate(path: string): boolean {
+  return ENTRYPOINT_EXTENSIONS.some((ext) => path.endsWith(ext));
+}
+
+function languageForPath(path: string | null): EditorLanguage {
+  if (!path) return "python";
+  if (path.endsWith(".py")) return "python";
+  if (path.endsWith(".sh")) return "bash";
+  if (
+    path.endsWith(".js") ||
+    path.endsWith(".ts") ||
+    path.endsWith(".mjs") ||
+    path.endsWith(".cjs")
+  ) {
+    return "node";
+  }
+  return "python";
+}
 
 function RunStatusBadge({ status, exitCode }: { status: string; exitCode: number | null }) {
   const map: Record<string, string> = {
@@ -57,57 +90,135 @@ export function ScriptEdit() {
   const { id } = useParams();
   const nav = useNavigate();
   const qc = useQueryClient();
+
+  // Creating a script now lives on its own page; bounce any stale /scripts/new
+  // links that still resolve to this route.
   const isNew = id === "new";
-  const { data: script } = useQuery({
-    queryKey: ["script", id],
-    queryFn: async () => {
-      const meta = await api<Omit<Script, "source">>(`/scripts/${id}`);
-      const sourceRes = await api<{ content: string }>(`/scripts/${id}/source`);
-      return { ...meta, source: sourceRes.content } as Script;
-    },
-    enabled: !isNew,
+  useEffect(() => {
+    if (isNew) nav("/kindling/scripts/new", { replace: true });
+  }, [isNew, nav]);
+
+  const scriptId = Number(id);
+  const scriptIdValid = !isNew && Number.isFinite(scriptId);
+
+  const { data: script } = useQuery<ScriptOut>({
+    queryKey: ["script", scriptId],
+    queryFn: () => api<ScriptOut>(`/scripts/${scriptId}`),
+    enabled: scriptIdValid,
   });
 
-  // Source + language live in local state so the editor is editable for new scripts.
+  const { data: files = [], refetch: refetchFiles } = useQuery<FileEntry[]>({
+    queryKey: ["script-files", scriptId],
+    queryFn: () => listScriptsFiles(scriptId),
+    enabled: scriptIdValid,
+  });
+
+  const [activePath, setActivePath] = useState<string | null>(null);
+  const [activeContent, setActiveContent] = useState("");
+  const [dialog, setDialog] = useState<null | "add">(null);
+  const activeLang = useMemo(() => languageForPath(activePath), [activePath]);
+
+  // Config tab form state, seeded from the loaded script.
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [source, setSource] = useState("");
-  const [language, setLanguage] = useState<"python" | "node">("python");
-  const [dragOver, setDragOver] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   useEffect(() => {
-    if (script) {
-      setName(script.name ?? "");
-      setDescription(script.description ?? "");
-      setSource(script.source ?? "");
-      if (script.language === "python" || script.language === "node") {
-        setLanguage(script.language);
-      }
-    }
+    if (!script) return;
+    setName(script.name ?? "");
+    setDescription(script.description ?? "");
   }, [script]);
 
-  const save = useMutation<Script, Error, { name?: string; description?: string | null; source?: string; language?: "python" | "node" }>({
-    mutationFn: (body) =>
-      isNew
-        ? api("/scripts", { method: "POST", body: JSON.stringify(body) })
-        : api(`/scripts/${id}`, { method: "PUT", body: JSON.stringify(body) }),
-    onSuccess: (data) => {
-      qc.invalidateQueries({ queryKey: ["scripts"] });
-      toast.success(isNew ? "Script created" : "Saved");
-      if (isNew && data?.id != null) nav(`/kindling/scripts/${data.id}`);
+  // Pick a sensible default file once the tree loads (or after the active file
+  // is deleted): the entrypoint if it still exists, else the first file.
+  useEffect(() => {
+    if (activePath || files.length === 0) return;
+    const entrypoint = script?.entrypoint;
+    setActivePath(files.find((f) => f.path === entrypoint)?.path ?? files[0].path);
+  }, [files, activePath, script]);
+
+  // Load the active file's content. The `cancelled` guard keeps a slow response
+  // for a previously-selected file from overwriting the current one.
+  useEffect(() => {
+    if (!activePath || !scriptIdValid) return;
+    let cancelled = false;
+    setActiveContent("");
+    getScriptFile(scriptId, activePath)
+      .then((content) => {
+        if (!cancelled) setActiveContent(content);
+      })
+      .catch((e: Error) => {
+        if (!cancelled) toast.error(e.message ?? "Failed to load file");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activePath, scriptId, scriptIdValid]);
+
+  const del = useMutation({
+    mutationFn: (path: string) => deleteScriptFile(scriptId, path),
+    onSuccess: (_data, path) => {
+      toast.success("File deleted");
+      refetchFiles();
+      // Clearing the selection lets the default-file effect re-select.
+      if (activePath === path) setActivePath(null);
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e: Error) => toast.error(e.message),
   });
+
+  const add = useMutation({
+    mutationFn: ({ path, content }: { path: string; content: string }) =>
+      createScriptFile(scriptId, path, content),
+    onSuccess: (_data, { path }) => {
+      toast.success("File added");
+      refetchFiles();
+      setDialog(null);
+      setActivePath(path);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const updateEntrypoint = useMutation({
+    mutationFn: (entrypoint: string) => updateScriptEntrypoint(scriptId, entrypoint),
+    onSuccess: () => {
+      toast.success("Entrypoint updated");
+      qc.invalidateQueries({ queryKey: ["script", scriptId] });
+      qc.invalidateQueries({ queryKey: ["scripts"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const saveMeta = useMutation({
+    mutationFn: () =>
+      updateScript(scriptId, {
+        name: name.trim(),
+        description: description.trim() || null,
+      }),
+    onSuccess: () => {
+      toast.success("Saved");
+      qc.invalidateQueries({ queryKey: ["script", scriptId] });
+      qc.invalidateQueries({ queryKey: ["scripts"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const run = useMutation<RunInfo, Error, void>({
-    mutationFn: () => api<RunInfo>(`/scripts/${id}/run`, { method: "POST" }),
-    onSuccess: () => toast.success("Run started"),
+    mutationFn: () => api<RunInfo>(`/scripts/${scriptId}/run`, { method: "POST" }),
     onError: (e: Error) => toast.error(e.message ?? "Run failed to start"),
   });
 
+  const delScript = useMutation({
+    mutationFn: () => api<void>(`/scripts/${scriptId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["scripts"] });
+      toast.success("Deleted");
+      nav("/kindling/scripts");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  // --- Run + log viewer (Logs tab) ---
   const [activeTab, setActiveTab] = useState("editor");
   const [currentRunId, setCurrentRunId] = useState<number | null>(null);
-  const [runLog, setRunLog] = useState<string>("");
+  const [runLog, setRunLog] = useState("");
 
   useEffect(() => {
     if (!run.data) return;
@@ -130,15 +241,14 @@ export function ScriptEdit() {
   useEffect(() => {
     if (!runStatus.data) return;
     if (runStatus.data.status === "running") return;
-    const status = runStatus.data.status;
-    const exit = runStatus.data.exit_code;
-    if (status === "success") toast.success(`Run #${runStatus.data.id} finished (exit 0)`);
-    else if (status === "failure") toast.error(`Run #${runStatus.data.id} failed (exit ${exit})`);
-    else if (status === "error") toast.error(`Run #${runStatus.data.id} crashed`);
-    else if (status === "cancelled") toast.warning(`Run #${runStatus.data.id} cancelled`);
+    const { id: runId, status, exit_code: exit } = runStatus.data;
+    if (status === "success") toast.success(`Run #${runId} finished (exit 0)`);
+    else if (status === "failure") toast.error(`Run #${runId} failed (exit ${exit})`);
+    else if (status === "error") toast.error(`Run #${runId} crashed`);
+    else if (status === "cancelled") toast.warning(`Run #${runId} cancelled`);
   }, [runStatus.data]);
 
-  // Refresh log content whenever the polled run finishes (and on tab open).
+  // Refresh log content whenever the polled run finishes.
   useEffect(() => {
     if (!currentRunId) return;
     if (runStatus.data?.status === "running") return;
@@ -158,199 +268,115 @@ export function ScriptEdit() {
       cancelled = true;
     };
   }, [currentRunId, runStatus.data?.status]);
-  const del = useMutation({
-    mutationFn: () => api(`/scripts/${id}`, { method: "DELETE" }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["scripts"] });
-      toast.success("Deleted");
-      nav("/kindling/scripts");
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
 
-  const canSave =
-    isNew
-      ? name.trim().length > 0 && source.trim().length > 0
-      : Boolean(script);
-  const handleSave = () => {
-    if (isNew) {
-      save.mutate({ name: name.trim(), description: description.trim() || null, source, language });
-    } else {
-      save.mutate({ name: name.trim() || undefined, description: description.trim() || null, source });
-    }
-  };
+  if (isNew) return null;
+  if (!script) {
+    return (
+      <AppShell>
+        <div className="p-6 text-sm text-muted-foreground">Loading…</div>
+      </AppShell>
+    );
+  }
 
-  const readFileText = (file: File): Promise<string> =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result ?? ""));
-      reader.onerror = () => reject(reader.error ?? new Error("Failed to read file"));
-      reader.readAsText(file);
-    });
-
-  const acceptFile = async (file: File) => {
-    const lower = file.name.toLowerCase();
-    if (lower.endsWith(".py")) setLanguage("python");
-    else if (lower.endsWith(".js") || lower.endsWith(".ts") || lower.endsWith(".mjs") || lower.endsWith(".cjs"))
-      setLanguage("node");
-    else {
-      toast.error("Unsupported file. Use .py, .js, .ts, .mjs, or .cjs");
-      return;
-    }
-    try {
-      const text = await readFileText(file);
-      setSource(text);
-    } catch (e) {
-      toast.error((e as Error).message ?? "Failed to read file");
-    }
-  };
-
-  const onDrop = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setDragOver(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) acceptFile(file);
-  };
-  const onPick = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) acceptFile(file);
-    e.target.value = "";
-  };
+  // Always offer the current entrypoint, even if it has an unusual extension.
+  const entrypointOptions = files
+    .map((f) => f.path)
+    .filter((p) => isEntrypointCandidate(p) || p === script.entrypoint);
 
   return (
     <AppShell>
-      <div className="mx-auto max-w-5xl space-y-6 p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0 flex-1 space-y-2">
-            <h1 className="truncate text-2xl font-semibold">
-              {isNew ? "New script" : script?.name ?? "Loading…"}
-            </h1>
-            {isNew && (
-              <div className="max-w-md space-y-1">
-                <Label htmlFor="name-inline" className="sr-only">
-                  Name
-                </Label>
-                <Input
-                  id="name-inline"
-                  placeholder="Script name (required to save)"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-              </div>
-            )}
+      <div className="flex h-[calc(100vh-4rem)] flex-col">
+        <header className="flex items-center justify-between gap-4 border-b px-4 py-2">
+          <div className="min-w-0 space-y-1">
+            <h1 className="truncate text-lg font-semibold">{script.name}</h1>
+            <p className="text-xs text-muted-foreground">
+              {script.language} · entrypoint: {script.entrypoint}
+            </p>
           </div>
-          <div className="flex shrink-0 flex-col items-end gap-1">
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={() => run.mutate()}
-                disabled={isNew || !script || run.isPending}
-                title={isNew ? "Save the script first to enable Run" : undefined}
-              >
-                <Play className="mr-2 h-4 w-4" /> {run.isPending ? "Starting…" : "Run"}
-              </Button>
-              <Button
-                onClick={handleSave}
-                disabled={!canSave || save.isPending}
-                title={
-                  isNew && !canSave
-                    ? name.trim().length === 0
-                      ? "Enter a name to save"
-                      : "Add some source code to save"
-                    : undefined
-                }
-              >
-                <Save className="mr-2 h-4 w-4" /> {save.isPending ? "Saving…" : "Save"}
-              </Button>
-              {!isNew && (
-                <Button variant="destructive" onClick={() => del.mutate()}>
-                  <Trash2 className="mr-2 h-4 w-4" /> Delete
-                </Button>
-              )}
-            </div>
-            {isNew && !canSave && (
-              <p className="text-xs text-muted-foreground">
-                {name.trim().length === 0
-                  ? "Enter a name above to enable Save."
-                  : "Add source code to enable Save."}
-              </p>
-            )}
+          <div className="flex shrink-0 gap-2">
+            <Button
+              variant="outline"
+              onClick={() => run.mutate()}
+              disabled={!script || run.isPending}
+            >
+              <Play className="mr-2 h-4 w-4" /> {run.isPending ? "Starting…" : "Run"}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (window.confirm(`Delete script "${script.name}"?`)) delScript.mutate();
+              }}
+              disabled={delScript.isPending}
+              title="Delete script"
+            >
+              <Trash2 className="mr-2 h-4 w-4" /> Delete
+            </Button>
           </div>
-        </div>
+        </header>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-0 flex-1 flex-col">
+          <TabsList className="mx-4 mt-2 self-start">
             <TabsTrigger value="editor">Editor</TabsTrigger>
             <TabsTrigger value="config">Config</TabsTrigger>
             <TabsTrigger value="logs">Logs</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="editor">
-            <Card>
-              <CardContent className="space-y-3 p-4">
-                <div
-                  data-testid="script-dropzone"
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    setDragOver(true);
-                  }}
-                  onDragLeave={() => setDragOver(false)}
-                  onDrop={onDrop}
-                  className={[
-                    "flex items-center justify-between gap-3 rounded-md border border-dashed px-3 py-2 text-sm transition-colors",
-                    dragOver
-                      ? "border-primary bg-primary/5 text-foreground"
-                      : "border-muted-foreground/25 text-muted-foreground",
-                  ].join(" ")}
-                >
-                  <div className="flex items-center gap-2">
-                    <FileCode2 className="h-4 w-4" />
-                    <span>
-                      Drop a <code className="font-mono">.py</code> /{" "}
-                      <code className="font-mono">.js</code> file or pick one to populate the editor.
-                    </span>
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <Upload className="mr-2 h-4 w-4" /> Choose file
-                  </Button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".py,.js,.ts,.mjs,.cjs,text/*"
-                    className="hidden"
-                    onChange={onPick}
-                  />
+          <TabsContent value="editor" className="mt-2 flex min-h-0 flex-1 overflow-hidden">
+            <FileTree
+              files={files}
+              active={activePath}
+              onSelect={setActivePath}
+              onAdd={() => setDialog("add")}
+              onUpload={() => toast.info("File upload is coming in a later release.")}
+              onDelete={(p) => {
+                if (window.confirm(`Delete ${p}?`)) del.mutate(p);
+              }}
+            />
+            <div className="min-w-0 flex-1">
+              {activePath ? (
+                <EditorPanel
+                  scriptId={scriptId}
+                  path={activePath}
+                  initialContent={activeContent}
+                  language={activeLang}
+                  onSaved={() => refetchFiles()}
+                  onError={(m) => toast.error(m)}
+                />
+              ) : (
+                <div className="p-6 text-sm text-muted-foreground">
+                  No file selected. Add a file to get started.
                 </div>
-                <div className="overflow-hidden rounded-md border bg-[#1e1e1e]">
-                  <Editor
-                    height="60vh"
-                    language={language}
-                    value={source}
-                    theme="vs-dark"
-                    onChange={(v) => setSource(v ?? "")}
-                    options={{
-                      minimap: { enabled: false },
-                      fontSize: 13,
-                      scrollBeyondLastLine: false,
-                      automaticLayout: true,
-                    }}
-                  />
-                </div>
-              </CardContent>
-            </Card>
+              )}
+            </div>
           </TabsContent>
 
-          <TabsContent value="config">
-            <Card>
+          <TabsContent value="config" className="overflow-auto p-4">
+            <Card className="max-w-2xl">
               <CardContent className="space-y-4 pt-6">
                 <div className="space-y-2">
                   <Label htmlFor="name">Name</Label>
                   <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Language</Label>
+                  <p className="text-sm text-muted-foreground">{script.language}</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="entrypoint">Entrypoint</Label>
+                  <select
+                    id="entrypoint"
+                    value={script.entrypoint}
+                    onChange={(e) => updateEntrypoint.mutate(e.target.value)}
+                    disabled={updateEntrypoint.isPending}
+                    className="block rounded-md border bg-background px-3 py-2 text-sm"
+                    data-testid="entrypoint-select"
+                  >
+                    {entrypointOptions.map((path) => (
+                      <option key={path} value={path}>
+                        {path}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="desc">Description</Label>
@@ -360,17 +386,22 @@ export function ScriptEdit() {
                     onChange={(e) => setDescription(e.target.value)}
                   />
                 </div>
+                <Button
+                  onClick={() => saveMeta.mutate()}
+                  disabled={!name.trim() || saveMeta.isPending}
+                  title={!name.trim() ? "Name cannot be empty" : undefined}
+                >
+                  <Save className="mr-2 h-4 w-4" /> {saveMeta.isPending ? "Saving…" : "Save"}
+                </Button>
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="logs">
+          <TabsContent value="logs" className="overflow-auto p-4">
             <Card>
               <CardContent className="space-y-3 p-4">
                 {currentRunId == null ? (
-                  <p className="text-sm text-muted-foreground">
-                    Run the script to see logs.
-                  </p>
+                  <p className="text-sm text-muted-foreground">Run the script to see logs.</p>
                 ) : (
                   <>
                     <div className="flex items-center gap-2">
@@ -391,6 +422,14 @@ export function ScriptEdit() {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {dialog === "add" && (
+          <FileDialog
+            mode="add"
+            onSubmit={(path) => add.mutate({ path, content: "" })}
+            onCancel={() => setDialog(null)}
+          />
+        )}
       </div>
     </AppShell>
   );

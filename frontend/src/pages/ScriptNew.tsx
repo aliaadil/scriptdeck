@@ -18,7 +18,7 @@ export function ScriptNew() {
       createScript({ name, language, template: language }),
     onSuccess: (s) => {
       toast.success("Script created");
-      nav(`/scripts/${s.id}`);
+      nav(`/kindling/scripts/${s.id}`);
     },
     onError: (e: Error) => toast.error(e.message ?? "Failed to create script"),
   });

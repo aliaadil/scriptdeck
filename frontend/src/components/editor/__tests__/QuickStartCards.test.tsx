@@ -1,4 +1,5 @@
 import { render, screen, fireEvent } from "@testing-library/react";
+import { it, expect, vi } from "vitest";
 import { QuickStartCards } from "../QuickStartCards";
 
 it("renders three cards and fires onPick", () => {

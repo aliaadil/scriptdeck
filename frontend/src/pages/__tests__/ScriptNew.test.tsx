@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { vi } from "vitest";
+import { it, expect, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ScriptNew } from "../ScriptNew";
@@ -39,5 +39,5 @@ it("shows three cards and creates a script on pick", async () => {
   renderPage();
   fireEvent.click(screen.getByTestId("card-python"));
   await waitFor(() => expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ language: "python", template: "python" })));
-  await waitFor(() => expect(mockNav).toHaveBeenCalledWith("/scripts/7"));
+  await waitFor(() => expect(mockNav).toHaveBeenCalledWith("/kindling/scripts/7"));
 });
