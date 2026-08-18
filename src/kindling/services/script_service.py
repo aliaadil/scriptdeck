@@ -18,6 +18,7 @@ class ScriptRow:
     updated_at: str
     description: str | None
     user_id: int | None
+    entrypoint: str
 
 
 def _table():

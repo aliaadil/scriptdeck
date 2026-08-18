@@ -27,6 +27,7 @@ class ScriptOut(BaseModel):
     name: str
     language: str
     source_path: str
+    entrypoint: str
     description: str | None
 
 
@@ -57,7 +58,8 @@ async def list_endpoint(
             s, language=language, q=q, limit=limit, user_id=user_id_filter,
         )
     return [ScriptOut(id=r.id, name=r.name, language=r.language,
-                      source_path=r.source_path, description=r.description) for r in rows]
+                      source_path=r.source_path, entrypoint=r.entrypoint,
+                      description=r.description) for r in rows]
 
 
 @router.post("", status_code=201)
@@ -83,7 +85,8 @@ async def create(
         new = await script_service.get_script(s, row.id)
     assert new is not None
     return ScriptOut(id=new.id, name=new.name, language=new.language,
-                     source_path=new.source_path, description=new.description)
+                     source_path=new.source_path, entrypoint=new.entrypoint,
+                     description=new.description)
 
 
 @router.get("/{script_id}")
@@ -96,7 +99,8 @@ async def detail(script_id: int, request: Request,
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="not found")
     return ScriptOut(id=row.id, name=row.name, language=row.language,
-                     source_path=row.source_path, description=row.description)
+                     source_path=row.source_path, entrypoint=row.entrypoint,
+                     description=row.description)
 
 
 @router.put("/{script_id}")
@@ -121,7 +125,8 @@ async def update(
     if new is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="not found")
     return ScriptOut(id=new.id, name=new.name, language=new.language,
-                     source_path=new.source_path, description=new.description)
+                     source_path=new.source_path, entrypoint=new.entrypoint,
+                     description=new.description)
 
 
 @router.delete("/{script_id}", status_code=204)

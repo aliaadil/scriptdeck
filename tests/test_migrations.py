@@ -31,7 +31,7 @@ async def test_run_migrations_idempotent(tmp_db):
         result = await conn.exec_driver_sql(
             "SELECT COUNT(*) FROM schema_version"
         )
-        assert result.scalar() == 12
+        assert result.scalar() == 13
 
 
 @pytest.mark.asyncio
