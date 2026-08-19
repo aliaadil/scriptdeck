@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { LogOut, User as UserIcon } from "lucide-react";
+import { LogOut, Settings, User as UserIcon } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
@@ -43,7 +43,7 @@ export function UserMenu() {
         {user?.role === "admin" && isMobile && (
           <DropdownMenuItem asChild>
             <Link to="/kindling/settings" className="flex items-center gap-2">
-              <UserIcon className="mr-2 h-4 w-4" /> Settings
+              <Settings className="mr-2 h-4 w-4" /> Settings
             </Link>
           </DropdownMenuItem>
         )}
