@@ -45,6 +45,10 @@ async def run_script(
     storage_dir: Path,
     env_ciphertext: str | None = None,
     env_nonce: str | None = None,
+    # Optional per-trigger params to export as KINDLING_PARAM_<KEY>=<value>.
+    # Merged AFTER the user's encrypted .env so the user's values win on
+    # conflict (we don't want a low-trust webhook to overwrite a secret).
+    param_env: dict[str, str] | None = None,
     active_procs: dict[int, asyncio.subprocess.Process] | None = None,
 ) -> RunResult:
     from kindling.config import get_settings
@@ -76,6 +80,12 @@ async def run_script(
                     decrypted = env_service.decrypt_lines(env_ciphertext, env_nonce)
                     if isinstance(decrypted, dict):
                         script_env = decrypted
+
+                # Apply trigger params FIRST so the user's .env can win on
+                # conflict — a low-trust webhook MUST NOT be able to
+                # overwrite a secret the script owner set.
+                if param_env:
+                    script_env = {**param_env, **script_env}
 
                 if settings.sandbox_enabled:
                     # Imports are lazy because the sandbox module dlopens
@@ -111,6 +121,7 @@ async def run_script(
                             stdout=asyncio.subprocess.PIPE,
                             stderr=asyncio.subprocess.STDOUT,
                             cwd=str(work_dir),
+                            env=merged_env,
                         )
                         if active_procs is not None:
                             active_procs[run_id] = proc

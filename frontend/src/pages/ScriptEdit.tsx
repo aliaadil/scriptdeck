@@ -15,6 +15,7 @@ import { toast } from "@/components/ui/sonner";
 import { FileTree } from "@/components/editor/FileTree";
 import { EditorPanel } from "@/components/editor/EditorPanel";
 import { FileDialog } from "@/components/editor/FileDialog";
+import { TriggersTab } from "@/components/schedules/TriggersTab";
 import {
   Select,
   SelectContent,
@@ -327,6 +328,7 @@ export function ScriptEdit() {
           <TabsList className="mx-4 mt-2 self-start">
             <TabsTrigger value="editor">Editor</TabsTrigger>
             <TabsTrigger value="config">Config</TabsTrigger>
+            <TabsTrigger value="triggers">Triggers</TabsTrigger>
             <TabsTrigger value="logs">Logs</TabsTrigger>
           </TabsList>
 
@@ -425,6 +427,10 @@ export function ScriptEdit() {
                 </Button>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="triggers" className="overflow-auto">
+            {scriptIdValid ? <TriggersTab scriptId={scriptId} /> : null}
           </TabsContent>
 
           <TabsContent value="logs" className="overflow-auto p-4">

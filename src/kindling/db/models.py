@@ -110,9 +110,9 @@ schedules = Table(
         nullable=False,
     ),
     Column("kind", String, nullable=False),
-    Column("expression", String, nullable=False),
+    Column("expression", String),  # nullable: webhook rows have no expression
     Column("enabled", Integer, nullable=False, default=1),
-    Column("next_run_at", String, nullable=False),
+    Column("next_run_at", String),  # nullable: webhook rows have no next_run_at
     Column("retry_max", Integer, nullable=False, default=0),
     Column("retry_backoff", Integer, nullable=False, default=0),
     Column("last_status", String),
@@ -123,7 +123,14 @@ schedules = Table(
     Column("overlap_policy", String, nullable=False, default="skip"),
     Column("queue_max", Integer, nullable=False, default=10),
     Column("queue_dropped", Integer, nullable=False, default=0),
-    CheckConstraint("kind IN ('cron', 'interval')", name="schedules_kind_check"),
+    # Migration 015: per-trigger params + webhook token hash. Both nullable;
+    # webhook rows have next_run_at NULL and expression NULL.
+    Column("params_json", Text),
+    Column("webhook_token_hash", String),
+    CheckConstraint(
+        "kind IN ('cron', 'interval', 'webhook')",
+        name="schedules_kind_check",
+    ),
     Index("idx_schedules_script", "script_id"),
     Index("idx_schedules_due", "enabled", "next_run_at"),
 )
