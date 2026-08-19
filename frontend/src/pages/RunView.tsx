@@ -70,9 +70,9 @@ export function RunView() {
 
   return (
     <AppShell>
-      <div className="mx-auto max-w-5xl space-y-6 p-6">
+      <div className="mx-auto max-w-5xl space-y-6 p-4 md:p-6">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0">
             <CardTitle>Run #{runId}</CardTitle>
             <div className="flex items-center gap-3">
               {run && <StatusBadge status={run.status} />}
@@ -99,7 +99,7 @@ export function RunView() {
         <AttemptList runs={attempts} currentRunId={runId} />
 
         <Tabs defaultValue="output">
-          <TabsList>
+          <TabsList className="flex-wrap">
             <TabsTrigger value="output">Output</TabsTrigger>
             <TabsTrigger value="config">Config</TabsTrigger>
             <TabsTrigger value="metadata">Metadata</TabsTrigger>
