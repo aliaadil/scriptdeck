@@ -158,7 +158,7 @@ export function Settings() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="pw">New password</Label>
-              <Input id="pw" className="w-full" type="password" />
+              <Input id="pw" type="password" />
             </div>
             <Button>Update password</Button>
           </CardContent>

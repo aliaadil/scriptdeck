@@ -71,7 +71,7 @@ export function Dashboard() {
                     No runs yet.
                   </div>
                 )}
-                {runRows.map((r: any) => (
+                {runRows.map((r) => (
                   <Link
                     key={r.id}
                     to={`/kindling/runs/${r.id}`}

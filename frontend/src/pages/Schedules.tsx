@@ -104,7 +104,6 @@ export function Schedules() {
   const editingId = isEditing ? mode.row.id : null;
 
   const isMobile = useIsMobile();
-  const rows = schedules;
 
   return (
     <AppShell>
@@ -118,12 +117,12 @@ export function Schedules() {
         <Card>
           {isMobile ? (
             <div className="space-y-2">
-              {rows.length === 0 && (
+              {schedules.length === 0 && (
                 <div className="p-3 text-center text-muted-foreground">
                   No schedules.
                 </div>
               )}
-              {rows.map((s) => (
+              {schedules.map((s) => (
                 <Link
                   key={s.id}
                   to={`/kindling/schedules/${s.id}`}
