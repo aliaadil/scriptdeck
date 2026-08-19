@@ -1,0 +1,22 @@
+site_name: Kindling
+site_description: Self-hosted scheduled script runner.
+site_url: https://aliaadil.github.io/kindling/
+repo_url: https://github.com/aliaadil/kindling
+repo_name: aliaadil/kindling
+theme:
+  name: material
+nav:
+  - Quickstart: index.md
+  - Install: install.md
+  - API reference: api.md
+  - Operations: operations.md
+  - Troubleshooting: troubleshooting.md
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+markdown_extensions:
+  - admonition
+  - pymdownx.superfences

@@ -1,0 +1,27 @@
+import { api } from "./client";
+
+export type Schedule = {
+  id: number; script_id: number; kind: "cron" | "interval"; expression: string;
+  enabled: boolean; next_run_at: string; retry_max: number; retry_backoff: number;
+  timezone?: string | null;
+  blackout_dates?: string[] | null;
+  include_days?: number[] | null;
+  overlap_policy?: "skip" | "queue" | "parallel";
+  queue_max?: number;
+  run_count: number;
+};
+
+export const listSchedules = (scriptId?: number) =>
+  api<Schedule[]>(`/schedules${scriptId ? `?script_id=${scriptId}` : ""}`);
+export const getSchedule = (id: number) =>
+  api<Schedule>(`/schedules/${id}`);
+export const createSchedule = (body: Omit<Schedule, "id" | "next_run_at">) =>
+  api<Schedule>("/schedules", { method: "POST", body: JSON.stringify(body) });
+export const updateSchedule = (id: number, body: Omit<Schedule, "id" | "next_run_at">) =>
+  api<Schedule>(`/schedules/${id}`, { method: "PUT", body: JSON.stringify(body) });
+export const deleteSchedule = (id: number) =>
+  api<void>(`/schedules/${id}`, { method: "DELETE" });
+export const enableSchedule = (id: number) =>
+  api(`/schedules/${id}/enable`, { method: "POST" });
+export const disableSchedule = (id: number) =>
+  api(`/schedules/${id}/disable`, { method: "POST" });

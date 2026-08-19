@@ -1,0 +1,29 @@
+name: kindling
+services:
+  kindling:
+    build: .
+    image: aliaadil/kindling
+    container_name: kindling
+    restart: unless-stopped
+    ports:
+      - "8765:8765"
+    cap_drop:
+      - ALL
+    cap_add:
+      - SYS_CHROOT
+      - SYS_ADMIN
+    environment:
+      KINDLING_DB_PATH: /data/kindling.db
+      KINDLING_STORAGE_DIR: /storage
+      KINDLING_JWT_SECRET: ${KINDLING_JWT_SECRET:?required}
+      KINDLING_ENV_ENCRYPTION_KEY: ${KINDLING_ENV_ENCRYPTION_KEY:?required}
+      KINDLING_RUNNER_CONCURRENCY: "4"
+      KINDLING_SCHEDULER_INTERVAL: "5"
+    volumes:
+      - kindling-data:/data
+      - kindling-storage:/storage
+volumes:
+  kindling-data:
+    name: kindling-data
+  kindling-storage:
+    name: kindling-storage

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="favFlame" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#dc2626"/>
+      <stop offset="60%" stop-color="#fb923c"/>
+      <stop offset="100%" stop-color="#facc15"/>
+    </linearGradient>
+    <linearGradient id="favLog" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#b45309"/>
+      <stop offset="100%" stop-color="#78350f"/>
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="7" fill="#0c0a09"/>
+  <!-- Crossed logs (no end-grain rings at favicon size — too noisy) -->
+  <g transform="translate(16 19) rotate(-32)">
+    <rect x="-8" y="-1.8" width="16" height="3.6" rx="1.8" fill="url(#favLog)"/>
+  </g>
+  <g transform="translate(16 19) rotate(32)">
+    <rect x="-8" y="-1.8" width="16" height="3.6" rx="1.8" fill="url(#favLog)"/>
+  </g>
+  <!-- Flame -->
+  <path d="M16 4 C18 8 19 12 16 15 C13 12 14 8 16 4 Z" fill="url(#favFlame)"/>
+</svg>
