@@ -17,8 +17,8 @@ from .db import initialize_database, table_names
 from .repository import (
     list_orphaned_runs,
     list_runs,
-    list_schedules,
     list_scripts,
+    list_triggers,
 )
 
 
@@ -94,7 +94,7 @@ def _check_db_connectivity(settings: Settings, *, threshold_seconds: int = 3600)
 
     try:
         scripts = list_scripts(conn)
-        schedules = list_schedules(conn)
+        triggers = list_triggers(conn)
         runs = list_runs(conn)
         orphaned = list_orphaned_runs(conn, _iso_threshold(threshold_seconds))
     except Exception as exc:
@@ -105,7 +105,7 @@ def _check_db_connectivity(settings: Settings, *, threshold_seconds: int = 3600)
     return CheckResult(
         "db_connectivity",
         True,
-        f"scripts={len(scripts)} schedules={len(schedules)} runs={len(runs)} "
+        f"scripts={len(scripts)} triggers={len(triggers)} runs={len(runs)} "
         f"orphaned_runs={len(orphaned)}",
     )
 
@@ -148,7 +148,7 @@ def collect_report(
     conn = initialize_database(settings.db_path)
     try:
         scripts = list_scripts(conn)
-        schedules = list_schedules(conn)
+        triggers = list_triggers(conn)
         runs = list_runs(conn)
         orphaned = list_orphaned_runs(
             conn, _iso_threshold(orphaned_threshold_seconds)
@@ -174,7 +174,7 @@ def collect_report(
         "all_ok": all(c.ok for c in checks),
         "counts": {
             "scripts": len(scripts),
-            "schedules": len(schedules),
+            "triggers": len(triggers),
             "runs": len(runs),
             "orphaned_runs": len(orphaned),
         },
@@ -182,7 +182,7 @@ def collect_report(
             {
                 "id": r["id"],
                 "script_id": r["script_id"],
-                "schedule_id": r["schedule_id"],
+                "trigger_id": r["trigger_id"],
                 "started_at": r["started_at"],
             }
             for r in orphaned
@@ -191,7 +191,7 @@ def collect_report(
             {
                 "id": latest_run["id"],
                 "script_id": latest_run["script_id"],
-                "schedule_id": latest_run["schedule_id"],
+                "trigger_id": latest_run["trigger_id"],
                 "status": latest_run["status"],
                 "started_at": latest_run["started_at"],
                 "ended_at": latest_run["ended_at"],
@@ -227,7 +227,7 @@ def render_report(report: dict[str, Any]) -> str:
         "Counts\n"
         "------\n"
         f"scripts        : {counts['scripts']}\n"
-        f"schedules      : {counts['schedules']}\n"
+        f"triggers       : {counts['triggers']}\n"
         f"runs           : {counts['runs']}\n"
         f"orphaned_runs  : {counts['orphaned_runs']}"
     )
@@ -240,7 +240,7 @@ def render_report(report: dict[str, Any]) -> str:
         for row in report["orphaned_runs"]:
             lines.append(
                 f"run_id={row['id']} script_id={row['script_id']} "
-                f"schedule_id={row['schedule_id']} started_at={row['started_at']}"
+                f"trigger_id={row['trigger_id']} started_at={row['started_at']}"
             )
     lines.append("")
     lines.append("Latest run")
@@ -251,7 +251,7 @@ def render_report(report: dict[str, Any]) -> str:
     else:
         lines.append(
             f"run_id={latest['id']} script_id={latest['script_id']} "
-            f"schedule_id={latest['schedule_id']} status={latest['status']}"
+            f"trigger_id={latest['trigger_id']} status={latest['status']}"
         )
         lines.append(f"started_at={latest['started_at']} ended_at={latest['ended_at']}")
         lines.append(f"log_path={latest['log_path']}")

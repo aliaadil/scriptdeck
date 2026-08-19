@@ -8,9 +8,10 @@ Concrete flow:
 
 1. The runner (or a test) reports a run finishing by calling
    ``record_run_result(...)`` with the final ``status``, ``exit_code``, etc.
-2. For status in ``failure``/``error`` and a schedule with ``retry_max > 0``,
-   a new run row is created with the same ``retry_group_id`` and an incremented
-   ``retry_attempt``. The caller is responsible for actually executing it.
+2. For status in ``failure``/``error`` and a schedule trigger with
+   ``retry_max > 0``, a new run row is created with the same
+   ``retry_group_id`` and an incremented ``retry_attempt``. The caller is
+   responsible for actually executing it.
 3. If retries are exhausted, the alerting webhook fires (best-effort).
 """
 
@@ -46,18 +47,34 @@ def _group_id_for_run(run: dict[str, Any]) -> str:
 def evaluate_retry(
     connection: sqlite3.Connection,
     run: dict[str, Any],
-    schedule: dict[str, Any],
+    trigger: dict[str, Any],
 ) -> RetryDecision:
     """Decide whether a finished run should be retried.
 
     Generates and persists a ``retry_group_id`` on the run if it doesn't already
     have one, so retries of the same cycle all share the id.
+
+    Webhook triggers never retry (a webhook caller can re-fire at will) and
+    never mark the cycle exhausted — they have no alerting webhook to fire.
     """
     status = run["status"]
     if status not in repository.RETRYABLE_STATUSES:
         return RetryDecision(False, 0, False, run.get("retry_group_id") or _group_id_for_run(run))
 
-    retry_max = int(schedule.get("retry_max") or 0)
+    if trigger.get("kind") == "webhook":
+        # Webhook-fired runs are never retried automatically. Make sure the
+        # group id is persisted so the run row links cleanly, but don't
+        # pretend the cycle is exhausted (no alerting should fire either).
+        group_id = _group_id_for_run(run)
+        if not run.get("retry_group_id"):
+            connection.execute(
+                "UPDATE runs SET retry_group_id = ? WHERE id = ?",
+                (group_id, run["id"]),
+            )
+            connection.commit()
+        return RetryDecision(False, 0, False, group_id)
+
+    retry_max = int(trigger.get("retry_max") or 0)
     group_id = _group_id_for_run(run)
 
     # If the run row does not yet have a retry_group_id, write one so the
@@ -95,19 +112,19 @@ def schedule_retry(
     connection: sqlite3.Connection,
     *,
     run: dict[str, Any],
-    schedule: dict[str, Any],
+    trigger: dict[str, Any],
     decision: RetryDecision,
     started_at: str | None = None,
 ) -> dict[str, Any]:
     """Insert a retry run row sharing the same ``retry_group_id``.
 
     The actual execution of the retry is the runner's job; this function only
-    records the new run row so the schedule state stays consistent.
+    records the new run row so the trigger state stays consistent.
     """
     return repository.create_run(
         connection,
         script_id=run["script_id"],
-        schedule_id=run["schedule_id"],
+        trigger_id=run["trigger_id"],
         started_at=started_at,
         status="error",  # retried runs are created in the "error" placeholder state
         retry_attempt=decision.next_attempt,
@@ -119,10 +136,10 @@ def fire_alert_if_exhausted(
     connection: sqlite3.Connection,
     *,
     run: dict[str, Any],
-    schedule: dict[str, Any],
+    trigger: dict[str, Any],
     decision: RetryDecision,
 ) -> bool:
-    """POST to the schedule's alerting webhook if the retry cycle is exhausted.
+    """POST to the trigger's alerting webhook if the retry cycle is exhausted.
 
     Returns True when the webhook fired (and was accepted), False otherwise.
     A ``False`` return covers both "no webhook configured" and "delivery
@@ -130,12 +147,16 @@ def fire_alert_if_exhausted(
     """
     if not decision.exhausted:
         return False
-    url = schedule.get("alert_webhook_url")
+    if trigger.get("kind") == "webhook":
+        # Webhook triggers never carry an alerting webhook — they're the
+        # consumer side, not the producer side.
+        return False
+    url = trigger.get("alert_webhook_url")
     if not url:
         return False
 
     payload = build_alert_payload(
-        schedule_id=int(schedule["id"]),
+        trigger_id=int(trigger["id"]),
         script_id=int(run["script_id"]),
         run_id=int(run["id"]),
         status=str(run["status"]),
@@ -150,7 +171,7 @@ def record_run_result(
     connection: sqlite3.Connection,
     *,
     run: dict[str, Any],
-    schedule: dict[str, Any],
+    trigger: dict[str, Any],
     ended_at: str | None = None,
 ) -> tuple[RetryDecision, dict[str, Any] | None, bool]:
     """Top-level entry point used by the runner (and tests).
@@ -166,13 +187,13 @@ def record_run_result(
         connection.commit()
         run = repository.get_run(connection, run["id"]) or run  # type: ignore[assignment]
 
-    decision = evaluate_retry(connection, run, schedule)
+    decision = evaluate_retry(connection, run, trigger)
 
     retry_run: dict[str, Any] | None = None
     if decision.should_retry:
-        retry_run = schedule_retry(connection, run=run, schedule=schedule, decision=decision)
+        retry_run = schedule_retry(connection, run=run, trigger=trigger, decision=decision)
 
     webhook_fired = fire_alert_if_exhausted(
-        connection, run=run, schedule=schedule, decision=decision
+        connection, run=run, trigger=trigger, decision=decision
     )
     return decision, retry_run, webhook_fired

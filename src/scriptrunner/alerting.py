@@ -34,7 +34,7 @@ def validate_webhook_url(url: str) -> str:
 
 def build_alert_payload(
     *,
-    schedule_id: int,
+    trigger_id: int,
     script_id: int,
     run_id: int,
     status: str,
@@ -42,9 +42,13 @@ def build_alert_payload(
     log_path: str | None,
     retry_attempt: int,
 ) -> dict[str, Any]:
-    """Return the JSON body that gets POSTed to the alerting webhook."""
+    """Return the JSON body that gets POSTed to the alerting webhook.
+
+    v0.8 — the schedule_id field is renamed to trigger_id to reflect the
+    generalisation. Alerting consumers should read ``trigger_id``.
+    """
     return {
-        "schedule_id": schedule_id,
+        "trigger_id": trigger_id,
         "script_id": script_id,
         "run_id": run_id,
         "status": status,

@@ -44,7 +44,7 @@ def test_collect_report_on_empty_db(settings: Settings) -> None:
     report = collect_report(settings)
     assert report["all_ok"] is True
     assert report["counts"] == {
-        "scripts": 0, "schedules": 0, "runs": 0, "orphaned_runs": 0,
+        "scripts": 0, "triggers": 0, "runs": 0, "orphaned_runs": 0,
     }
     assert report["orphaned_runs"] == []
     assert report["latest_run"] is None
@@ -59,7 +59,7 @@ def test_collect_report_detects_orphaned_runs(settings: Settings) -> None:
         create_run(
             conn,
             script_id=script["id"],
-            schedule_id=None,
+            trigger_id=None,
             started_at=long_ago,
             status="error",
         )
@@ -128,7 +128,7 @@ def test_render_report_shape_includes_latest_run_log_tail(tmp_path: Path) -> Non
         create_run(
             conn,
             script_id=script["id"],
-            schedule_id=None,
+            trigger_id=None,
             status="success",
             log_path=str(log),
             log_size_bytes=18,

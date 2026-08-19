@@ -12,7 +12,7 @@ Cron + logrotate + ad-hoc shell wrappers work — until you have a dozen jobs th
 
 ## What ships today
 
-- **SQLite-backed persistence** — one file, four tables (`scripts`, `schedules`, `runs`, `logs`), versioned migrations.
+- **SQLite-backed persistence** — one file, four tables (`scripts`, `triggers`, `runs`, `logs`), versioned migrations.
 - **Stdlib HTTP JSON API** — manage scripts, schedules, runs, and read log metadata over a single port.
 - **Small dependency surface** — `pip install scriptdeck` and you're done. No FastAPI, no Pydantic, no SQLAlchemy. Install the optional `auth` extra when enabling Basic auth.
 - **Environment-variable config** — `SCRIPTDECK_DB_PATH`, `SCRIPTDECK_STORAGE_DIR`, `SCRIPTDECK_HOST`, `SCRIPTDECK_PORT`. Coolify, systemd, plain shell — all the same.
@@ -42,6 +42,50 @@ browser:
   `curl -N` or any EventSource client.
 
 See [`ROADMAP.md`](ROADMAP.md) and the [Operator Runbook](https://github.com/aliaadil/scriptdeck/wiki) for detail.
+
+## Triggers (v0.8)
+
+A script can have 0..N *triggers*. Each trigger is either:
+
+- **schedule** — a cron/interval expression that fires the runner on a cadence.
+  Carries the legacy retry policy (`retry_max`, `retry_backoff_seconds`) and
+  an optional `alert_webhook_url` that fires once when retries are exhausted.
+- **webhook** — a unique URL `http://host/webhooks/<token>` plus a 64-char
+  secret token. POSTing to that URL enqueues a run for the script. No Basic
+  auth — the token in the path is the only credential.
+
+Both kinds carry an optional `params` map (JSON object of stringy keys/values).
+At run time, every entry is exported as `SCRIPTDECK_PARAM_<KEY>` plus the full
+blob as `SCRIPTDECK_PARAMS_JSON`, so two triggers on the same script can pass
+different flags without mutating the script row.
+
+API surface:
+
+```bash
+# Create a script
+curl -X POST http://127.0.0.1:8765/api/scripts \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"nightly","language":"python","source":"print(\"hi\")\n"}'
+
+# Attach a schedule trigger with per-trigger params
+curl -X POST http://127.0.0.1:8765/api/scripts/1/triggers/schedule \
+  -H 'Content-Type: application/json' \
+  -d '{"schedule_kind":"cron","expression":"0 3 * * *","params":{"env":"prod"}}'
+
+# Attach a webhook trigger
+curl -X POST http://127.0.0.1:8765/api/scripts/1/triggers/webhook \
+  -H 'Content-Type: application/json' \
+  -d '{"params":{"region":"us-east-1"}}'
+# -> {"id":3,"kind":"webhook","webhook_url":"http://.../webhooks/<token>", ...}
+
+# Hit the webhook to fire the script (no Basic auth required)
+curl -X POST http://127.0.0.1:8765/webhooks/<token> -d '{}'
+# -> 202 {"run_id":42,"status":"success"}
+```
+
+The HTML view at `GET /scripts/<id>` lists every trigger with add / run-now /
+delete buttons; the page is plain HTML + a few lines of vanilla JS so it works
+without a build step.
 
 ## Install & run
 

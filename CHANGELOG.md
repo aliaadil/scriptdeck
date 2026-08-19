@@ -4,6 +4,52 @@ All notable changes to ScriptDeck are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] — 2026-08-19
+
+### Added
+- **Triggers** (generalisation of the schedule model): each script may now
+  have 0..N triggers, where each trigger is either a *schedule* (cron /
+  interval + retry policy + alerting webhook URL) or a *webhook* (unique
+  URL + shared secret token). Migration v6 back-fills every existing
+  schedule as one `kind='schedule'` trigger.
+- **Per-trigger params** (`params_json` column): each trigger carries an
+  optional JSON-object of stringy key/value pairs. The runner exports them
+  to the script as `SCRIPTDECK_PARAM_<KEY>` env vars (plus a single
+  `SCRIPTDECK_PARAMS_JSON` blob), so two schedules on the same script can
+  pass different flags at run time.
+- **Public webhook endpoint** at `POST /webhooks/<token>`: no Basic auth,
+  token in URL path is the only credential. The endpoint validates the
+  token (lookup is unique-indexed), enqueues a run via the runner, and
+  returns 202 with the new `run_id`. 404 for an unknown token.
+- **HTML script view** at `GET /scripts/<id>`: lists the script's triggers
+  with add / run-now / delete affordances, served by the same stdlib server
+  (no SPA, no framework).
+- New repository functions: `create_schedule_trigger`, `create_webhook_trigger`,
+  `get_trigger`, `get_trigger_by_webhook_token`, `list_triggers`,
+  `list_triggers_for_script`, `update_trigger`, `delete_trigger`,
+  `trigger_params`.
+- `runner.run_script(...)` now takes `trigger_id` instead of `schedule_id`
+  and exports the trigger's `params` as environment variables.
+- `scheduler.evaluate_retry(...)` returns `should_retry=False, exhausted=False`
+  for webhook triggers — webhook runs never retry automatically and never
+  fire an alerting webhook (they're the consumer side, not the producer).
+
+### Changed
+- `runs.schedule_id` is renamed to `runs.trigger_id`; the v6 migration
+  preserves the existing lineage by reusing the same numeric id.
+- `alerting.build_alert_payload` accepts `trigger_id=` (not `schedule_id=`)
+  and emits `"trigger_id"` in the JSON body.
+- `scriptdeck-doctor` output reports `triggers` instead of `schedules`.
+- `runs.trigger_id` is now used everywhere internally; the HTTP API uses
+  `trigger_id` consistently.
+
+### Removed
+- `POST /api/schedules` and `GET /api/schedules` endpoints (replaced by
+  `POST /api/scripts/<id>/triggers/schedule` and `GET /api/triggers`).
+- `repository.create_schedule`, `get_schedule`, `list_schedules` (replaced
+  by the trigger equivalents).
+- `schedules` table is dropped at the end of v6 (replaced by `triggers`).
+
 ## [0.4.0] — 2026-08-08
 
 ### Added

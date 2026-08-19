@@ -64,7 +64,7 @@ def test_validate_webhook_url_rejects_bad_urls(bad_url: str) -> None:
 
 def test_build_alert_payload_shape() -> None:
     payload = build_alert_payload(
-        schedule_id=1,
+        trigger_id=1,
         script_id=2,
         run_id=3,
         status="failure",
@@ -73,7 +73,7 @@ def test_build_alert_payload_shape() -> None:
         retry_attempt=2,
     )
     assert payload == {
-        "schedule_id": 1,
+        "trigger_id": 1,
         "script_id": 2,
         "run_id": 3,
         "status": "failure",
@@ -85,7 +85,7 @@ def test_build_alert_payload_shape() -> None:
 
 def test_post_alert_returns_true_on_2xx(webhook_server: str) -> None:
     payload = build_alert_payload(
-        schedule_id=1, script_id=2, run_id=3, status="failure",
+        trigger_id=1, script_id=2, run_id=3, status="failure",
         exit_code=1, log_path=None, retry_attempt=0,
     )
     assert post_alert(webhook_server, payload, timeout=2.0) is True
@@ -109,7 +109,7 @@ def test_post_alert_returns_false_on_5xx() -> None:
     server, url = _start_server(FiveHundredHandler)
     try:
         payload = build_alert_payload(
-            schedule_id=1, script_id=2, run_id=3, status="error",
+            trigger_id=1, script_id=2, run_id=3, status="error",
             exit_code=None, log_path=None, retry_attempt=0,
         )
         assert post_alert(url, payload, timeout=2.0) is False
@@ -124,7 +124,7 @@ def test_post_alert_returns_false_on_connection_error() -> None:
     _, port = sock.getsockname()
     sock.close()
     payload = build_alert_payload(
-        schedule_id=1, script_id=2, run_id=3, status="failure",
+        trigger_id=1, script_id=2, run_id=3, status="failure",
         exit_code=1, log_path=None, retry_attempt=0,
     )
     assert post_alert(f"http://127.0.0.1:{port}/", payload, timeout=1.0) is False
@@ -132,7 +132,7 @@ def test_post_alert_returns_false_on_connection_error() -> None:
 
 def test_post_alert_returns_false_on_invalid_url() -> None:
     payload = build_alert_payload(
-        schedule_id=1, script_id=2, run_id=3, status="failure",
+        trigger_id=1, script_id=2, run_id=3, status="failure",
         exit_code=1, log_path=None, retry_attempt=0,
     )
     assert post_alert("ftp://nope/", payload, timeout=1.0) is False

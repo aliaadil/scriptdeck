@@ -4,4 +4,4 @@ from .config import Settings
 from .db import connect, initialize_database
 
 __all__ = ["Settings", "connect", "initialize_database"]
-__version__ = "0.7.0"
+__version__ = "0.8.0"

@@ -14,7 +14,7 @@ def test_migrations_create_all_tables(tmp_db_path: Path) -> None:
     conn = initialize_database(tmp_db_path)
     try:
         names = set(table_names(conn))
-        assert names == {"scripts", "schedules", "runs", "logs"}
+        assert names == {"scripts", "triggers", "runs", "logs"}
     finally:
         conn.close()
 
@@ -36,12 +36,12 @@ def test_migrations_are_idempotent(tmp_db_path: Path) -> None:
 def test_foreign_keys_are_enforced(tmp_db_path: Path) -> None:
     conn = initialize_database(tmp_db_path)
     try:
-        # schedules references scripts; inserting a schedule with no matching script must error.
+        # triggers references scripts; inserting a trigger with no matching script must error.
         with __import__("pytest").raises(Exception):
             conn.execute(
-                "INSERT INTO schedules(script_id, kind, expression, enabled, created_at) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (99999, "cron", "* * * * *", 1, "2026-01-01T00:00:00Z"),
+                "INSERT INTO triggers(script_id, kind, schedule_kind, expression, enabled, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (99999, "schedule", "cron", "* * * * *", 1, "2026-01-01T00:00:00Z"),
             )
             conn.commit()
     finally:

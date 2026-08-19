@@ -104,18 +104,71 @@ def test_schedule_creation_and_listing(server) -> None:
         "language": "python",
         "source_path": "/srv/x.py",
     })
-    status, body = _request("POST", base, "/api/schedules", {
-        "script_id": script["id"],
-        "kind": "interval",
+    status, body = _request("POST", base, f"/api/scripts/{script['id']}/triggers/schedule", {
+        "schedule_kind": "interval",
         "expression": "5m",
     })
     assert status == 201
     assert body["enabled"] in (1, True)  # JSON normalizes 1->True, both OK
+    assert body["kind"] == "schedule"
+    assert body["schedule_kind"] == "interval"
+    assert body["expression"] == "5m"
 
-    status, body = _request("GET", base, "/api/schedules")
+    status, body = _request("GET", base, "/api/triggers")
     assert status == 200
     assert len(body) == 1
     assert body[0]["expression"] == "5m"
+    assert body[0]["kind"] == "schedule"
+
+
+def test_webhook_trigger_creation_and_token(server) -> None:
+    base, _ = server
+    _, script = _request("POST", base, "/api/scripts", {
+        "name": "wh-test",
+        "language": "python",
+        "source_path": "/srv/x.py",
+    })
+    status, body = _request(
+        "POST",
+        base,
+        f"/api/scripts/{script['id']}/triggers/webhook",
+        {"params": {"env": "staging"}},
+    )
+    assert status == 201
+    assert body["kind"] == "webhook"
+    assert body["params"] == {"env": "staging"}
+    token = body["webhook_token"]
+    assert token and len(token) == 64
+    assert body["webhook_url"].endswith(f"/webhooks/{token}")
+
+
+def test_webhook_invocation_runs_script_and_rejects_bad_token(server, tmp_path) -> None:
+    base, _ = server
+    # Write a real source file so the runner can actually execute it.
+    script_path = tmp_path / "demo.py"
+    script_path.write_text("print('hello from webhook')\n", encoding="utf-8")
+    _, script = _request("POST", base, "/api/scripts", {
+        "name": "wh-fire",
+        "language": "python",
+        "source_path": str(script_path),
+    })
+    status, body = _request(
+        "POST", base, f"/api/scripts/{script['id']}/triggers/webhook", {}
+    )
+    assert status == 201
+    token = body["webhook_token"]
+
+    # Unknown token must be rejected with 404.
+    status, body = _request("POST", base, "/webhooks/deadbeef" + "f" * 56, {})
+    assert status == 404
+    assert body["error"] == "invalid webhook token"
+
+    # The real token must be accepted (no Basic auth required). The runner
+    # executes the script and finalises the run row with ``status='success'``;
+    # the webhook endpoint returns 202 with the run_id.
+    status, body = _request("POST", base, f"/webhooks/{token}", {"x": 1})
+    assert status == 202, body
+    assert "run_id" in body and body["run_id"] >= 1
 
 
 def test_run_creation_and_logs(server) -> None:

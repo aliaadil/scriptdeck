@@ -104,6 +104,91 @@ MIGRATIONS = {
     CREATE INDEX IF NOT EXISTS idx_runs_retry_group ON runs(retry_group_id);
     PRAGMA foreign_keys = ON;
     """,
+    6: """
+    -- v0.8 — Generalize the schedule model into a generic ``triggers`` table so a
+    -- single script can have 0..N triggers. Each trigger is either a schedule
+    -- (with cron/interval + retry policy + alerting webhook URL) or a webhook
+    -- (with a unique URL + shared secret token that POSTs can hit to fire the
+    -- script). A new ``params_json`` column carries per-trigger parameter /
+    -- flag overrides that are passed through to the runner.
+    --
+    -- Existing rows are back-filled one-for-one: every legacy schedule becomes
+    -- a ``kind='schedule'`` trigger, and ``runs.schedule_id`` is renamed to
+    -- ``runs.trigger_id`` so the existing run history keeps its lineage. The
+    -- old ``schedules`` table is dropped at the end of the migration.
+    PRAGMA foreign_keys = OFF;
+    CREATE TABLE triggers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        script_id INTEGER NOT NULL,
+        kind TEXT NOT NULL CHECK (kind IN ('schedule', 'webhook')),
+        -- Schedule-specific fields (NULL when kind='webhook')
+        schedule_kind TEXT CHECK (schedule_kind IN ('cron', 'interval') OR schedule_kind IS NULL),
+        expression TEXT,
+        next_run_at TEXT,
+        enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+        retry_max INTEGER NOT NULL DEFAULT 0,
+        retry_backoff_seconds INTEGER NOT NULL DEFAULT 60,
+        alert_webhook_url TEXT,
+        -- Webhook-specific fields (NULL when kind='schedule')
+        webhook_token TEXT,
+        -- Common: opaque per-trigger params (JSON object of strings). NULL is
+        -- a valid value — empty / no overrides.
+        params_json TEXT,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (script_id) REFERENCES scripts(id) ON DELETE CASCADE
+    );
+    INSERT INTO triggers (
+        id, script_id, kind, schedule_kind, expression, next_run_at, enabled,
+        retry_max, retry_backoff_seconds, alert_webhook_url, webhook_token,
+        params_json, created_at
+    )
+    SELECT
+        id,
+        script_id,
+        'schedule',
+        kind,
+        expression,
+        next_run_at,
+        enabled,
+        retry_max,
+        retry_backoff_seconds,
+        alert_webhook_url,
+        NULL,
+        NULL,
+        created_at
+    FROM schedules;
+    -- Rebuild runs with the renamed trigger_id column (preserve the existing
+    -- schedule_id values so historical runs still link back to their trigger).
+    CREATE TABLE runs_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        script_id INTEGER NOT NULL,
+        trigger_id INTEGER,
+        started_at TEXT NOT NULL,
+        ended_at TEXT,
+        exit_code INTEGER,
+        status TEXT NOT NULL CHECK (status IN ('running', 'success', 'failure', 'error', 'cancelled')),
+        log_path TEXT,
+        log_size_bytes INTEGER NOT NULL DEFAULT 0,
+        retry_attempt INTEGER NOT NULL DEFAULT 0,
+        retry_group_id TEXT,
+        FOREIGN KEY (script_id) REFERENCES scripts(id) ON DELETE CASCADE,
+        FOREIGN KEY (trigger_id) REFERENCES triggers(id) ON DELETE SET NULL
+    );
+    INSERT INTO runs_new (id, script_id, trigger_id, started_at, ended_at, exit_code,
+                          status, log_path, log_size_bytes, retry_attempt, retry_group_id)
+    SELECT id, script_id, schedule_id, started_at, ended_at, exit_code,
+           status, log_path, log_size_bytes, retry_attempt, retry_group_id
+    FROM runs;
+    DROP TABLE runs;
+    ALTER TABLE runs_new RENAME TO runs;
+    CREATE INDEX IF NOT EXISTS idx_runs_retry_group ON runs(retry_group_id);
+    CREATE INDEX IF NOT EXISTS idx_triggers_script ON triggers(script_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_triggers_webhook_token ON triggers(webhook_token)
+        WHERE webhook_token IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_runs_trigger ON runs(trigger_id);
+    DROP TABLE schedules;
+    PRAGMA foreign_keys = ON;
+    """,
 }
 
 

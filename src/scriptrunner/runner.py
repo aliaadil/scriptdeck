@@ -1,4 +1,4 @@
-"""Subprocess runner for ScriptDeck (v0.2 + v0.4 isolation integration).
+"""Subprocess runner for ScriptDeck (v0.2 + v0.4 isolation + v0.8 triggers).
 
 The runner is the bridge between the database and the filesystem:
 
@@ -17,6 +17,7 @@ concerns (one-active-run-per-script, scheduler tick) live elsewhere.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import subprocess
 import threading
@@ -54,15 +55,40 @@ class RunResult:
     webhook_fired: bool
 
 
+def _params_env(params: dict[str, str]) -> dict[str, str]:
+    """Render trigger params as environment variables.
+
+    Each key ``FOO=bar`` becomes ``SCRIPTDECK_PARAM_FOO=bar`` so the script
+    can read its overrides from the environment without a parser dependency.
+    Also serialises the full map as ``SCRIPTDECK_PARAMS_JSON`` for callers
+    that prefer one lookup.
+    """
+    env: dict[str, str] = {}
+    for key, value in params.items():
+        # Keys come from the operator, not the script — uppercase + replace
+        # non-identifier chars so we never produce malformed env names.
+        normalised = "SCRIPTDECK_PARAM_" + "".join(
+            ch if (ch.isalnum() or ch == "_") else "_" for ch in key.upper()
+        )
+        env[normalised] = value
+    env["SCRIPTDECK_PARAMS_JSON"] = json.dumps(params, sort_keys=True)
+    return env
+
+
 def run_script(
     *,
     connection: sqlite3.Connection,
     storage_dir: Path,
     script_id: int,
-    schedule_id: int | None = None,
+    trigger_id: int | None = None,
     log_tail_lines: int = 0,
 ) -> RunResult:
     """Execute a script end-to-end and finalise its run row.
+
+    Pass ``trigger_id`` when the run was kicked off by a specific trigger
+    (schedule tick or webhook hit). The trigger's ``params_json`` is decoded
+    and exported as environment variables so different schedules can pass
+    different flags to the same script.
 
     Raises ``ValueError`` for malformed input and ``FileNotFoundError`` if the
     script's source file is missing.
@@ -70,15 +96,16 @@ def run_script(
     script_row = repository.get_script(connection, script_id)
     if script_row is None:
         raise ValueError(f"script {script_id} does not exist")
-    if script_row.get("schedule_id") is not None and schedule_id is None:
-        # Not used today, but lets future scheduler code pass through.
-        pass
 
-    schedule_row: dict[str, Any] | None = None
-    if schedule_id is not None:
-        schedule_row = repository.get_schedule(connection, schedule_id)
-        if schedule_row is None:
-            raise ValueError(f"schedule {schedule_id} does not exist")
+    trigger_row: dict[str, Any] | None = None
+    if trigger_id is not None:
+        trigger_row = repository.get_trigger(connection, trigger_id)
+        if trigger_row is None:
+            raise ValueError(f"trigger {trigger_id} does not exist")
+        if int(trigger_row["script_id"]) != script_id:
+            raise ValueError(
+                f"trigger {trigger_id} does not belong to script {script_id}"
+            )
 
     source_path = Path(script_row["source_path"])
     if not source_path.exists():
@@ -96,19 +123,13 @@ def run_script(
     run_row = repository.create_run(
         connection,
         script_id=script_id,
-        schedule_id=schedule_id,
+        trigger_id=trigger_id,
         status="error",  # placeholder; finalised below
     )
     log_path = logs_dir / f"{run_row['id']}.log"
 
     # 2. Serialise per-script: prevents the same script from being executed by
     #    two scheduler ticks (or two manual triggers) at the same time.
-    # NOTE: ``resolve_interpreter`` below also takes the provision lock, but
-    # since ``flock`` is per-file-description and re-entrant from the same fd,
-    # the inner ``provision_lock`` opens a fresh fd and would deadlock
-    # against the outer one if we wrapped it explicitly. So we only take the
-    # in-process threading.Lock here, and rely on resolve_interpreter for the
-    # cross-process guard.
     with _local_lock(script_id):
         iso = isolation.resolve_interpreter(
             storage_dir=storage_dir,
@@ -119,11 +140,16 @@ def run_script(
             connection=connection,
         )
 
-        env = isolation.runner_env(
+        base_env = isolation.runner_env(
             language=script_row["language"],
             isolation=iso,
             script_row=script_row,
         )
+        # Per-trigger params ride on top of the runner env so different
+        # triggers can supply different flags / config without mutating
+        # the script row.
+        params = repository.trigger_params(trigger_row)
+        env = {**base_env, **_params_env(params)}
 
         cmd, cwd = _build_command(script_row["language"], iso.interpreter_path, source_path)
         started_at = db.utc_now()
@@ -144,16 +170,16 @@ def run_script(
     run_row = repository.get_run(connection, run_row["id"]) or run_row
 
     # 4. Hand off to the scheduler for retry/alert policy.
-    if schedule_row is not None:
+    if trigger_row is not None and trigger_row.get("kind") == "schedule":
         decision, retry_run, webhook_fired = record_run_result(
-            connection, run=run_row, schedule=schedule_row
+            connection, run=run_row, trigger=trigger_row
         )
     else:
-        # Manual trigger with no schedule: still produce a RetryDecision for the
+        # Webhook trigger or no trigger: still produce a RetryDecision for the
         # benefit of the caller, but skip retries/alerting.
         from .scheduler import evaluate_retry  # local import to avoid cycles
 
-        decision = evaluate_retry(connection, run_row, _stub_schedule(schedule_id))
+        decision = evaluate_retry(connection, run_row, _stub_trigger(trigger_id))
         retry_run = None
         webhook_fired = False
 
@@ -165,10 +191,11 @@ def run_script(
     )
 
 
-def _stub_schedule(schedule_id: int | None) -> dict[str, Any]:
-    """A schedule-like dict used when an ad-hoc run has no schedule row."""
+def _stub_trigger(trigger_id: int | None) -> dict[str, Any]:
+    """A trigger-like dict used when an ad-hoc / webhook run has no schedule trigger row."""
     return {
-        "id": schedule_id or 0,
+        "id": trigger_id or 0,
+        "kind": "schedule",
         "retry_max": 0,
         "retry_backoff_seconds": 0,
         "alert_webhook_url": None,
