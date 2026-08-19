@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { AppShell } from "@/components/AppShell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -11,6 +12,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/api/client";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 type Run = {
   id: string;
@@ -42,6 +44,7 @@ export function Dashboard() {
     : 0;
 
   const runRows = runs.slice(0, 8);
+  const isMobile = useIsMobile();
 
   return (
     <AppShell>
@@ -61,7 +64,41 @@ export function Dashboard() {
             <CardTitle>Recent runs</CardTitle>
           </CardHeader>
           <CardContent>
-            <Table>
+            {isMobile ? (
+              <div className="space-y-2">
+                {runRows.length === 0 && (
+                  <div className="text-center text-muted-foreground">
+                    No runs yet.
+                  </div>
+                )}
+                {runRows.map((r: any) => (
+                  <Link
+                    key={r.id}
+                    to={`/kindling/runs/${r.id}`}
+                    className="flex items-center justify-between rounded-md border p-3 hover:bg-muted"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate font-medium">{r.script_name}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {new Date(r.started_at).toLocaleString()} · {r.duration}
+                      </div>
+                    </div>
+                    <Badge
+                      variant={
+                        r.status === "failed"
+                          ? "destructive"
+                          : r.status === "success"
+                            ? "success"
+                            : "secondary"
+                      }
+                    >
+                      {r.status}
+                    </Badge>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Script</TableHead>
@@ -105,6 +142,7 @@ export function Dashboard() {
                 )}
               </TableBody>
             </Table>
+            )}
           </CardContent>
         </Card>
       </div>
