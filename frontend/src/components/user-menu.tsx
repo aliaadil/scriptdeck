@@ -1,6 +1,7 @@
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { LogOut, User as UserIcon } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -15,6 +16,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 export function UserMenu() {
   const { user, logout } = useAuth();
   const nav = useNavigate();
+  const isMobile = useIsMobile();
   if (!user) return null;
   const initials = user.email.slice(0, 2).toUpperCase();
   return (
@@ -38,6 +40,13 @@ export function UserMenu() {
         <DropdownMenuItem onClick={() => nav("/kindling/settings")}>
           <UserIcon className="mr-2 h-4 w-4" /> Profile
         </DropdownMenuItem>
+        {user?.role === "admin" && isMobile && (
+          <DropdownMenuItem asChild>
+            <Link to="/kindling/settings" className="flex items-center gap-2">
+              <UserIcon className="mr-2 h-4 w-4" /> Settings
+            </Link>
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem
           onClick={async () => {
             await logout();
