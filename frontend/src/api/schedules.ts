@@ -9,6 +9,9 @@ export type Schedule = {
   overlap_policy?: "skip" | "queue" | "parallel";
   queue_max?: number;
   run_count: number;
+  // Issue #17: per-trigger params exported to the script as
+  // SCRIPTDECK_PARAM_<KEY> + SCRIPTDECK_PARAMS_JSON.
+  params?: Record<string, string> | null;
 };
 
 export const listSchedules = (scriptId?: number) =>

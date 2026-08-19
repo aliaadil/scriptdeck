@@ -6,6 +6,7 @@ import { Dashboard } from "@/pages/Dashboard";
 import { Scripts } from "@/pages/Scripts";
 import { ScriptEdit } from "@/pages/ScriptEdit";
 import { ScriptNew } from "@/pages/ScriptNew";
+import { ScriptTriggers } from "@/pages/ScriptTriggers";
 import { Schedules } from "@/pages/Schedules";
 import { Runs } from "@/pages/Runs";
 import { RunView } from "@/pages/RunView";
@@ -20,6 +21,7 @@ const router = createBrowserRouter([
     // react-router ranks static routes higher regardless of order.
     { path: "scripts/new", element: <ScriptNew /> },
     { path: "scripts/:id", element: <ScriptEdit /> },
+    { path: "scripts/:id/triggers", element: <ScriptTriggers /> },
     { path: "schedules", element: <Schedules /> },
     { path: "runs", element: <Runs /> },
     { path: "runs/:id", element: <RunView /> },

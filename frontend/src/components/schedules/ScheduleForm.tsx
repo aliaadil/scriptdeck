@@ -32,6 +32,10 @@ export type SchedulePayload = {
   queue_max: number;
   retry_max: number;
   retry_backoff: number;
+  // Issue #17: per-trigger params. Optional in the form so existing
+  // callers keep working — undefined serialises to "no params" (defaults
+  // to '{}' on the backend).
+  params?: Record<string, string> | null;
 };
 
 const DEFAULT_CRON = "0 9 * * *";
