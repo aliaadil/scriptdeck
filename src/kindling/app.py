@@ -18,6 +18,9 @@ from kindling.api.schedules import router as schedules_router
 from kindling.api.scripts import router as scripts_router
 from kindling.api.stats import router as stats_router
 from kindling.api.users import router as users_router
+from kindling.api.webhooks import nested_router as webhooks_nested_router
+from kindling.api.webhooks import public_router as webhooks_public_router
+from kindling.api.webhooks import router as webhooks_router
 from kindling.config import Settings
 from kindling.db import make_engine, run_migrations, run_migrations_sync
 from kindling.db.engine import session_factory as make_session_factory
@@ -116,6 +119,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(stats_router, prefix="/api/kindling")
     app.include_router(presets_router, prefix="/api/kindling")
     app.include_router(admin_router, prefix="/api/kindling")
+    app.include_router(webhooks_router, prefix="/api/kindling")
+    # Nested ``/api/kindling/scripts/<id>/webhooks`` lives at the same
+    # prefix as the other scripts API; it owns its own router so the
+    # webhook CRUD router doesn't have to special-case the URL shape.
+    app.include_router(webhooks_nested_router, prefix="/api/kindling")
+    # Public fire endpoint lives outside the /api/kindling prefix so it's
+    # visually distinct from the JWT-protected API surface — operators
+    # expect webhook URLs to look like https://host/webhooks/<token>.
+    app.include_router(webhooks_public_router)
 
     # Apply migrations eagerly so tests (which don't trigger lifespan) see the
     # schema. `run_migrations_sync` is idempotent. In production the lifespan

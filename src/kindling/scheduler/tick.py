@@ -180,6 +180,14 @@ async def _tick(
             run_id, _, _ = await create_run(s, script_id=sid, schedule_id=row["id"])
             await s.commit()
 
+            # Snapshot the schedule's per-trigger params so the runner can
+            # export them as SCRIPTDECK_PARAM_<KEY> + SCRIPTDECK_PARAMS_JSON.
+            # Two schedules on the same script can carry different flag sets
+            # without mutating the script row.
+            from kindling.services.webhook_service import decode_params as _decode_params
+
+            trigger_params = _decode_params(row.get("params_json"))
+
             script = Script(
                 id=sid,
                 user_id=row["user_id"],
@@ -199,6 +207,7 @@ async def _tick(
                 concurrency=concurrency,
                 storage_dir=storage_dir,
                 session_factory=session_factory,
+                trigger_params=trigger_params,
             )
 
         # ---- Phase 2: due retries (pending_retry -> running) ----
@@ -266,6 +275,7 @@ def _schedule(
     concurrency: asyncio.Semaphore,
     storage_dir: Path,
     session_factory,
+    trigger_params: dict[str, str] | None = None,
 ) -> None:
     """Create and register the background run task so its outcome isn't lost."""
     task = asyncio.create_task(
@@ -278,6 +288,7 @@ def _schedule(
             storage_dir=storage_dir,
             session_factory=session_factory,
             active_procs=(app.state.active_procs if app is not None else None),
+            trigger_params=trigger_params or {},
         )
     )
     if app is not None:
@@ -304,6 +315,7 @@ async def _execute_and_finalize(
     storage_dir,
     session_factory,
     active_procs=None,
+    trigger_params: dict[str, str] | None = None,
 ):
     try:
         result = await run_script(
@@ -314,6 +326,7 @@ async def _execute_and_finalize(
             concurrency=concurrency,
             storage_dir=storage_dir,
             active_procs=active_procs,
+            trigger_params=trigger_params,
         )
         status = "success" if result.exit_code == 0 else "failure"
     except Exception as exc:

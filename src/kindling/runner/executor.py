@@ -46,6 +46,7 @@ async def run_script(
     env_ciphertext: str | None = None,
     env_nonce: str | None = None,
     active_procs: dict[int, asyncio.subprocess.Process] | None = None,
+    trigger_params: dict[str, str] | None = None,
 ) -> RunResult:
     from kindling.config import get_settings
     from kindling.runner.registry import get_runner
@@ -57,6 +58,25 @@ async def run_script(
 
     user_root = (storage_dir / "users" / str(script.user_id)).resolve()
     user_root.mkdir(parents=True, exist_ok=True)
+
+    # Pre-encode the params blob so both the sandboxed and legacy paths
+    # export the same env contract. Issue #17: every per-trigger key/value
+    # becomes SCRIPTDECK_PARAM_<KEY>; the full map is also exposed as a
+    # single SCRIPTDECK_PARAMS_JSON blob for callers that want it whole.
+    import json as _json
+
+    trigger_env: dict[str, str] = {}
+    if trigger_params:
+        for k, v in trigger_params.items():
+            # Uppercase the key so a stored ``{"region": "eu"}`` surfaces
+            # as ``SCRIPTDECK_PARAM_REGION`` (matches the documented env
+            # contract; tests/scripts rely on the uppercase form).
+            trigger_env[f"SCRIPTDECK_PARAM_{k.upper()}"] = str(v)
+        trigger_env["SCRIPTDECK_PARAMS_JSON"] = _json.dumps(
+            {k: str(v) for k, v in trigger_params.items()},
+            separators=(",", ":"),
+            sort_keys=True,
+        )
 
     async with concurrency:
         async with per_script_lock(script.id, storage_dir / "locks"):
@@ -76,6 +96,10 @@ async def run_script(
                     decrypted = env_service.decrypt_lines(env_ciphertext, env_nonce)
                     if isinstance(decrypted, dict):
                         script_env = decrypted
+                # trigger_env sits above the encrypted .env so the operator
+                # can't accidentally override a SCRIPTDECK_PARAM_<KEY> by
+                # putting it in the .env file.
+                script_env.update(trigger_env)
 
                 if settings.sandbox_enabled:
                     # Imports are lazy because the sandbox module dlopens
@@ -111,6 +135,7 @@ async def run_script(
                             stdout=asyncio.subprocess.PIPE,
                             stderr=asyncio.subprocess.STDOUT,
                             cwd=str(work_dir),
+                            env=merged_env,
                         )
                         if active_procs is not None:
                             active_procs[run_id] = proc

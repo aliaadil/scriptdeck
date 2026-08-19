@@ -16,6 +16,7 @@ from kindling.services.schedule_service import (
     advance_next_run,
     compute_next_run,
 )
+from kindling.services.webhook_service import encode_params as encode_trigger_params
 
 router = APIRouter(prefix="/schedules")
 
@@ -47,6 +48,11 @@ class ScheduleCreate(BaseModel):
     include_days: list[int] | None = None
     overlap_policy: str = "skip"
     queue_max: int = Field(default=10, ge=1, le=100)
+    # Issue #17: per-trigger key/value bag exported as
+    # SCRIPTDECK_PARAM_<KEY> + SCRIPTDECK_PARAMS_JSON when the schedule
+    # fires. Two schedules on the same script can pass different flags
+    # without mutating the script row.
+    params: dict[str, str] | None = None
 
     @field_validator("blackout_dates")
     @classmethod
@@ -93,6 +99,9 @@ class ScheduleOut(BaseModel):
     queue_max: int
     queue_dropped: int
     run_count: int = 0
+    # Issue #17: decoded view of params_json. The runner re-encodes this
+    # back to JSON via the same encoder the API uses for the request.
+    params: dict[str, str] | None = None
 
 
 def _require(user: User) -> None:
@@ -103,6 +112,12 @@ def _require(user: User) -> None:
 def _row_to_out(row, run_count: int = 0) -> ScheduleOut:
     bo = json.loads(row["blackout_dates"]) if row["blackout_dates"] else None
     inc = json.loads(row["include_days"]) if row["include_days"] else None
+    # Decode params_json for the wire. Empty dict (default) collapses to
+    # None so the UI shows "no params" instead of an empty object.
+    raw_params = row.get("params_json") or "{}"
+    params = json.loads(raw_params) if raw_params != "{}" else None
+    if params is not None and not isinstance(params, dict):
+        params = None
     return ScheduleOut(
         id=row["id"], script_id=row["script_id"], kind=row["kind"],
         expression=row["expression"], enabled=bool(row["enabled"]),
@@ -112,6 +127,7 @@ def _row_to_out(row, run_count: int = 0) -> ScheduleOut:
         overlap_policy=row["overlap_policy"], queue_max=row["queue_max"],
         queue_dropped=row["queue_dropped"],
         run_count=int(run_count),
+        params=params,
     )
 
 
@@ -213,6 +229,7 @@ async def create(body: ScheduleCreate, request: Request,
                 include_days=json.dumps(body.include_days) if body.include_days else None,
                 overlap_policy=body.overlap_policy,
                 queue_max=body.queue_max,
+                params_json=encode_trigger_params(body.params),
             ).returning(*t.c)
         )
         row = (await s.execute(stmt)).mappings().one()
@@ -248,6 +265,7 @@ async def update_schedule(schedule_id: int, body: ScheduleCreate, request: Reque
             include_days=json.dumps(body.include_days) if body.include_days else None,
             overlap_policy=body.overlap_policy,
             queue_max=body.queue_max,
+            params_json=encode_trigger_params(body.params),
         ))
         await s.commit()
         row = (await s.execute(select(t).where(t.c.id == schedule_id))).mappings().one()

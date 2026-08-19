@@ -123,9 +123,38 @@ schedules = Table(
     Column("overlap_policy", String, nullable=False, default="skip"),
     Column("queue_max", Integer, nullable=False, default=10),
     Column("queue_dropped", Integer, nullable=False, default=0),
+    # Issue #17: per-trigger key/value bag. The runner exports each
+    # top-level key as SCRIPTDECK_PARAM_<KEY>; default '{}' is non-null
+    # JSON so legacy rows behave identically post-migration.
+    Column("params_json", String, nullable=False, server_default=text("'{}'")),
     CheckConstraint("kind IN ('cron', 'interval')", name="schedules_kind_check"),
     Index("idx_schedules_script", "script_id"),
     Index("idx_schedules_due", "enabled", "next_run_at"),
+)
+
+webhooks = Table(
+    "webhooks",
+    mapper_registry.metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column(
+        "script_id",
+        Integer,
+        ForeignKey("scripts.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    # 32 url-safe random bytes (~190 bits of entropy). The token is the
+    # only credential at the public /webhooks/<token> endpoint, so it
+    # must not be guessable; regeneration rotates this column in place.
+    Column("secret_token", String, nullable=False, unique=True),
+    Column("enabled", Integer, nullable=False, default=1),
+    # Same env-encoding contract as schedules.params_json.
+    Column("params_json", String, nullable=False, server_default=text("'{}'")),
+    Column("description", String),
+    Column("created_at", String, nullable=False),
+    Column("last_fired_at", String),
+    Column("fire_count", Integer, nullable=False, default=0),
+    CheckConstraint("enabled IN (0, 1)", name="webhooks_enabled_check"),
+    Index("idx_webhooks_script", "script_id"),
 )
 
 runs = Table(
