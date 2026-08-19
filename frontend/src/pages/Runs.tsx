@@ -331,11 +331,11 @@ export function Runs() {
             <CardTitle className="text-sm font-medium">History</CardTitle>
           </CardHeader>
           {isMobile ? (
-            <div className="space-y-2 p-3">
+            <div className="space-y-2">
               {historyRows.length === 0 && (
                 <div className="text-center text-muted-foreground">No runs yet.</div>
               )}
-              {historyRows.map((r: any) => (
+              {historyRows.map((r) => (
                 <Link
                   key={r.id}
                   to={`/kindling/runs/${r.id}`}
@@ -344,10 +344,14 @@ export function Runs() {
                   <div className="min-w-0">
                     <div className="truncate font-medium">{r.script_name}</div>
                     <div className="text-xs text-muted-foreground">
-                      {new Date(r.started_at).toLocaleString()} · {r.duration}
+                      {new Date(r.started_at).toLocaleString()} · <RunningDuration
+                        started_at={r.started_at}
+                        ended_at={r.ended_at}
+                        status={r.status}
+                      />
                     </div>
                   </div>
-                  <Badge variant={r.status === "failed" ? "destructive" : r.status === "success" ? "success" : "secondary"}>
+                  <Badge variant={variantFor(r.status)}>
                     {r.status}
                   </Badge>
                 </Link>
