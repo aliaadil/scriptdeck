@@ -21,6 +21,15 @@ import {
 } from "@/components/ui/empty";
 import { toast } from "@/components/ui/sonner";
 import { Plus } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
+
+type ScriptRow = {
+  id: string | number;
+  name: string;
+  language?: string | null;
+  schedule?: string | null;
+  last_run?: string | { status?: string; ago?: string } | null;
+};
 
 export function Scripts() {
   const qc = useQueryClient();
@@ -43,6 +52,8 @@ export function Scripts() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const isMobile = useIsMobile();
+
   return (
     <AppShell>
       <div className="space-y-6">
@@ -53,6 +64,34 @@ export function Scripts() {
           </Button>
         </div>
         <Card>
+          {isMobile ? (
+            <div className="space-y-2">
+              {scripts.length === 0 && (
+                <div className="p-3 text-center text-muted-foreground">
+                  No scripts.
+                </div>
+              )}
+              {(scripts as ScriptRow[]).map((s) => (
+                <Link
+                  key={s.id}
+                  to={`/kindling/scripts/${s.id}`}
+                  className="flex items-center justify-between rounded-md border p-3 hover:bg-muted"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate font-medium">{s.name}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {s.last_run && typeof s.last_run === "object"
+                        ? `last run: ${s.last_run.status ?? "—"} · ${s.last_run.ago ?? "—"}`
+                        : s.last_run
+                          ? new Date(s.last_run).toLocaleString()
+                          : "never run"}
+                    </div>
+                  </div>
+                  <Badge variant="secondary">{s.language ?? "—"}</Badge>
+                </Link>
+              ))}
+            </div>
+          ) : (
           <Table>
             <TableHeader>
               <TableRow>
@@ -124,6 +163,7 @@ export function Scripts() {
               )}
             </TableBody>
           </Table>
+          )}
         </Card>
       </div>
     </AppShell>

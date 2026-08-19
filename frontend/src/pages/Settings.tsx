@@ -124,11 +124,11 @@ export function Settings() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" value={user?.email ?? ""} disabled />
+              <Input id="email" className="w-full" value={user?.email ?? ""} disabled />
             </div>
             <div className="space-y-2">
               <Label htmlFor="name">Display name</Label>
-              <Input id="name" placeholder="Your name" />
+              <Input id="name" className="w-full" placeholder="Your name" />
             </div>
           </CardContent>
         </Card>
@@ -174,6 +174,7 @@ export function Settings() {
               <Label htmlFor="instance">Instance name</Label>
               <Input
                 id="instance"
+                className="w-full"
                 value={instanceName}
                 onChange={(e) => setInstanceName(e.target.value)}
               />
@@ -218,7 +219,7 @@ export function Settings() {
                               })
                             }
                           >
-                            <SelectTrigger>
+                            <SelectTrigger className="w-full">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -252,11 +253,12 @@ export function Settings() {
                 <CardDescription>Create an invite for a new user.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-3">
+                <div className="grid w-full gap-4 md:grid-cols-3">
                   <div className="space-y-2 md:col-span-2">
                     <Label htmlFor="invite-email">Email</Label>
                     <Input
                       id="invite-email"
+                      className="w-full"
                       type="email"
                       value={inviteEmail}
                       onChange={(e) => setInviteEmail(e.target.value)}
@@ -268,7 +270,7 @@ export function Settings() {
                       value={inviteRole}
                       onValueChange={(v) => setInviteRole(v as "admin" | "editor" | "viewer")}
                     >
-                      <SelectTrigger id="invite-role">
+                      <SelectTrigger id="invite-role" className="w-full">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -290,7 +292,7 @@ export function Settings() {
                 {lastInviteToken && (
                   <div className="space-y-2">
                     <Label>Invite token</Label>
-                    <Input readOnly value={lastInviteToken} />
+                    <Input className="w-full" readOnly value={lastInviteToken} />
                   </div>
                 )}
               </CardContent>

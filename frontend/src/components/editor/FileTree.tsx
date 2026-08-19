@@ -25,7 +25,7 @@ export function FileTree({ files, active, onSelect, onAdd, onUpload, onDelete }:
   const groups = buildTree(files);
   return (
     <aside
-      className="flex h-full w-56 flex-col gap-2 border-r bg-muted/30 p-2"
+      className="hidden md:flex h-full w-56 flex-col gap-2 border-r bg-muted/30 p-2"
       data-testid="file-tree"
     >
       <div className="flex gap-1">

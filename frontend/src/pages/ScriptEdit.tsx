@@ -16,6 +16,13 @@ import { FileTree } from "@/components/editor/FileTree";
 import { EditorPanel } from "@/components/editor/EditorPanel";
 import { FileDialog } from "@/components/editor/FileDialog";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   listScriptsFiles,
   getScriptFile,
   deleteScriptFile,
@@ -298,6 +305,7 @@ export function ScriptEdit() {
               variant="outline"
               onClick={() => run.mutate()}
               disabled={!script || run.isPending}
+              className="min-h-10"
             >
               <Play className="mr-2 h-4 w-4" /> {run.isPending ? "Starting…" : "Run"}
             </Button>
@@ -308,6 +316,7 @@ export function ScriptEdit() {
               }}
               disabled={delScript.isPending}
               title="Delete script"
+              className="min-h-10"
             >
               <Trash2 className="mr-2 h-4 w-4" /> Delete
             </Button>
@@ -322,6 +331,26 @@ export function ScriptEdit() {
           </TabsList>
 
           <TabsContent value="editor" className="mt-2 flex min-h-0 flex-1 overflow-hidden">
+            <div className="md:hidden px-4 pb-2">
+              {activePath !== null && (
+                <Select
+                  value={activePath}
+                  onValueChange={setActivePath}
+                  disabled={files.length === 0}
+                >
+                  <SelectTrigger aria-label="Select file" className="w-full min-h-10">
+                    <SelectValue placeholder="Select file" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {files.map((f) => (
+                      <SelectItem key={f.path} value={f.path}>
+                        {f.path}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
             <FileTree
               files={files}
               active={activePath}
@@ -390,6 +419,7 @@ export function ScriptEdit() {
                   onClick={() => saveMeta.mutate()}
                   disabled={!name.trim() || saveMeta.isPending}
                   title={!name.trim() ? "Name cannot be empty" : undefined}
+                  className="min-h-10"
                 >
                   <Save className="mr-2 h-4 w-4" /> {saveMeta.isPending ? "Saving…" : "Save"}
                 </Button>

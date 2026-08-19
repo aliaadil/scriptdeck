@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   keepPreviousData,
   useQuery,
@@ -41,6 +41,7 @@ import {
 } from "@/components/ui/pagination";
 import { toast } from "@/components/ui/sonner";
 import { RunningDuration } from "@/components/runs/RunningDuration";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { X } from "lucide-react";
 
 function StartedCell({ iso }: { iso: string }) {
@@ -207,6 +208,9 @@ export function Runs() {
     (history.data?.length ?? 0) === 0 &&
     !history.isLoading;
 
+  const isMobile = useIsMobile();
+  const historyRows = history.data ?? [];
+
   return (
     <AppShell>
       <div className="mx-auto max-w-6xl space-y-6 p-6">
@@ -326,54 +330,83 @@ export function Runs() {
           <CardHeader className="px-4 py-3">
             <CardTitle className="text-sm font-medium">History</CardTitle>
           </CardHeader>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Run</TableHead>
-                <TableHead>Script</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Started</TableHead>
-                <TableHead>Duration</TableHead>
-                <TableHead>Exit</TableHead>
-                <TableHead>Schedule</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {(history.data ?? []).map((r) => (
-                <TableRow
+          {isMobile ? (
+            <div className="space-y-2">
+              {historyRows.length === 0 && (
+                <div className="text-center text-muted-foreground">No runs yet.</div>
+              )}
+              {historyRows.map((r) => (
+                <Link
                   key={r.id}
-                  tabIndex={0}
-                  onClick={() => nav(`/kindling/runs/${r.id}`)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") nav(`/kindling/runs/${r.id}`);
-                  }}
-                  className="cursor-pointer hover:bg-muted/50"
+                  to={`/kindling/runs/${r.id}`}
+                  className="flex items-center justify-between rounded-md border p-3 hover:bg-muted"
                 >
-                  <TableCell className="font-mono text-xs">
-                    #{String(r.id).slice(0, 6)}
-                  </TableCell>
-                  <TableCell>{r.script_name}</TableCell>
-                  <TableCell>
-                    <StatusBadge status={r.status} skip_reason={r.skip_reason} />
-                  </TableCell>
-                  <TableCell>
-                    <StartedCell iso={r.started_at} />
-                  </TableCell>
-                  <TableCell>
-                    <RunningDuration
-                      started_at={r.started_at}
-                      ended_at={r.ended_at}
-                      status={r.status}
-                    />
-                  </TableCell>
-                  <TableCell>{r.exit_code ?? "—"}</TableCell>
-                  <TableCell>
-                    <ScheduleCell id={r.schedule_id} timezone={r.schedule_timezone} />
-                  </TableCell>
-                </TableRow>
+                  <div className="min-w-0">
+                    <div className="truncate font-medium">{r.script_name}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {new Date(r.started_at).toLocaleString()} · <RunningDuration
+                        started_at={r.started_at}
+                        ended_at={r.ended_at}
+                        status={r.status}
+                      />
+                    </div>
+                  </div>
+                  <Badge variant={variantFor(r.status)}>
+                    {r.status}
+                  </Badge>
+                </Link>
               ))}
-            </TableBody>
-          </Table>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Run</TableHead>
+                  <TableHead>Script</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Started</TableHead>
+                  <TableHead>Duration</TableHead>
+                  <TableHead>Exit</TableHead>
+                  <TableHead>Schedule</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(history.data ?? []).map((r) => (
+                  <TableRow
+                    key={r.id}
+                    tabIndex={0}
+                    onClick={() => nav(`/kindling/runs/${r.id}`)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") nav(`/kindling/runs/${r.id}`);
+                    }}
+                    className="cursor-pointer hover:bg-muted/50"
+                  >
+                    <TableCell className="font-mono text-xs">
+                      #{String(r.id).slice(0, 6)}
+                    </TableCell>
+                    <TableCell>{r.script_name}</TableCell>
+                    <TableCell>
+                      <StatusBadge status={r.status} skip_reason={r.skip_reason} />
+                    </TableCell>
+                    <TableCell>
+                      <StartedCell iso={r.started_at} />
+                    </TableCell>
+                    <TableCell>
+                      <RunningDuration
+                        started_at={r.started_at}
+                        ended_at={r.ended_at}
+                        status={r.status}
+                      />
+                    </TableCell>
+                    <TableCell>{r.exit_code ?? "—"}</TableCell>
+                    <TableCell>
+                      <ScheduleCell id={r.schedule_id} timezone={r.schedule_timezone} />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </Card>
 
         {noMatches && (

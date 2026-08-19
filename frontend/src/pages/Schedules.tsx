@@ -1,10 +1,12 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
 import { api } from "@/api/client";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -29,6 +31,7 @@ import {
   type SchedulePayload,
 } from "@/components/schedules/ScheduleForm";
 import { getSchedule } from "@/api/schedules";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 type ScheduleRow = {
   id: number;
@@ -100,6 +103,8 @@ export function Schedules() {
   const isEditing = mode?.kind === "edit";
   const editingId = isEditing ? mode.row.id : null;
 
+  const isMobile = useIsMobile();
+
   return (
     <AppShell>
       <div className="space-y-6">
@@ -110,6 +115,40 @@ export function Schedules() {
           </Button>
         </div>
         <Card>
+          {isMobile ? (
+            <div className="space-y-2">
+              {schedules.length === 0 && (
+                <div className="p-3 text-center text-muted-foreground">
+                  No schedules.
+                </div>
+              )}
+              {schedules.map((s) => (
+                <Link
+                  key={s.id}
+                  to={`/kindling/schedules/${s.id}`}
+                  className="flex items-center justify-between rounded-md border p-3 hover:bg-muted"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate font-medium">
+                      <span className="font-mono text-xs">{s.expression}</span>
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        #{s.script_id} · {s.timezone ?? "UTC"}
+                      </span>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      next{" "}
+                      {s.next_run_at
+                        ? new Date(s.next_run_at).toLocaleString()
+                        : "—"}
+                    </div>
+                  </div>
+                  <Badge variant={s.enabled ? "success" : "secondary"}>
+                    {s.enabled ? "on" : "off"}
+                  </Badge>
+                </Link>
+              ))}
+            </div>
+          ) : (
           <Table>
             <TableHeader>
               <TableRow>
@@ -162,6 +201,7 @@ export function Schedules() {
               ))}
             </TableBody>
           </Table>
+          )}
         </Card>
       </div>
 
