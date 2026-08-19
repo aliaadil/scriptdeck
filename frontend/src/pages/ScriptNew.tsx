@@ -30,11 +30,11 @@ export function ScriptNew() {
         <p className="text-sm text-muted-foreground">Pick a language to get started.</p>
         <div className="space-y-2">
           <Label htmlFor="new-name">Name</Label>
-          <Input id="new-name" value={name} onChange={(e) => setName(e.target.value)} />
+          <Input id="new-name" className="w-full" value={name} onChange={(e) => setName(e.target.value)} />
         </div>
         <QuickStartCards onPick={(l) => create.mutate(l)} />
         <Card className="border-dashed">
-          <CardContent className="flex items-center justify-between p-4 text-sm">
+          <CardContent className="flex w-full flex-col-reverse gap-2 p-4 text-sm md:flex-row md:items-center md:justify-between">
             <span className="text-muted-foreground">Prefer to start blank?</span>
             <Button variant="outline" onClick={() => create.mutate("python")}>
               Blank editor
