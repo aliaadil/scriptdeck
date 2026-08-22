@@ -87,6 +87,19 @@ async def test_manual_run_invalid_params_422(app_ctx, monkeypatch_auth):
     assert r.status_code == 422
 
 
+@pytest.fixture(autouse=True)
+def _stub_finalize(monkeypatch):
+    """No-op the background ``_execute_and_finalize`` so the request-handler
+    task the test fires doesn't leak across pytest teardown and stall on an
+    aiosqlite future the test never resolves. These tests only assert on
+    the HTTP response, not the script execution.
+    """
+    async def _noop(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr("kindling.api.runs._execute_and_finalize", _noop)
+
+
 @pytest.mark.asyncio
 async def test_manual_run_without_params_unchanged(app_ctx, monkeypatch_auth):
     ac, app = app_ctx

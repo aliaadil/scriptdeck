@@ -84,6 +84,20 @@ async def _seed_webhook(app, *, enabled: int = 1, params_json: str | None = None
     return raw, int(sid)
 
 
+@pytest.fixture(autouse=True)
+def _stub_finalize(monkeypatch):
+    """Stub out the background-run finalize so webhook tests don't leave a
+    pending ``asyncio.Task`` holding an aiosqlite connection across pytest
+    teardown. Without this, ``test_webhook_does_not_require_jwt`` and its
+    siblings hang on Python 3.11/3.12 because the background task awaits a
+    SQLite future the test never gives it a chance to resolve.
+    """
+    async def _noop(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr("kindling.api.runs._execute_and_finalize", _noop)
+
+
 @pytest.mark.asyncio
 async def test_webhook_unknown_token_returns_404(webhook_ctx):
     ac, _app, _storage = webhook_ctx

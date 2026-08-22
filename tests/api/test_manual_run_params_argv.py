@@ -45,6 +45,19 @@ async def app_ctx(tmp_path):
         yield ac, app
 
 
+@pytest.fixture(autouse=True)
+def _stub_finalize(monkeypatch):
+    """No-op the background ``_execute_and_finalize`` so manual-run tests
+    don't leave a pending ``asyncio.Task`` holding an aiosqlite connection
+    across pytest teardown — otherwise pytest-asyncio hangs cancelling it
+    on Python 3.11/3.12.
+    """
+    async def _noop(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr("kindling.api.runs._execute_and_finalize", _noop)
+
+
 @pytest.mark.asyncio
 async def test_manual_run_with_params_argv_persists_list(app_ctx, monkeypatch_auth):
     ac, app = app_ctx
