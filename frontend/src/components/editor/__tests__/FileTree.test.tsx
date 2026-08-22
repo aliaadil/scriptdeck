@@ -18,6 +18,7 @@ describe("FileTree", () => {
         onAdd={() => {}}
         onUpload={() => {}}
         onDelete={() => {}}
+        language="python"
       />
     );
     expect(screen.getByText("main.py")).toBeInTheDocument();
@@ -36,9 +37,29 @@ describe("FileTree", () => {
         onAdd={() => {}}
         onUpload={() => {}}
         onDelete={() => {}}
+        language="python"
       />
     );
     fireEvent.click(screen.getByText("main.py"));
     expect(onSelect).toHaveBeenCalledWith("main.py");
+  });
+
+  it("renders a 'deps' badge on requirements.txt for python scripts", () => {
+    const files = [
+      { path: "main.py", size: 0, updated_at: "" },
+      { path: "requirements.txt", size: 0, updated_at: "" },
+    ];
+    render(
+      <FileTree
+        files={files}
+        active="main.py"
+        onSelect={() => {}}
+        onAdd={() => {}}
+        onUpload={() => {}}
+        onDelete={() => {}}
+        language="python"
+      />,
+    );
+    expect(screen.getByTestId("deps-badge")).toBeInTheDocument();
   });
 });

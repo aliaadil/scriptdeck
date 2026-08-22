@@ -9,6 +9,7 @@ type Props = {
   onAdd: () => void;
   onUpload: () => void;
   onDelete: (path: string) => void;
+  language: "python" | "node" | "bash";
 };
 
 function buildTree(files: FileEntry[]): Map<string, FileEntry[]> {
@@ -21,7 +22,7 @@ function buildTree(files: FileEntry[]): Map<string, FileEntry[]> {
   return groups;
 }
 
-export function FileTree({ files, active, onSelect, onAdd, onUpload, onDelete }: Props) {
+export function FileTree({ files, active, onSelect, onAdd, onUpload, onDelete, language }: Props) {
   const groups = buildTree(files);
   return (
     <aside
@@ -44,6 +45,9 @@ export function FileTree({ files, active, onSelect, onAdd, onUpload, onDelete }:
               {items.map((f) => {
                 const name = f.path.split("/").pop()!;
                 const isActive = f.path === active;
+                const showDepsBadge =
+                  ["python", "node"].includes(language) &&
+                  (f.path === "requirements.txt" || f.path === "package.json");
                 return (
                   <li
                     key={f.path}
@@ -53,11 +57,19 @@ export function FileTree({ files, active, onSelect, onAdd, onUpload, onDelete }:
                     <button
                       onClick={() => onSelect(f.path)}
                       className={[
-                        "flex-1 truncate rounded px-2 py-1 text-left",
+                        "flex flex-1 items-center truncate rounded px-2 py-1 text-left",
                         isActive ? "bg-primary/10 text-primary" : "hover:bg-muted",
                       ].join(" ")}
                     >
-                      {name}
+                      <span className="truncate">{name}</span>
+                      {showDepsBadge && (
+                        <span
+                          data-testid="deps-badge"
+                          className="ml-2 rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-secondary-foreground"
+                        >
+                          deps
+                        </span>
+                      )}
                     </button>
                     <button
                       onClick={() => onDelete(f.path)}

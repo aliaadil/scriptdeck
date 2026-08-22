@@ -370,6 +370,7 @@ export function ScriptEdit() {
               onDelete={(p) => {
                 if (window.confirm(`Delete ${p}?`)) del.mutate(p);
               }}
+              language={script.language}
             />
             <div className="min-w-0 flex-1">
               {activePath ? (
