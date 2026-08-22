@@ -626,7 +626,7 @@ export function ScriptEdit() {
               (Radix keeps the wrapper mounted), pushing the active form
               panel below the fold. */}
           <div className="relative min-h-0 flex-1">
-            <TabsContent value="editor" className="absolute inset-0 mt-2 flex overflow-hidden data-[state=inactive]:hidden">
+            <TabsContent value="editor" forceMount className="absolute inset-0 mt-2 flex overflow-hidden data-[state=inactive]:hidden">
             <div className="md:hidden px-4 pb-2">
               {activePath !== null && (
                 <Select
@@ -679,11 +679,11 @@ export function ScriptEdit() {
             </div>
           </TabsContent>
 
-          <TabsContent value="triggers" className="absolute inset-0 overflow-auto data-[state=inactive]:hidden">
+          <TabsContent value="triggers" forceMount className="absolute inset-0 overflow-auto data-[state=inactive]:hidden">
             {scriptIdValid ? <TriggersTab scriptId={scriptId} /> : null}
           </TabsContent>
 
-          <TabsContent value="logs" className="absolute inset-0 overflow-auto p-4 data-[state=inactive]:hidden">
+          <TabsContent value="logs" forceMount className="absolute inset-0 overflow-auto p-4 data-[state=inactive]:hidden">
             <div className="space-y-4">
               <Card>
                 <CardContent className="space-y-2 p-4">

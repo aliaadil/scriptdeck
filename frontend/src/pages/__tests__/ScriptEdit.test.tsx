@@ -246,6 +246,27 @@ describe("ScriptEdit", () => {
     await waitFor(() => expect(screen.getByRole("tab", { name: /logs/i })).toHaveAttribute("aria-selected", "true"));
   });
 
+  it("preserves editor content when toggling between tabs (force-mount fix)", async () => {
+    const user = userEvent.setup();
+    renderEditor();
+    const editor = (await screen.findAllByTestId("monaco-mock"))[0] as HTMLTextAreaElement;
+    await waitFor(() => expect(editor.value).toBe("# main.py"));
+
+    // Edit the file — value should persist when tabs flip.
+    fireEvent.change(editor, { target: { value: "# main.py\nMY EDIT" } });
+    await waitFor(() => expect(editor.value).toBe("# main.py\nMY EDIT"));
+
+    // Flip to Logs and back. EditorPanel used to unmount + remount here,
+    // resetting to ScriptEdit's stale `activeContent` (the original file
+    // content); forceMount on TabsContent keeps the editor mounted and
+    // its internal state intact.
+    await user.click(await screen.findByRole("tab", { name: /logs/i }));
+    await user.click(screen.getByRole("tab", { name: /editor/i }));
+
+    const editorAfter = screen.getAllByTestId("monaco-mock")[0] as HTMLTextAreaElement;
+    expect(editorAfter.value).toBe("# main.py\nMY EDIT");
+  });
+
   it("Logs tab lists recent runs and clicking one loads its log", async () => {
     const user = userEvent.setup();
     const runsResp = [
