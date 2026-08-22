@@ -21,10 +21,10 @@ import {
   updateTrigger,
   type CreateTriggerResponse,
   type Trigger,
+  type TriggerBody,
   type TriggerKind,
 } from "@/api/triggers";
 import { shlex } from "@/lib/shell";
-import { argsToJson } from "@/lib/argsToJson";
 
 type Draft = {
   kind: TriggerKind;
@@ -43,40 +43,36 @@ function defaultDraft(kind: TriggerKind): Draft {
 }
 
 type ParamsParseResult =
-  | { ok: true; value: Record<string, string> | null }
+  | { ok: true; argv: string[] | null }
   | { ok: false; error: string };
 
 function parseParamsText(text: string): ParamsParseResult {
   const trimmed = text.trim();
-  if (!trimmed) return { ok: true, value: null };
+  if (!trimmed) return { ok: true, argv: null };
   const r = shlex(trimmed);
   if (r.error) return { ok: false, error: r.error };
-  return argsToJson(r.tokens ?? []);
+  return { ok: true, argv: r.tokens ?? [] };
 }
 
 function paramsToText(p: Trigger["params_json"]): string {
-  // Stored as JSON object (params_json path) — render as a single shell-style
-  // line so the row matches the input format. Falls back to JSON.stringify
-  // only if a future caller hands us an unexpected shape.
-  if (!p || typeof p !== "object" || Array.isArray(p)) return "";
-  const parts: string[] = [];
-  for (const [k, v] of Object.entries(p as Record<string, unknown>)) {
-    if (typeof v === "string") {
-      parts.push(v === "true" ? `--${k}` : `--${k} ${v}`);
-    } else if (typeof v === "number" || typeof v === "boolean") {
-      parts.push(`--${k} ${String(v)}`);
-    } else {
-      parts.push(`--${k} ${JSON.stringify(v)}`);
+  // Read both shapes so legacy dict params (KINDLING_PARAM_<KEY>=value path)
+  // and new argv lists both display in the same single-line format that
+  // the input expects.
+  if (Array.isArray(p)) return p.map(String).join(" ");
+  if (p && typeof p === "object") {
+    const parts: string[] = [];
+    for (const [k, v] of Object.entries(p as Record<string, unknown>)) {
+      if (v === true || v === "true") parts.push(`--${k}`);
+      else parts.push(`--${k} ${String(v)}`);
     }
+    return parts.join(" ");
   }
-  return parts.join(" ");
+  return "";
 }
 
-function paramsPreview(value: Record<string, string> | null): string | null {
-  if (!value) return null;
-  return Object.entries(value)
-    .map(([k, v]) => `KINDLING_PARAM_${k.toUpperCase()}=${v}`)
-    .join("  ");
+function paramsPreview(argv: string[] | null): string | null {
+  if (!argv || argv.length === 0) return null;
+  return `argv: ${argv.join(" ")}`;
 }
 
 export function TriggersTab({ scriptId }: { scriptId: number }) {
@@ -146,15 +142,17 @@ function NewTriggerCard({
   const create = useMutation({
     mutationFn: () => {
       const parsed = parseParamsText(draft.paramsText);
-      const body: Parameters<typeof createTrigger>[1] = {
+      const body: TriggerBody = {
         kind: draft.kind,
         enabled: draft.enabled,
       };
       if (draft.kind !== "webhook") {
         body.expression = draft.expression;
       }
-      if (parsed.ok && parsed.value) {
-        body.params_json = parsed.value;
+      if (parsed.ok && parsed.argv && parsed.argv.length > 0) {
+        // Same argv shape as the Manual Run button: copy the value that
+        // worked manually into the trigger and they execute identically.
+        body.params_argv = parsed.argv;
       }
       return createTrigger(scriptId, body);
     },
@@ -176,8 +174,8 @@ function NewTriggerCard({
 
   const parsedParams = parseParamsText(draft.paramsText);
   const paramsError = !parsedParams.ok ? parsedParams.error : null;
-  const paramsValue = parsedParams.ok ? parsedParams.value : null;
-  const paramsPreviewText = paramsPreview(paramsValue);
+  const paramsArgv = parsedParams.ok ? parsedParams.argv : null;
+  const paramsPreviewText = paramsPreview(paramsArgv);
 
   return (
     <Card>
@@ -223,7 +221,7 @@ function NewTriggerCard({
             data-testid="trigger-params-input"
             value={draft.paramsText}
             onChange={(e) => setDraft({ ...draft, paramsText: e.target.value })}
-            placeholder="--region us-east-1 --shard 3 --verbose"
+            placeholder="users -p 9000"
             aria-invalid={paramsError != null}
             className="min-h-10 font-mono text-xs"
           />
@@ -361,7 +359,7 @@ function TriggerRow({
   const update = useMutation({
     mutationFn: () => {
       const parsed = parseParamsText(draft.paramsText);
-      const body: Parameters<typeof updateTrigger>[2] = {
+      const body: TriggerBody = {
         kind: draft.kind,
         enabled: draft.enabled,
         rotate_token: rotate && draft.kind === "webhook",
@@ -369,8 +367,9 @@ function TriggerRow({
       if (draft.kind !== "webhook") {
         body.expression = draft.expression;
       }
-      if (parsed.ok && parsed.value) {
-        body.params_json = parsed.value;
+      if (parsed.ok && parsed.argv && parsed.argv.length > 0) {
+        // Migrate legacy dict params over to argv on first save.
+        body.params_argv = parsed.argv;
       }
       return updateTrigger(scriptId, trigger.id, body);
     },
@@ -404,8 +403,8 @@ function TriggerRow({
 
   const parsedParams = parseParamsText(draft.paramsText);
   const paramsError = !parsedParams.ok ? parsedParams.error : null;
-  const paramsValue = parsedParams.ok ? parsedParams.value : null;
-  const paramsPreviewText = paramsPreview(paramsValue);
+  const paramsArgv = parsedParams.ok ? parsedParams.argv : null;
+  const paramsPreviewText = paramsPreview(paramsArgv);
 
   return (
     <div className="space-y-2 py-3">
@@ -482,7 +481,7 @@ function TriggerRow({
               data-testid="trigger-params-input"
               value={draft.paramsText}
               onChange={(e) => setDraft({ ...draft, paramsText: e.target.value })}
-              placeholder="--region us-east-1 --shard 3 --verbose"
+              placeholder="users -p 9000"
               aria-invalid={paramsError != null}
               className="min-h-9 font-mono text-xs"
             />

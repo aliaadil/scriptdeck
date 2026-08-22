@@ -14,8 +14,26 @@ export type Trigger = {
   timezone?: string | null;
   overlap_policy: "skip" | "queue" | "parallel";
   queue_max: number;
-  params_json?: Record<string, unknown> | null;
+  // Stored as either a JSON object (legacy env-var path) or a JSON array
+  // (argv path, same on-wire shape as Manual Run's params_argv). The
+  // frontend always writes argv now and renders both shapes for read.
+  params_json?: Record<string, unknown> | unknown[] | null;
   run_count: number;
+};
+
+/** Body for create / update. Exactly one of params_json / params_argv. */
+export type TriggerBody = {
+  kind: TriggerKind;
+  expression?: string | null;
+  enabled?: boolean;
+  timezone?: string | null;
+  overlap_policy?: "skip" | "queue" | "parallel";
+  retry_max?: number;
+  retry_backoff?: number;
+  queue_max?: number;
+  params_json?: Record<string, unknown>;
+  params_argv?: string[];
+  rotate_token?: boolean;
 };
 
 export type CreateTriggerResponse = Trigger & { token?: string };
@@ -23,10 +41,7 @@ export type CreateTriggerResponse = Trigger & { token?: string };
 export const listTriggers = (scriptId: number) =>
   api<Trigger[]>(`/scripts/${scriptId}/triggers`);
 
-export const createTrigger = (
-  scriptId: number,
-  body: Partial<Trigger> & { kind: TriggerKind; rotate_token?: boolean },
-) =>
+export const createTrigger = (scriptId: number, body: TriggerBody) =>
   api<CreateTriggerResponse>(`/scripts/${scriptId}/triggers`, {
     method: "POST",
     body: JSON.stringify(body),
@@ -35,7 +50,7 @@ export const createTrigger = (
 export const updateTrigger = (
   scriptId: number,
   triggerId: number,
-  body: Partial<Trigger> & { kind: TriggerKind; rotate_token?: boolean },
+  body: TriggerBody,
 ) =>
   api<CreateTriggerResponse>(`/scripts/${scriptId}/triggers/${triggerId}`, {
     method: "PUT",

@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import delete, func, insert, select, update
 
 from kindling.api.deps import require_script_owner
+from kindling.api._params import check_params_argv, check_params_exclusive, check_params_json
 from kindling.api.webhooks import hash_token
 from kindling.auth.deps import current_user
 from kindling.auth.users import User
@@ -57,7 +58,14 @@ class TriggerCreate(BaseModel):
     retry_max: int = Field(default=0, ge=0)
     retry_backoff: int = Field(default=0, ge=0)
     queue_max: int = Field(default=10, ge=1, le=100)
+    # Trigger params accept EITHER form. They describe the same thing --
+    # what the runner should execute -- and exactly one path is honored:
+    #   params_json: dict (legacy) -> KINDLING_PARAM_<KEY>=<value> env vars,
+    #     then language-mapped argv via argv_for().
+    #   params_argv: list[str] -> appended verbatim after the entrypoint.
+    # Same input shape as the Manual Run endpoint.
     params_json: dict[str, Any] | None = None
+    params_argv: list[str] | None = None
 
     @field_validator("overlap_policy")
     @classmethod
@@ -68,17 +76,13 @@ class TriggerCreate(BaseModel):
 
     @field_validator("params_json")
     @classmethod
-    def _check_params(cls, v: dict[str, Any] | None) -> dict[str, Any] | None:
-        if v is None:
-            return v
-        for k, val in v.items():
-            if not isinstance(k, str) or not k:
-                raise ValueError("params_json keys must be non-empty strings")
-            if not isinstance(val, (str, int, float, bool)):
-                raise ValueError(
-                    f"params_json[{k!r}] must be a primitive"
-                )
-        return v
+    def _check_params_json(cls, v: dict[str, Any] | None) -> dict[str, Any] | None:
+        return check_params_json(v)
+
+    @field_validator("params_argv")
+    @classmethod
+    def _check_params_argv(cls, v: list[str] | None) -> list[str] | None:
+        return check_params_argv(v)
 
     @model_validator(mode="after")
     def _kind_appropriate(self) -> TriggerCreate:
@@ -87,10 +91,13 @@ class TriggerCreate(BaseModel):
                 raise ValueError("timezone not allowed for kind='webhook'")
             self.expression = None
         else:
-            if self.params_json is not None:
-                raise ValueError("params_json only allowed for kind='webhook'")
+            # cron / interval triggers accept both legacy params_json and
+            # params_argv; legacy had this restriction, but the manual-run
+            # path uses argv too so callers shouldn't be surprised.
             if not self.expression:
                 raise ValueError(f"expression required for kind='{self.kind}'")
+        # Mutual exclusion (both describing "what the script receives").
+        check_params_exclusive(self.params_json, self.params_argv)
         return self
 
 
@@ -105,12 +112,24 @@ class TriggerUpdate(BaseModel):
     retry_backoff: int = Field(default=0, ge=0)
     queue_max: int = Field(default=10, ge=1, le=100)
     params_json: dict[str, Any] | None = None
+    params_argv: list[str] | None = None
     rotate_token: bool = False
+
+    @field_validator("params_json")
+    @classmethod
+    def _check_params_json(cls, v: dict[str, Any] | None) -> dict[str, Any] | None:
+        return check_params_json(v)
+
+    @field_validator("params_argv")
+    @classmethod
+    def _check_params_argv(cls, v: list[str] | None) -> list[str] | None:
+        return check_params_argv(v)
 
     @model_validator(mode="after")
     def _kind_appropriate(self) -> TriggerUpdate:
         if self.kind == "webhook":
             self.expression = None
+        check_params_exclusive(self.params_json, self.params_argv)
         return self
 
 
@@ -127,12 +146,42 @@ class TriggerOut(BaseModel):
     timezone: str | None
     overlap_policy: str
     queue_max: int
-    params_json: dict[str, Any] | None = None
+    # Either form, mirroring the input. Frontend renders both via shlex.
+    params_json: dict[str, Any] | list[Any] | None = None
     run_count: int = 0
 
 
+def _coerce_params_json(raw: str | None) -> dict[str, Any] | list[Any] | None:
+    """Parse the schedules.params_json column. Accepts either a JSON object
+    (legacy env-var path) or a JSON array (argv path) -- both shapes share
+    the same column. Returns None when the column is empty / blank.
+    """
+    if not raw:
+        return None
+    try:
+        parsed = json.loads(raw)
+    except (ValueError, TypeError):
+        return None
+    if isinstance(parsed, (dict, list)):
+        return parsed
+    return None
+
+
+def _serialize_params(
+    params_json: dict[str, Any] | None, params_argv: list[str] | None,
+) -> str | None:
+    """Pick exactly one of (params_json, params_argv) and JSON-encode it for
+    the schedules.params_json column. Both inputs None → None.
+    """
+    if params_argv is not None:
+        return json.dumps(params_argv)
+    if params_json is not None:
+        return json.dumps(params_json)
+    return None
+
+
 def _row_to_out(row, run_count: int = 0) -> TriggerOut:
-    params = json.loads(row["params_json"]) if row.get("params_json") else None
+    params = _coerce_params_json(row.get("params_json"))
     return TriggerOut(
         id=row["id"],
         script_id=row["script_id"],
@@ -217,7 +266,7 @@ async def create_trigger(
                 timezone=body.timezone,
                 overlap_policy=body.overlap_policy,
                 queue_max=body.queue_max,
-                params_json=json.dumps(body.params_json) if body.params_json else None,
+                params_json=_serialize_params(body.params_json, body.params_argv),
                 webhook_token_hash=token_hash,
             ).returning(*t.c)
         )).mappings().one()
@@ -265,7 +314,7 @@ async def update_trigger(
             timezone=body.timezone,
             overlap_policy=body.overlap_policy,
             queue_max=body.queue_max,
-            params_json=json.dumps(body.params_json) if body.params_json else None,
+            params_json=_serialize_params(body.params_json, body.params_argv),
             **({"webhook_token_hash": new_hash} if new_hash is not None else {}),
         ))
         await s.commit()

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from sqlalchemy import update
 
-from kindling.api.webhooks import trigger_params_env
+from kindling.api.webhooks import trigger_params_env_from_dict
 from kindling.runner.executor import Script, run_script
 from kindling.services.log_broker import LogBroker
 from kindling.services.run_service import (
@@ -34,6 +34,26 @@ log = logging.getLogger(__name__)
 def _table():
     from kindling.db.models import runs as _runs
     return _runs
+
+
+def _split_trigger_params(raw: str | None) -> tuple[dict[str, str] | None, list[str] | None]:
+    """Decide whether the stored params_json column is a JSON object (legacy
+    env-var path) or a JSON array (argv path). Returns ``(param_env,
+    param_argv)`` — exactly one will be non-None for any stored row, both
+    None when the column is empty.
+    """
+    if not raw:
+        return (None, None)
+    try:
+        parsed = json.loads(raw)
+    except (ValueError, TypeError):
+        return (None, None)
+    if isinstance(parsed, list):
+        argv = [str(t) for t in parsed if isinstance(t, str)]
+        return (None, argv)
+    if isinstance(parsed, dict):
+        return (trigger_params_env_from_dict(parsed), None)
+    return (None, None)
 
 
 def _parse_json_list(raw: str | None) -> list[str] | None:
@@ -199,10 +219,11 @@ async def _tick(
                 scripts_dir=storage_dir / "scripts" / str(sid),
                 requirements=[],
             )
-            # Per-trigger params: cron/interval triggers can also carry
-            # params_json — they share the same KINDLING_PARAM_<KEY> contract
-            # as webhook triggers (webhooks.py builds the same mapping).
-            param_env = trigger_params_env(row.get("params_json"))
+            # Per-trigger params: a stored JSON object becomes
+            # KINDLING_PARAM_<KEY>=<value> env vars (legacy path);
+            # a stored JSON array becomes raw argv appended after the
+            # entrypoint — same on-wire payload as the Manual Run button.
+            param_env, param_argv = _split_trigger_params(row.get("params_json"))
             _schedule(
                 app=app,
                 run_id=run_id,
@@ -213,6 +234,7 @@ async def _tick(
                 storage_dir=storage_dir,
                 session_factory=session_factory,
                 param_env=param_env,
+                param_argv=param_argv,
             )
 
         # ---- Phase 2: due retries (pending_retry -> running) ----
@@ -286,6 +308,7 @@ def _schedule(
     storage_dir: Path,
     session_factory,
     param_env: dict[str, str] | None = None,
+    param_argv: list[str] | None = None,
 ) -> None:
     """Create and register the background run task so its outcome isn't lost."""
     task = asyncio.create_task(
@@ -299,6 +322,7 @@ def _schedule(
             session_factory=session_factory,
             active_procs=(app.state.active_procs if app is not None else None),
             param_env=param_env,
+            param_argv=param_argv,
         )
     )
     if app is not None:
@@ -326,6 +350,7 @@ async def _execute_and_finalize(
     session_factory,
     active_procs=None,
     param_env: dict[str, str] | None = None,
+    param_argv: list[str] | None = None,
 ):
     try:
         result = await run_script(
@@ -337,6 +362,7 @@ async def _execute_and_finalize(
             storage_dir=storage_dir,
             active_procs=active_procs,
             param_env=param_env,
+            param_argv=param_argv,
         )
         status = "success" if result.exit_code == 0 else "failure"
     except Exception as exc:

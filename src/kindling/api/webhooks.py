@@ -165,7 +165,10 @@ async def fire_webhook(token: str, request: Request):
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="not found")
         script_id = int(row["script_id"])
         schedule_id = int(row["id"])
-        params_env = trigger_params_env(row["params_json"])
+        # Trigger params: a stored JSON object becomes KINDLING_PARAM_<KEY>
+        # env vars (legacy); a stored JSON array becomes raw argv appended
+        # to the entrypoint — same on-wire payload as the Manual Run button.
+        params_env, params_argv = _split_trigger_params(row["params_json"])
         # Resolve the script row in the same session so we have language/path.
         from kindling.db.models import scripts as _scripts
         script_row = (await s.execute(
@@ -233,6 +236,7 @@ async def fire_webhook(token: str, request: Request):
         run_id=run_id,
         script=runner_script,
         params_env=params_env,
+        params_argv=params_argv,
     )
     return {
         "ok": True,
@@ -248,7 +252,8 @@ def _schedule_execution(
     *,
     run_id: int,
     script: Script,
-    params_env: dict[str, str],
+    params_env: dict[str, str] | None,
+    params_argv: list[str] | None = None,
 ) -> None:
     """Create and register the background run task."""
     import asyncio
@@ -263,6 +268,7 @@ def _schedule_execution(
             script=script,
             app=app,
             param_env=params_env,
+            param_argv=params_argv,
         )
 
     task = asyncio.create_task(_run())
@@ -277,3 +283,22 @@ def _schedule_execution(
             log.exception("webhook background task failed: %s", exc)
 
     task.add_done_callback(_on_done)
+
+
+def _split_trigger_params(raw: str | None) -> tuple[dict[str, str] | None, list[str] | None]:
+    """Same shape decision as scheduler.tick._split_trigger_params: a JSON
+    object (legacy) becomes env vars; a JSON array becomes raw argv. Both
+    None when the column is empty.
+    """
+    if not raw:
+        return (None, None)
+    try:
+        parsed = json.loads(raw)
+    except (ValueError, TypeError):
+        return (None, None)
+    if isinstance(parsed, list):
+        argv = [str(t) for t in parsed if isinstance(t, str)]
+        return (None, argv)
+    if isinstance(parsed, dict):
+        return (trigger_params_env(parsed), None)
+    return (None, None)
