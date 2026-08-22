@@ -274,10 +274,31 @@ describe("ScriptEdit", () => {
     // Both recent-run rows are rendered and the selected run header appears.
     expect(await screen.findByTestId("recent-run-99")).toBeInTheDocument();
     expect(screen.getByTestId("recent-run-98")).toBeInTheDocument();
+    // No Cancel button on finished rows.
+    expect(screen.queryByTestId("cancel-run-99")).not.toBeInTheDocument();
 
     await user.click(screen.getByTestId("recent-run-98"));
     await waitFor(() =>
       expect(screen.getByText("Run #98")).toBeInTheDocument(),
     );
+  });
+
+  it("shows a Cancel button on a stuck running row", async () => {
+    const user = userEvent.setup();
+    const runsResp = [
+      { id: 50, script_id: 1, status: "running", exit_code: null, started_at: "2026-08-22T01:00:00Z", ended_at: null, schedule_id: null, trigger_kind: "manual", attempt: 0, retry_group: null },
+    ];
+    apiMock.mockImplementation((path: string) => {
+      if (path === "/scripts/1") return Promise.resolve(mockScript);
+      if (path.startsWith("/runs?script_id=1")) return Promise.resolve(runsResp);
+      return Promise.resolve({});
+    });
+
+    renderEditor();
+    await user.click(await screen.findByRole("tab", { name: /logs/i }));
+
+    // The X icon button for stopping a stuck run is present and labelled.
+    expect(await screen.findByTestId("cancel-run-50")).toBeInTheDocument();
+    expect(screen.getByLabelText("Cancel run 50")).toBeInTheDocument();
   });
 });

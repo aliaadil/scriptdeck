@@ -392,7 +392,11 @@ async def cancel(run_id: int, request: Request,
     async with sf() as s:
         if row["status"] != "running":
             return {"ok": True, "status": row["status"]}
-        await s.execute(update(t).where(t.c.id == run_id).values(status="cancelled"))
+        await s.execute(update(t).where(t.c.id == run_id).values(
+            status="cancelled",
+            ended_at=datetime.now(UTC).isoformat(),
+            exit_code=-1,
+        ))
         await s.commit()
     await request.app.state.log_broker.close(run_id, "cancelled", -1)
     return {"ok": True, "status": "cancelled"}

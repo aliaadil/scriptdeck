@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Save, Play, Trash2 } from "lucide-react";
+import { Save, Play, Trash2, X } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { api } from "@/lib/api";
 import { API_BASE, getToken } from "@/api/client";
@@ -14,6 +14,7 @@ import { toast } from "@/components/ui/sonner";
 import { FileTree } from "@/components/editor/FileTree";
 import { EditorPanel } from "@/components/editor/EditorPanel";
 import { FileDialog } from "@/components/editor/FileDialog";
+import { useAuth } from "@/auth/AuthProvider";
 import { TriggersTab } from "@/components/schedules/TriggersTab";
 import { LogViewer } from "@/components/runs/LogViewer";
 import {
@@ -33,7 +34,8 @@ import {
   type FileEntry,
   type ScriptOut,
 } from "@/api/scripts";
-import { listRuns } from "@/api/runs";
+import { listRuns, cancelRun } from "@/api/runs";
+import { ApiError } from "@/api/client";
 
 type RunInfo = {
   id: number;
@@ -119,6 +121,7 @@ export function ScriptEdit() {
   const { id } = useParams();
   const nav = useNavigate();
   const qc = useQueryClient();
+  const { user } = useAuth();
 
   // Creating a script now lives on its own page; bounce any stale /scripts/new
   // links that still resolve to this route.
@@ -239,6 +242,23 @@ export function ScriptEdit() {
     queryFn: () => listRuns({ script_id: scriptId, limit: 20 }),
     enabled: scriptIdValid,
     refetchInterval: 5000,
+  });
+
+  // Force-stop a stuck running row. The backend kills the live subprocess
+  // (if any) and marks status='cancelled' even when the runner died without
+  // finalizing, so the user never has to edit the DB by hand.
+  const cancelRecent = useMutation({
+    mutationFn: (id: number) => cancelRun(id),
+    onSuccess: () => {
+      toast.success("Run cancelled");
+      qc.invalidateQueries({ queryKey: ["runs", "by-script", scriptId] });
+      qc.invalidateQueries({ queryKey: ["run", currentRunId] });
+    },
+    onError: (e: Error) => {
+      if (e instanceof ApiError && e.status === 404) toast.error("Already finished");
+      else toast.error(e.message);
+      qc.invalidateQueries({ queryKey: ["runs", "by-script", scriptId] });
+    },
   });
 
   const delScript = useMutation({
@@ -470,15 +490,14 @@ export function ScriptEdit() {
                   {recentRuns.data && recentRuns.data.length > 0 ? (
                     <div className="divide-y">
                       {recentRuns.data.map((r) => (
-                        <button
+                        <div
                           key={r.id}
-                          type="button"
                           data-testid={`recent-run-${r.id}`}
                           onClick={() => {
                             setCurrentRunId(r.id);
                             setRunLog("");
                           }}
-                          className={`flex w-full items-center justify-between gap-2 py-2 text-left text-sm hover:bg-muted/50 ${
+                          className={`flex w-full cursor-pointer items-center justify-between gap-2 py-1 hover:bg-muted/50 ${
                             currentRunId === r.id ? "bg-muted/40" : ""
                           }`}
                         >
@@ -490,10 +509,27 @@ export function ScriptEdit() {
                             </span>
                             {r.trigger_kind ? <RunTriggerBadge kind={r.trigger_kind} /> : null}
                           </span>
-                          <span className="text-xs text-muted-foreground">
-                            exit {r.exit_code ?? "—"}
+                          <span className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">
+                              exit {r.exit_code ?? "—"}
+                            </span>
+                            {r.status === "running" && user?.role !== "viewer" && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                aria-label={`Cancel run ${r.id}`}
+                                data-testid={`cancel-run-${r.id}`}
+                                disabled={cancelRecent.isPending}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  cancelRecent.mutate(r.id);
+                                }}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            )}
                           </span>
-                        </button>
+                        </div>
                       ))}
                     </div>
                   ) : (
