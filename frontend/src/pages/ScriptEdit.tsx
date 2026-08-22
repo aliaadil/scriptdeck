@@ -413,7 +413,7 @@ export function ScriptEdit() {
         </header>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-0 flex-1 flex-col">
-          <TabsList className="mx-4 self-start">
+          <TabsList className="mx-4 mt-3 self-start">
             <TabsTrigger value="editor">Editor</TabsTrigger>
             <TabsTrigger value="triggers">Triggers</TabsTrigger>
             <TabsTrigger value="logs">Logs</TabsTrigger>
