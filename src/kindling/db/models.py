@@ -171,6 +171,10 @@ runs = Table(
     # UI needs an explicit field. Nullable for rows written before this
     # migration.
     Column("trigger_kind", String),
+    # Migration 017: params supplied to a manual run, stored as a JSON
+    # string. Nullable — schedule/webhook runs and pre-feature manual
+    # runs have no value.
+    Column("params_json", Text),
     CheckConstraint(
         "status IN ('running', 'success', 'failure', 'error', 'cancelled', "
         "'skipped', 'pending', 'pending_retry')",

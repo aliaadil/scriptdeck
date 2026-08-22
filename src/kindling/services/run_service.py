@@ -45,20 +45,13 @@ async def create_run(
     status: str = "running",
     skip_reason: str | None = None,
     retry_group: str | None = None,
+    params_json: str | None = None,
 ) -> tuple[int, str, str]:
     """Insert a new run row and return (run_id, started_at, retry_group).
 
-    ``trigger_kind`` labels the source of the run ('manual', 'cron',
-    'interval', 'webhook'). ``schedule_id`` is the FK to the schedules
-    table (which holds both cron/interval AND webhook trigger rows), so
-    the UI needs trigger_kind to render an accurate badge.
-
-    ``retry_group`` is the chain identity used by GET /api/runs?group=.
-    If ``None``, a new ULID is generated so the row has a chain identity
-    from the moment it's created (a single-row attempt chain — the
-    spec's "Retry State Machine" semantics — still needs the column
-    populated so the API can group the run with its sibling attempts).
-    Pass an existing ULID to thread an existing chain.
+    ``params_json`` is a serialized JSON object string written verbatim
+    to ``runs.params_json``. ``None`` keeps the column NULL — caller's
+    responsibility to json.dumps() before passing.
     """
     t = _table()
     rg = retry_group or _new_ulid()
@@ -73,6 +66,7 @@ async def create_run(
             skip_reason=skip_reason,
             retry_group=rg,
             started_at=started_at,
+            params_json=params_json,
         )
         .returning(t.c.id, t.c.started_at, t.c.retry_group)
     )
