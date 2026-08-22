@@ -75,6 +75,15 @@ function paramsPreview(argv: string[] | null): string | null {
   return `argv: ${argv.join(" ")}`;
 }
 
+/** Trim an ISO timestamp like "2026-08-22T17:59:30.224580+00:00" to a more
+ *  scannable "2026-08-22 17:59 UTC". Falls back to the raw string on parse
+ *  failure so we never lose information. */
+function formatNext(iso: string): string {
+  const m = iso.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/);
+  if (!m) return iso;
+  return `${m[1]} ${m[2]} UTC`;
+}
+
 export function TriggersTab({ scriptId }: { scriptId: number }) {
   const qc = useQueryClient();
 
@@ -409,8 +418,8 @@ function TriggerRow({
   return (
     <div className="space-y-2 py-3">
       <div className="flex items-start gap-3">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 text-sm">
+        <div className="flex-1 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full bg-secondary px-2 py-0.5 font-mono text-xs">
               {trigger.kind}
             </span>
@@ -419,20 +428,31 @@ function TriggerRow({
                 POST to /api/kindling/webhooks/&lt;your-token&gt;
               </span>
             ) : (
-              <span className="font-mono text-xs">
+              <span className="font-mono text-sm">
                 {trigger.expression ?? "(none)"}
               </span>
             )}
-            <span className="text-xs text-muted-foreground">
+            <span
+              className={
+                "rounded-full px-2 py-0.5 text-[11px] font-medium " +
+                (trigger.enabled
+                  ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                  : "bg-zinc-500/15 text-zinc-600 dark:text-zinc-400")
+              }
+            >
               {trigger.enabled ? "enabled" : "disabled"}
             </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
             {trigger.next_run_at ? (
-              <span className="text-xs text-muted-foreground">
-                next: {trigger.next_run_at}
+              <span>
+                next <span className="font-mono">{formatNext(trigger.next_run_at)}</span>
               </span>
+            ) : trigger.kind !== "webhook" ? (
+              <span className="italic">not scheduled</span>
             ) : null}
-            <span className="text-xs text-muted-foreground">
-              runs: {trigger.run_count}
+            <span>
+              <span className="font-mono">{trigger.run_count}</span> run{trigger.run_count === 1 ? "" : "s"}
             </span>
           </div>
           {trigger.params_json ? (
