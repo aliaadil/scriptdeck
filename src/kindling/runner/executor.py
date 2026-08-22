@@ -73,7 +73,19 @@ async def run_script(
                 else:
                     work_dir = (user_root / "node_modules" / str(script.id))
                 work_dir.mkdir(parents=True, exist_ok=True)
-                interpreter = await runner.provision(work_dir, script.requirements)
+                artifact_filename = runner.resolve_artifact_path()
+                script_source_dir = script.source_path.parent
+                artifact_candidate = script_source_dir / artifact_filename
+                artifact_path = (
+                    artifact_candidate if artifact_candidate.exists() else None
+                )
+                interpreter = await runner.provision(
+                    work_dir,
+                    script.requirements,
+                    artifact_path=artifact_path,
+                    log_broker=log_broker,
+                    run_id=run_id,
+                )
 
                 script_env: dict[str, str] = {}
                 if env_ciphertext and env_nonce:

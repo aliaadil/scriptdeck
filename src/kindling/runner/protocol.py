@@ -14,7 +14,14 @@ class LanguageRunner(Protocol):
 
     def resolve_artifact_path(self) -> str: ...
 
-    async def provision(self, work_dir: Path, deps: list[str]) -> Path: ...
+    async def provision(
+        self,
+        work_dir: Path,
+        deps: list[str],
+        artifact_path: Path | None = None,
+        log_broker: "LogBroker | None" = None,
+        run_id: int | None = None,
+    ) -> Path: ...
 
     def build_command(
         self, interpreter: Path, source_path: Path, env: dict[str, str]

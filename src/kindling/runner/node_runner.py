@@ -17,16 +17,38 @@ class NodeRunner:
         from kindling.services.dep_detect import detect_node_deps
         return detect_node_deps(source)
 
-    async def provision(self, work_dir: Path, deps: list[str]) -> Path:
+    async def provision(
+        self,
+        work_dir: Path,
+        deps: list[str],
+        artifact_path: Path | None = None,
+        log_broker: "LogBroker | None" = None,
+        run_id: int | None = None,
+    ) -> Path:
         pkg_path = work_dir / self.resolve_artifact_path()
-        if pkg_path.exists():
-            data = json.loads(pkg_path.read_text(encoding="utf-8"))
+        if artifact_path is not None and artifact_path.exists():
+            artifact_text = artifact_path.read_text(encoding="utf-8")
+            pkg_path.write_text(artifact_text, encoding="utf-8")
+            data = json.loads(artifact_text)
+            deps_for_log = list((data.get("dependencies") or {}).keys())
         else:
             data = {"name": "kindling-script", "version": "1.0.0", "private": True}
-        data["dependencies"] = {d: "*" for d in deps}
-        pkg_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-        if deps:
-            await _run(["npm", "install", "--silent"], cwd=work_dir)
+            data["dependencies"] = {d: "*" for d in deps}
+            pkg_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            deps_for_log = deps
+
+        if deps_for_log:
+            n = len(deps_for_log)
+            if log_broker is not None and run_id is not None:
+                await log_broker.publish(run_id, f"▶ Installing {n} packages…\n", 0)
+            try:
+                await _run(["npm", "install", "--silent"], cwd=work_dir)
+            except Exception as exc:
+                if log_broker is not None and run_id is not None:
+                    await log_broker.publish(run_id, f"✖ Install failed: {exc}\n", 0)
+                raise
+            if log_broker is not None and run_id is not None:
+                await log_broker.publish(run_id, f"✔ Installed {n} packages\n", 0)
         return Path("node")  # resolved on PATH
 
     def build_command(

@@ -16,24 +16,53 @@ class PythonRunner:
         from kindling.services.dep_detect import detect_python_deps
         return detect_python_deps(source)
 
-    async def provision(self, work_dir: Path, deps: list[str]) -> Path:
+    async def provision(
+        self,
+        work_dir: Path,
+        deps: list[str],
+        artifact_path: Path | None = None,
+        log_broker: "LogBroker | None" = None,
+        run_id: int | None = None,
+    ) -> Path:
         req = work_dir / self.resolve_artifact_path()
-        req.write_text("\n".join(deps) + ("\n" if deps else ""), encoding="utf-8")
+        if artifact_path is not None and artifact_path.exists():
+            # Honor the user-edited artifact verbatim; preserve pin versions.
+            artifact_text = artifact_path.read_text(encoding="utf-8")
+            req.write_text(artifact_text, encoding="utf-8")
+            deps_for_log = [
+                line.strip()
+                for line in artifact_text.splitlines()
+                if line.strip() and not line.strip().startswith("#")
+            ]
+        else:
+            req.write_text("\n".join(deps) + ("\n" if deps else ""), encoding="utf-8")
+            deps_for_log = deps
+
         venv = work_dir / ".venv"
         if not (venv / "bin" / "python").exists():
             await _run(["uv", "venv", str(venv)])
-        if deps:
-            await _run(
-                [
-                    "uv",
-                    "pip",
-                    "install",
-                    "--python",
-                    str((venv / "bin" / "python").resolve()),
-                    "-r",
-                    str(req.resolve()),
-                ]
-            )
+        if deps_for_log:
+            n = len(deps_for_log)
+            if log_broker is not None and run_id is not None:
+                await log_broker.publish(run_id, f"▶ Installing {n} packages…\n", 0)
+            try:
+                await _run(
+                    [
+                        "uv",
+                        "pip",
+                        "install",
+                        "--python",
+                        str((venv / "bin" / "python").resolve()),
+                        "-r",
+                        str(req.resolve()),
+                    ]
+                )
+            except Exception as exc:
+                if log_broker is not None and run_id is not None:
+                    await log_broker.publish(run_id, f"✖ Install failed: {exc}\n", 0)
+                raise
+            if log_broker is not None and run_id is not None:
+                await log_broker.publish(run_id, f"✔ Installed {n} packages\n", 0)
         return (venv / "bin" / "python").resolve()
 
     def build_command(
