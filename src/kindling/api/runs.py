@@ -13,6 +13,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, field_validator
 from sqlalchemy import insert, select, update
 
+from kindling.api._params import check_params_json
 from kindling.api.deps import require_run_owner, require_script_owner
 from kindling.auth.deps import current_user
 from kindling.auth.users import User
@@ -59,14 +60,7 @@ class RunTrigger(BaseModel):
     def _check_params(cls, v: dict[str, Any] | None) -> dict[str, Any] | None:
         # Mirror TriggerCreate.params_json rules so the manual endpoint
         # accepts exactly the same shape schedules and webhooks do.
-        if v is None:
-            return v
-        for k, val in v.items():
-            if not isinstance(k, str) or not k:
-                raise ValueError("params_json keys must be non-empty strings")
-            if not isinstance(val, (str, int, float, bool)):
-                raise ValueError(f"params_json[{k!r}] must be a primitive")
-        return v
+        return check_params_json(v)
 
 
 class RunOut(BaseModel):

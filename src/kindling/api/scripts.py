@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
+from kindling.api._params import check_params_json
 from kindling.api.deps import require_script_owner
 from kindling.api.runs import RunOut, _trigger_run
 from kindling.auth.deps import current_user
@@ -61,6 +64,20 @@ class FileContentIn(BaseModel):
 class FileCreateIn(BaseModel):
     path: str
     content: str = ""
+
+
+class _ManualRunBody(BaseModel):
+    """Optional body for POST /scripts/{id}/run.
+
+    Defined at module scope so it isn't recreated on every request, and
+    so the same params_json rules used by RunTrigger stay in sync.
+    """
+    params_json: dict[str, Any] | None = None
+
+    @field_validator("params_json")
+    @classmethod
+    def _check_params(cls, v: dict[str, Any] | None) -> dict[str, Any] | None:
+        return check_params_json(v)
 
 
 def _require(user: User) -> None:
@@ -219,27 +236,13 @@ async def run_script(script_id: int, request: Request,
     # all. Read it manually so we accept missing/empty/{} without 422,
     # but still let the Pydantic validator surface invalid params_json
     # values as 422.
-    from typing import Any as _Any
-    from pydantic import BaseModel, ValidationError, field_validator
-
-    class _ManualRunBody(BaseModel):
-        params_json: dict[str, _Any] | None = None
-
-        @field_validator("params_json")
-        @classmethod
-        def _check_params(cls, v):
-            if v is None:
-                return v
-            for k, val in v.items():
-                if not isinstance(k, str) or not k:
-                    raise ValueError("params_json keys must be non-empty strings")
-                if not isinstance(val, (str, int, float, bool)):
-                    raise ValueError(f"params_json[{k!r}] must be a primitive")
-            return v
-
     try:
         raw = await request.json()
-    except Exception:
+    except json.JSONDecodeError:
+        # Starlette's Request.json() raises json.JSONDecodeError when the
+        # body isn't valid JSON. Tolerate it here so empty/garbage bodies
+        # behave the same as no body at all (params_json stays None);
+        # downstream consumers shouldn't see non-JSON as a 500.
         raw = None
     if raw is None or raw == {}:
         body = _ManualRunBody(params_json=None)
