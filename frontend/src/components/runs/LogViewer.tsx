@@ -8,12 +8,33 @@ type Line =
 
 const TRACE_RE = /^(\s*)(File ".+", line \d+|at .+:\d+:\d+|Traceback \(most recent call last\))/;
 
+// Common envelope shapes that wrap the actual log line in a string field.
+// If JSON parses to an object with one of these keys as a string, render
+// the string directly instead of the JSON envelope.
+const ENVELOPE_KEYS = ["content", "message", "msg", "text", "output", "data"];
+
+function extractEnvelope(v: unknown): string | null {
+  if (typeof v !== "object" || v === null || Array.isArray(v)) return null;
+  const obj = v as Record<string, unknown>;
+  for (const key of ENVELOPE_KEYS) {
+    const val = obj[key];
+    if (typeof val === "string") return val;
+  }
+  return null;
+}
+
 function classify(text: string): Line {
   const stripped = text.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "");
   const trimmed = stripped.trim();
   if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
     try {
       const v = JSON.parse(trimmed);
+      const envelope = extractEnvelope(v);
+      if (envelope !== null) {
+        // Unwrap: render the inner string as a text line so the user
+        // sees the actual content, not the JSON envelope.
+        return { kind: "text", spans: parseAnsi(envelope) };
+      }
       return { kind: "json", value: v, raw: text };
     } catch {
       /* fall through */
