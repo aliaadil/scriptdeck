@@ -352,4 +352,65 @@ describe("ScriptEdit", () => {
       }),
     );
   });
+
+  it("shows description as read-only text with an edit pencil", async () => {
+    renderEditor();
+    const display = await screen.findByTestId("description-display");
+    expect(display).toHaveTextContent("d");
+    expect(screen.getByTestId("edit-description")).toBeInTheDocument();
+  });
+
+  it("hides the description input until the pencil toggles edit mode", async () => {
+    const user = userEvent.setup();
+    renderEditor();
+    expect(screen.queryByTestId("description-input")).not.toBeInTheDocument();
+    await user.click(await screen.findByTestId("edit-description"));
+    expect(await screen.findByTestId("description-input")).toBeInTheDocument();
+  });
+
+  it("falls back to an Add-description prompt when the script has none", async () => {
+    apiMock.mockImplementation((path: string) => {
+      if (path === "/scripts/1")
+        return Promise.resolve({ ...mockScript, description: null });
+      return Promise.resolve({});
+    });
+    renderEditor();
+    const display = await screen.findByTestId("description-display");
+    expect(display).toHaveTextContent(/add description/i);
+  });
+
+  it("shows the Saved indicator only when meta is clean", async () => {
+    const user = userEvent.setup();
+    renderEditor();
+    expect(await screen.findByTestId("saved-indicator")).toBeInTheDocument();
+    const nameInput = (await screen.findByTestId("name-input")) as HTMLInputElement;
+    await user.type(nameInput, "x");
+    await waitFor(() =>
+      expect(screen.queryByTestId("saved-indicator")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("uses a language-specific params placeholder for Python scripts", async () => {
+    const user = userEvent.setup();
+    renderEditor();
+    await user.click(await screen.findByLabelText("Show params"));
+    const textarea = (await screen.findByTestId(
+      "run-params-textarea",
+    )) as HTMLTextAreaElement;
+    expect(textarea.placeholder).toMatch(/positional/i);
+    expect(await screen.findByTestId("params-hint")).toHaveTextContent(/python/i);
+  });
+
+  it("uses a --key value hint for Node scripts", async () => {
+    apiMock.mockImplementation((path: string) => {
+      if (path === "/scripts/1")
+        return Promise.resolve({ ...mockScript, language: "node" });
+      return Promise.resolve({});
+    });
+    const user = userEvent.setup();
+    renderEditor();
+    await user.click(await screen.findByLabelText("Show params"));
+    const hint = await screen.findByTestId("params-hint");
+    expect(hint).toHaveTextContent(/--/);
+  });
 });

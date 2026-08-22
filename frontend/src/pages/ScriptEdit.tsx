@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Save, Play, Trash2, X, ChevronDown, ChevronUp } from "lucide-react";
+import { Save, Play, Trash2, X, ChevronDown, ChevronUp, Pencil, Check } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { api } from "@/lib/api";
 import { API_BASE, getToken } from "@/api/client";
@@ -72,6 +72,27 @@ function languageForPath(path: string | null): EditorLanguage {
     return "node";
   }
   return "python";
+}
+
+/** Placeholder + hint reflect how JSON params map to argv per language.
+ *  Same JSON shape is accepted; only the invocation form differs. */
+function paramsExampleFor(language: EditorLanguage): { placeholder: string; hint: string } {
+  if (language === "node") {
+    return {
+      placeholder: '{"name":"alice","count":3}   # passed as --name alice --count 3',
+      hint: "Node: each value is passed as --<key> <value> flags.",
+    };
+  }
+  if (language === "bash") {
+    return {
+      placeholder: '{"name":"alice","count":3}   # passed as KEY=value env',
+      hint: "Bash: each pair becomes an env var (KEY=value).",
+    };
+  }
+  return {
+    placeholder: '{"name":"alice","count":3}   # passed as positional args',
+    hint: "Python: values are passed as positional args (sys.argv[1], sys.argv[2], ...).",
+  };
 }
 
 function RunTriggerBadge({ kind }: { kind: string | null }) {
@@ -237,6 +258,7 @@ export function ScriptEdit() {
 
   const [showParams, setShowParams] = useState(false);
   const [paramsText, setParamsText] = useState("");
+  const [editingDescription, setEditingDescription] = useState(false);
 
   const run = useMutation<Run, Error, void>({
     mutationFn: () => {
@@ -393,7 +415,7 @@ export function ScriptEdit() {
               className="h-9 max-w-md font-semibold"
               data-testid="name-input"
             />
-            {metaDirty ? (
+            {metaDirty && (
               <Button
                 size="sm"
                 variant="outline"
@@ -408,10 +430,6 @@ export function ScriptEdit() {
               >
                 <Save className="mr-2 h-4 w-4" /> {saveMeta.isPending ? "Saving…" : "Save"}
               </Button>
-            ) : (
-              <span className="text-xs text-muted-foreground" data-testid="saved-indicator">
-                Saved
-              </span>
             )}
             <div className="ml-auto flex shrink-0 items-center gap-2">
               <div className="flex">
@@ -452,24 +470,78 @@ export function ScriptEdit() {
               </Button>
             </div>
           </div>
-          <Input
-            aria-label="Description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Optional description"
-            className="h-7 text-xs"
-            data-testid="description-input"
-          />
+          <div className="flex items-center gap-2" data-testid="description-row">
+            {editingDescription ? (
+              <Input
+                autoFocus
+                aria-label="Description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                onBlur={() => setEditingDescription(false)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === "Escape") {
+                    e.preventDefault();
+                    setEditingDescription(false);
+                  }
+                }}
+                placeholder="Optional description"
+                className="h-7 text-xs"
+                data-testid="description-input"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setEditingDescription(true)}
+                className={`flex-1 truncate rounded px-1 py-0.5 text-left text-xs hover:bg-muted/50 ${
+                  description ? "text-foreground" : "text-muted-foreground italic"
+                }`}
+                aria-label={description ? "Edit description" : "Add description"}
+                title="Edit description"
+                data-testid="description-display"
+              >
+                {description || "Add description"}
+              </button>
+            )}
+            {!editingDescription && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setEditingDescription(true)}
+                aria-label="Edit description"
+                title="Edit description"
+                className="h-7 w-7 shrink-0"
+                data-testid="edit-description"
+              >
+                <Pencil className="h-3 w-3" />
+              </Button>
+            )}
+            {!metaDirty && (
+              <span
+                className="flex shrink-0 items-center gap-1 self-center text-[10px] text-muted-foreground"
+                data-testid="saved-indicator"
+              >
+                <Check className="h-3 w-3" /> Saved
+              </span>
+            )}
+          </div>
           {showParams && (
-            <Textarea
-              data-testid="run-params-textarea"
-              aria-label="Run params"
-              value={paramsText}
-              onChange={(e) => setParamsText(e.target.value)}
-              placeholder={'{"region":"us-east-1","shard":3}'}
-              rows={2}
-              className="mt-2 font-mono text-xs"
-            />
+            <div className="space-y-1">
+              <Textarea
+                data-testid="run-params-textarea"
+                aria-label="Run params"
+                value={paramsText}
+                onChange={(e) => setParamsText(e.target.value)}
+                placeholder={paramsExampleFor(script.language).placeholder}
+                rows={2}
+                className="font-mono text-xs"
+              />
+              <p
+                className="text-[10px] text-muted-foreground"
+                data-testid="params-hint"
+              >
+                {paramsExampleFor(script.language).hint}
+              </p>
+            </div>
           )}
         </header>
 
