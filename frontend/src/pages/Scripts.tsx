@@ -104,11 +104,16 @@ export function Scripts() {
             </TableHeader>
             <TableBody>
               {scripts.map((s: any) => (
-                <TableRow key={s.id}>
+                <TableRow
+                  key={s.id}
+                  className="cursor-pointer"
+                  onClick={() => nav(`/kindling/scripts/${s.id}`)}
+                >
                   <TableCell>
                     <Link
                       to={`/kindling/scripts/${s.id}`}
                       className="font-medium hover:underline"
+                      onClick={(e) => e.stopPropagation()}
                     >
                       {s.name}
                     </Link>
@@ -126,21 +131,21 @@ export function Scripts() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => run.mutate(s.id)}
+                      onClick={(e) => { e.stopPropagation(); run.mutate(s.id); }}
                     >
                       Run
                     </Button>
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => nav(`/kindling/scripts/${s.id}`)}
+                      onClick={(e) => { e.stopPropagation(); nav(`/kindling/scripts/${s.id}`); }}
                     >
                       Edit
                     </Button>
                     <Button
                       size="sm"
                       variant="destructive"
-                      onClick={() => del.mutate(s.id)}
+                      onClick={(e) => { e.stopPropagation(); del.mutate(s.id); }}
                     >
                       Delete
                     </Button>
