@@ -49,6 +49,11 @@ async def run_script(
     # Merged AFTER the user's encrypted .env so the user's values win on
     # conflict (we don't want a low-trust webhook to overwrite a secret).
     param_env: dict[str, str] | None = None,
+    # Language-mapped argv appended after the script entrypoint. python/bash
+    # get positional args (values only), node gets --key value pairs. None or
+    # [] means no extra argv — the runner behaves the same as a no-params
+    # call today.
+    param_argv: list[str] | None = None,
     active_procs: dict[int, asyncio.subprocess.Process] | None = None,
 ) -> RunResult:
     from kindling.config import get_settings
@@ -115,7 +120,10 @@ async def run_script(
                     rv = await run_sandboxed(
                         user_id=script.user_id,
                         script_id=script.id,
-                        cmd=runner.build_command(interpreter_path, source_jail, merged_env),
+                        cmd=runner.build_command(
+                            interpreter_path, source_jail, merged_env,
+                            param_argv=param_argv,
+                        ),
                         env=merged_env,
                         user_root=user_root,
                         view=runner.sandbox_view(),
@@ -129,7 +137,10 @@ async def run_script(
                     log_fh = log_path.open("wb")
                     try:
                         proc = await asyncio.create_subprocess_exec(
-                            *runner.build_command(interpreter, script.source_path, merged_env),
+                            *runner.build_command(
+                                interpreter, script.source_path, merged_env,
+                                param_argv=param_argv,
+                            ),
                             stdout=asyncio.subprocess.PIPE,
                             stderr=asyncio.subprocess.STDOUT,
                             cwd=str(work_dir),

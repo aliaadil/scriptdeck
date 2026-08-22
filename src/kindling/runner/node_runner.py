@@ -52,9 +52,13 @@ class NodeRunner:
         return Path("node")  # resolved on PATH
 
     def build_command(
-        self, interpreter: Path, source_path: Path, env: dict[str, str]
+        self, interpreter: Path, source_path: Path, env: dict[str, str],
+        *, param_argv: list[str] | None = None,
     ) -> list[str]:
-        return [str(interpreter), str(source_path)]
+        cmd = [str(interpreter), str(source_path)]
+        if param_argv:
+            cmd.extend(param_argv)
+        return cmd
 
     def sandbox_view(self) -> SandboxView:
         return SandboxView(binds=[

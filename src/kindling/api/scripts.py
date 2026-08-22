@@ -215,7 +215,52 @@ async def run_script(script_id: int, request: Request,
                     user: User = Depends(current_user)) -> RunOut:
     if user.role == "viewer":
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="viewer cannot trigger")
-    return await _trigger_run(request.app, script_id, user)
+    # Body is optional — a manual trigger without params sends no body at
+    # all. Read it manually so we accept missing/empty/{} without 422,
+    # but still let the Pydantic validator surface invalid params_json
+    # values as 422.
+    from typing import Any as _Any
+    from pydantic import BaseModel, ValidationError, field_validator
+
+    class _ManualRunBody(BaseModel):
+        params_json: dict[str, _Any] | None = None
+
+        @field_validator("params_json")
+        @classmethod
+        def _check_params(cls, v):
+            if v is None:
+                return v
+            for k, val in v.items():
+                if not isinstance(k, str) or not k:
+                    raise ValueError("params_json keys must be non-empty strings")
+                if not isinstance(val, (str, int, float, bool)):
+                    raise ValueError(f"params_json[{k!r}] must be a primitive")
+            return v
+
+    try:
+        raw = await request.json()
+    except Exception:
+        raw = None
+    if raw is None or raw == {}:
+        body = _ManualRunBody(params_json=None)
+    else:
+        try:
+            body = _ManualRunBody.model_validate(raw)
+        except ValidationError as exc:
+            # exc.errors() may contain non-JSON-serializable ctx (e.g. the
+            # raw ValueError instance); FastAPI normally strips those when
+            # raising 422 from a declared body model, but since we validate
+            # manually we have to do it ourselves.
+            safe = [
+                {k: v for k, v in err.items() if k != "ctx"}
+                for err in exc.errors()
+            ]
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY, detail=safe
+            )
+    return await _trigger_run(
+        request.app, script_id, user, params_json=body.params_json,
+    )
 
 
 @router.get("/{script_id}/files")
