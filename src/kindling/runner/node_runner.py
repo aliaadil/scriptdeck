@@ -3,8 +3,12 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from kindling.runner.sandbox_view import BindMount, SandboxView
+
+if TYPE_CHECKING:
+    from kindling.services.log_broker import LogBroker
 
 
 class NodeRunner:
@@ -22,7 +26,7 @@ class NodeRunner:
         work_dir: Path,
         deps: list[str],
         artifact_path: Path | None = None,
-        log_broker: "LogBroker | None" = None,
+        log_broker: LogBroker | None = None,
         run_id: int | None = None,
     ) -> Path:
         pkg_path = work_dir / self.resolve_artifact_path()

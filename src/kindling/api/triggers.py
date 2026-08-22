@@ -25,8 +25,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import delete, func, insert, select, update
 
-from kindling.api.deps import require_script_owner
 from kindling.api._params import check_params_argv, check_params_exclusive, check_params_json
+from kindling.api.deps import require_script_owner
 from kindling.api.webhooks import hash_token
 from kindling.auth.deps import current_user
 from kindling.auth.users import User

@@ -26,8 +26,12 @@ test("quick-start -> edit -> save -> run", async ({ page }) => {
   await page.getByRole("button", { name: /sign in/i }).click();
   await page.waitForURL("**/dashboard");
 
-  // Quick-start: pick the Python card on /kindling/scripts/new.
+  // Quick-start: pick the Python card on /kindling/scripts/new. The default
+  // name is the "Untitled script" placeholder, which the new-script page now
+  // blocks (mirrors the backend UNTITLED_PLACEHOLDER check); type a real name
+  // first so the create call actually fires.
   await page.goto("/kindling/scripts/new");
+  await page.getByTestId("new-name-input").fill("morning-report");
   await expect(page.getByTestId("quick-start-cards")).toBeVisible();
   await page.getByTestId("card-python").click();
   await page.waitForURL(/\/kindling\/scripts\/\d+/);

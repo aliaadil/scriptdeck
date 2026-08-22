@@ -36,7 +36,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request, status
 from sqlalchemy import insert, select, update
 
-from kindling.runner.executor import Script, run_script
+from kindling.runner.executor import Script
 from kindling.services import run_service
 from kindling.services.dep_detect import detect_deps_for_language
 
