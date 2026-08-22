@@ -38,6 +38,7 @@ import {
 import { listRuns, cancelRun } from "@/api/runs";
 import type { Run } from "@/api/runs";
 import { ApiError } from "@/api/client";
+import { argvFor, commandPreviewFor } from "@/lib/argv";
 
 type RunInfo = {
   id: number;
@@ -76,6 +77,25 @@ function languageForPath(path: string | null): EditorLanguage {
 
 /** Placeholder + hint reflect how JSON params map to argv per language.
  *  Same JSON shape is accepted; only the invocation form differs. */
+/** Parse textarea text into argv via the same rules the runner applies.
+ *  Returns null on empty / invalid / non-object JSON — caller hides preview. */
+function previewArgv(text: string, language: EditorLanguage): string[] | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  let v: unknown;
+  try {
+    v = JSON.parse(trimmed);
+  } catch {
+    return null;
+  }
+  if (typeof v !== "object" || v === null || Array.isArray(v)) return null;
+  try {
+    return argvFor(language, v as Record<string, unknown>);
+  } catch {
+    return null;
+  }
+}
+
 function paramsExampleFor(language: EditorLanguage): { placeholder: string; hint: string } {
   if (language === "node") {
     return {
@@ -546,25 +566,37 @@ export function ScriptEdit() {
               </span>
             )}
           </div>
-          {showParams && (
-            <div className="space-y-1">
-              <Textarea
-                data-testid="run-params-textarea"
-                aria-label="Run params"
-                value={paramsText}
-                onChange={(e) => setParamsText(e.target.value)}
-                placeholder={paramsExampleFor(script.language).placeholder}
-                rows={2}
-                className="font-mono text-xs"
-              />
-              <p
-                className="text-[10px] text-muted-foreground"
-                data-testid="params-hint"
-              >
-                {paramsExampleFor(script.language).hint}
-              </p>
-            </div>
-          )}
+          {showParams && (() => {
+            const argv = previewArgv(paramsText, script.language);
+            return (
+              <div className="space-y-1">
+                <Textarea
+                  data-testid="run-params-textarea"
+                  aria-label="Run params"
+                  value={paramsText}
+                  onChange={(e) => setParamsText(e.target.value)}
+                  placeholder={paramsExampleFor(script.language).placeholder}
+                  rows={2}
+                  className="font-mono text-xs"
+                />
+                {argv && (
+                  <p
+                    className="truncate font-mono text-[11px] text-muted-foreground"
+                    data-testid="argv-preview"
+                    title={commandPreviewFor(script.language, script.entrypoint, argv)}
+                  >
+                    {commandPreviewFor(script.language, script.entrypoint, argv)}
+                  </p>
+                )}
+                <p
+                  className="text-[10px] text-muted-foreground"
+                  data-testid="params-hint"
+                >
+                  {paramsExampleFor(script.language).hint}
+                </p>
+              </div>
+            );
+          })()}
         </header>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-0 flex-1 flex-col">

@@ -435,4 +435,43 @@ describe("ScriptEdit", () => {
     const hint = await screen.findByTestId("params-hint");
     expect(hint).toHaveTextContent(/--/);
   });
+
+  it("renders a live argv preview for Python scripts", async () => {
+    const user = userEvent.setup();
+    renderEditor();
+    await user.click(await screen.findByLabelText("Show params"));
+    fireEvent.change(await screen.findByTestId("run-params-textarea"), {
+      target: { value: '{"name":"alice","count":3}' },
+    });
+    expect(await screen.findByTestId("argv-preview")).toHaveTextContent(
+      "$ python main.py alice 3",
+    );
+  });
+
+  it("renders --key value argv for Node scripts with a boolean true flag", async () => {
+    apiMock.mockImplementation((path: string) => {
+      if (path === "/scripts/1")
+        return Promise.resolve({ ...mockScript, language: "node", entrypoint: "main.js" });
+      return Promise.resolve({});
+    });
+    const user = userEvent.setup();
+    renderEditor();
+    await user.click(await screen.findByLabelText("Show params"));
+    fireEvent.change(await screen.findByTestId("run-params-textarea"), {
+      target: { value: '{"region":"us-east-1","verbose":true}' },
+    });
+    expect(await screen.findByTestId("argv-preview")).toHaveTextContent(
+      "$ node main.js --region us-east-1 --verbose",
+    );
+  });
+
+  it("omits the preview while the textarea contains invalid JSON", async () => {
+    const user = userEvent.setup();
+    renderEditor();
+    await user.click(await screen.findByLabelText("Show params"));
+    fireEvent.change(await screen.findByTestId("run-params-textarea"), {
+      target: { value: "{not json" },
+    });
+    expect(screen.queryByTestId("argv-preview")).not.toBeInTheDocument();
+  });
 });
