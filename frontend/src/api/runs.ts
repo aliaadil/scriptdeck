@@ -6,7 +6,8 @@ export type Run = {
   trigger_kind: string | null;
   started_at: string; ended_at: string | null; exit_code: number | null; status: string;
   attempt: number; retry_group: string | null;
-  params_json: Record<string, unknown> | null;
+  // Either an object (params_json path) or a list (params_argv path).
+  params_json: Record<string, unknown> | unknown[] | null;
 };
 
 export const listRunGroup = (group: string) =>

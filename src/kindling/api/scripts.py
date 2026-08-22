@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
-from kindling.api._params import check_params_json
+from kindling.api._params import check_params_argv, check_params_exclusive, check_params_json
 from kindling.api.deps import require_script_owner
 from kindling.api.runs import RunOut, _trigger_run
 from kindling.auth.deps import current_user
@@ -93,11 +93,23 @@ class _ManualRunBody(BaseModel):
     so the same params_json rules used by RunTrigger stay in sync.
     """
     params_json: dict[str, Any] | None = None
+    params_argv: list[str] | None = None
 
     @field_validator("params_json")
     @classmethod
     def _check_params(cls, v: dict[str, Any] | None) -> dict[str, Any] | None:
         return check_params_json(v)
+
+    @field_validator("params_argv")
+    @classmethod
+    def _check_argv(cls, v: list[Any] | None) -> list[str] | None:
+        return check_params_argv(v)
+
+    @field_validator("params_argv", mode="after")
+    @classmethod
+    def _check_exclusive(cls, v: list[str] | None, info) -> None:
+        check_params_exclusive(info.data.get("params_json"), v)
+        return v
 
 
 def _require(user: User) -> None:
@@ -265,7 +277,7 @@ async def run_script(script_id: int, request: Request,
         # downstream consumers shouldn't see non-JSON as a 500.
         raw = None
     if raw is None or raw == {}:
-        body = _ManualRunBody(params_json=None)
+        body = _ManualRunBody(params_json=None, params_argv=None)
     else:
         try:
             body = _ManualRunBody.model_validate(raw)
@@ -282,7 +294,9 @@ async def run_script(script_id: int, request: Request,
                 status.HTTP_422_UNPROCESSABLE_ENTITY, detail=safe
             )
     return await _trigger_run(
-        request.app, script_id, user, params_json=body.params_json,
+        request.app, script_id, user,
+        params_json=body.params_json,
+        params_argv=body.params_argv,
     )
 
 

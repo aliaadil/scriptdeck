@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/sonner";
 import { FileTree } from "@/components/editor/FileTree";
 import { EditorPanel } from "@/components/editor/EditorPanel";
@@ -38,7 +37,8 @@ import {
 import { listRuns, cancelRun } from "@/api/runs";
 import type { Run } from "@/api/runs";
 import { ApiError } from "@/api/client";
-import { argvFor, commandPreviewFor } from "@/lib/argv";
+import { commandPreviewFor } from "@/lib/argv";
+import { shlex } from "@/lib/shell";
 import { isPlaceholderName } from "@/lib/placeholder";
 
 type RunInfo = {
@@ -78,42 +78,8 @@ function languageForPath(path: string | null): EditorLanguage {
 
 /** Placeholder + hint reflect how JSON params map to argv per language.
  *  Same JSON shape is accepted; only the invocation form differs. */
-/** Parse textarea text into argv via the same rules the runner applies.
- *  Returns null on empty / invalid / non-object JSON — caller hides preview. */
-function previewArgv(text: string, language: EditorLanguage): string[] | null {
-  const trimmed = text.trim();
-  if (!trimmed) return null;
-  let v: unknown;
-  try {
-    v = JSON.parse(trimmed);
-  } catch {
-    return null;
-  }
-  if (typeof v !== "object" || v === null || Array.isArray(v)) return null;
-  try {
-    return argvFor(language, v as Record<string, unknown>);
-  } catch {
-    return null;
-  }
-}
-
-function paramsExampleFor(language: EditorLanguage): { placeholder: string; hint: string } {
-  if (language === "node") {
-    return {
-      placeholder: '{"name":"alice","count":3}   # passed as --name alice --count 3',
-      hint: "Node: each value is passed as --<key> <value> flags.",
-    };
-  }
-  if (language === "bash") {
-    return {
-      placeholder: '{"name":"alice","count":3}   # passed as KEY=value env',
-      hint: "Bash: each pair becomes an env var (KEY=value).",
-    };
-  }
-  return {
-    placeholder: '{"name":"alice","count":3}   # passed as positional args',
-    hint: "Python: values are passed as positional args (sys.argv[1], sys.argv[2], ...).",
-  };
+function runArgsPlaceholder(): string {
+  return "users -p 9000";
 }
 
 function RunTriggerBadge({ kind }: { kind: string | null }) {
@@ -278,38 +244,26 @@ export function ScriptEdit() {
   });
 
   const [showParams, setShowParams] = useState(false);
-  const [paramsText, setParamsText] = useState("");
+  const [runArgs, setRunArgs] = useState("");
   const [editingDescription, setEditingDescription] = useState(false);
   const [editingName, setEditingName] = useState(false);
 
   const run = useMutation<Run, Error, void>({
     mutationFn: () => {
-      // Manual-run params: parse the textarea on click. Empty text means
-      // "no params", matching the no-body POST behaviour. Invalid JSON
-      // is surfaced as a toast and the mutation short-circuits so no
-      // run is started — better than kicking off a run with junk.
-      let parsed: Record<string, string | number | boolean> | undefined;
-      const trimmed = paramsText.trim();
+      // Manual-run args: shlex-parse the input, send raw argv to backend.
+      // Empty text == no-args run (no body POST); invalid syntax is
+      // surfaced via toast and the mutation short-circuits so no run is
+      // started.
+      const trimmed = runArgs.trim();
       if (trimmed) {
-        try {
-          const v = JSON.parse(trimmed);
-          if (
-            typeof v !== "object" ||
-            v === null ||
-            Array.isArray(v)
-          ) {
-            throw new Error("params must be a JSON object");
-          }
-          parsed = v as Record<string, string | number | boolean>;
-        } catch (e) {
-          toast.error(`Invalid params JSON: ${(e as Error).message}`);
-          // Return a never-resolving promise so the mutation stays in
-          // pending state (button stays disabled) until the user fixes
-          // the JSON. onError won't fire because mutationFn threw.
+        const r = shlex(trimmed);
+        if (r.error || !r.tokens) {
+          toast.error(`Invalid run args: ${r.error ?? "could not parse"}`);
           return new Promise<Run>(() => {});
         }
+        return triggerRun(scriptId, undefined, r.tokens);
       }
-      return triggerRun(scriptId, parsed);
+      return triggerRun(scriptId);
     },
     onError: (e: Error) => toast.error(e.message ?? "Run failed to start"),
   });
@@ -581,19 +535,21 @@ export function ScriptEdit() {
             )}
           </div>
           {showParams && (() => {
-            const argv = previewArgv(paramsText, script.language);
+            const preview = shlex(runArgs.trim());
+            const argv = preview.tokens ?? null;
+            const previewError = preview.error ?? null;
             return (
               <div className="space-y-1">
-                <Textarea
-                  data-testid="run-params-textarea"
-                  aria-label="Run params"
-                  value={paramsText}
-                  onChange={(e) => setParamsText(e.target.value)}
-                  placeholder={paramsExampleFor(script.language).placeholder}
-                  rows={2}
-                  className="font-mono text-xs"
+                <Input
+                  data-testid="run-args-input"
+                  aria-label="Run args"
+                  aria-invalid={previewError != null}
+                  value={runArgs}
+                  onChange={(e) => setRunArgs(e.target.value)}
+                  placeholder={runArgsPlaceholder()}
+                  className="h-8 font-mono text-xs"
                 />
-                {argv && (
+                {argv && argv.length > 0 && (
                   <p
                     className="truncate font-mono text-[11px] text-muted-foreground"
                     data-testid="argv-preview"
@@ -602,12 +558,15 @@ export function ScriptEdit() {
                     {commandPreviewFor(script.language, script.entrypoint, argv)}
                   </p>
                 )}
-                <p
-                  className="text-[10px] text-muted-foreground"
-                  data-testid="params-hint"
-                >
-                  {paramsExampleFor(script.language).hint}
-                </p>
+                {previewError && (
+                  <p
+                    className="text-[10px] text-destructive"
+                    role="alert"
+                    data-testid="argv-error"
+                  >
+                    {previewError}
+                  </p>
+                )}
               </div>
             );
           })()}

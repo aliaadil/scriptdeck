@@ -13,7 +13,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, field_validator
 from sqlalchemy import insert, select, update
 
-from kindling.api._params import check_params_json
+from kindling.api._params import check_params_argv, check_params_exclusive, check_params_json
 from kindling.api.deps import require_run_owner, require_script_owner
 from kindling.auth.deps import current_user
 from kindling.auth.users import User
@@ -54,6 +54,7 @@ def _envs_table():
 class RunTrigger(BaseModel):
     script_id: int
     params_json: dict[str, Any] | None = None
+    params_argv: list[str] | None = None
 
     @field_validator("params_json")
     @classmethod
@@ -61,6 +62,18 @@ class RunTrigger(BaseModel):
         # Mirror TriggerCreate.params_json rules so the manual endpoint
         # accepts exactly the same shape schedules and webhooks do.
         return check_params_json(v)
+
+    @field_validator("params_argv")
+    @classmethod
+    def _check_argv(cls, v: list[Any] | None) -> list[str] | None:
+        return check_params_argv(v)
+
+    @field_validator("params_argv", mode="after")
+    @classmethod
+    def _check_exclusive(cls, v: list[str] | None, info) -> None:
+        # mode='after' lets us see the sibling field's value via info.data
+        check_params_exclusive(info.data.get("params_json"), v)
+        return v
 
 
 class RunOut(BaseModel):
@@ -81,26 +94,29 @@ class RunOut(BaseModel):
     # _trigger_run builds RunOut by hand for a fresh (attempt 0) run.
     attempt: int = 0
     retry_group: str | None = None
-    # Migration 017: the JSON object (parsed) the manual run was started
+    # Migration 017: the JSON payload (parsed) the manual run was started
     # with, or null when this run wasn't started from /scripts/{id}/run
-    # with a params body (or pre-feature).
-    params_json: dict[str, Any] | None = None
+    # with a params body (or pre-feature). Holds a dict for the
+    # params_json path and a list[str] for the params_argv path — both
+    # shapes round-trip through the same TEXT column.
+    params_json: dict[str, Any] | list[Any] | None = None
 
     @field_validator("params_json", mode="before")
     @classmethod
     def _coerce_params_json(cls, v: Any) -> Any:
-        # The DB column stores a JSON object string; both the list and detail
-        # endpoints construct RunOut directly from a SQLAlchemy RowMapping,
-        # so we parse the string back to a dict here. Corrupt legacy rows
-        # surface as None rather than 500ing the endpoint.
-        if v is None or isinstance(v, dict):
+        # The DB column stores a JSON-encoded payload as TEXT; both the
+        # list and detail endpoints construct RunOut directly from a
+        # SQLAlchemy RowMapping, so we parse the string back here.
+        # Corrupt legacy rows surface as None rather than 500ing the
+        # endpoint.
+        if v is None or isinstance(v, (dict, list)):
             return v
         if isinstance(v, str):
             try:
                 parsed = json.loads(v)
             except (ValueError, TypeError):
                 return None
-            return parsed if isinstance(parsed, dict) else None
+            return parsed if isinstance(parsed, (dict, list)) else None
         return None
 
 
@@ -203,13 +219,19 @@ async def _trigger_run(
     app, script_id: int, user: User,
     *,
     params_json: dict[str, Any] | None = None,
+    params_argv: list[str] | None = None,
 ) -> RunOut:
     """Shared trigger flow used by /runs and /scripts/{id}/run.
 
-    When ``params_json`` is provided, the dict is persisted on the run
-    row, exported as KINDLING_PARAM_<KEY>=<value> env vars (same as the
-    schedule/webhook paths), and converted to language-appropriate
-    argv via argv_for() so the runner sees them as sys.argv / --flags.
+    Exactly one of ``params_json`` (object) or ``params_argv`` (list) may
+    be provided:
+    - ``params_json``: dict → exported as KINDLING_PARAM_<KEY>=<value> env
+      vars (same as the schedule/webhook paths) and converted to
+      language-appropriate argv via argv_for() so the runner sees them as
+      sys.argv / --flags.
+    - ``params_argv``: list of strings → used verbatim as the argv
+      appended after the entrypoint. No env-var export. Lets manual
+      runners type CLI args the way they'd pass them on a shell.
     """
     from kindling.api.webhooks import trigger_params_env_from_dict
     from kindling.params import argv_for
@@ -219,6 +241,8 @@ async def _trigger_run(
     env_ciphertext: str | None = None
     env_nonce: str | None = None
     param_argv: list[str] = []
+    # Reflected back on RunOut — list shape for argv path, dict for json path.
+    persisted_payload: dict[str, Any] | list[str] | None = None
     async with sf() as s:
         await require_script_owner(s, script_id, user)
         script = await script_service.get_script(s, script_id)
@@ -229,12 +253,29 @@ async def _trigger_run(
             raise HTTPException(
                 status.HTTP_409_CONFLICT, detail="another run is in progress"
             )
-        if params_json:
+        # Defense-in-depth: model_validators should have caught this, but a
+        # future caller path could bypass them.
+        if params_json is not None and params_argv is not None:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Provide either params_json or params_argv, not both.",
+            )
+        params_json_str: str | None
+        if params_argv is not None:
+            # User provided raw argv — use verbatim; no language transform.
+            param_argv = list(params_argv)
+            persisted_payload = param_argv
+            params_json_str = json.dumps(param_argv) if param_argv else None
+        elif params_json:
             # Compute argv up-front so an invalid language raises 422 here
             # rather than mid-background-task (which would leave the run
             # row stuck in 'running').
             param_argv = argv_for(script.language, params_json)
-        params_json_str = json.dumps(params_json) if params_json else None
+            persisted_payload = params_json
+            params_json_str = json.dumps(params_json)
+        else:
+            param_argv = []
+            params_json_str = None
         run_id, started, retry_group = await run_service.create_run(
             s, script_id=script.id, schedule_id=None, trigger_kind="manual",
             params_json=params_json_str,
@@ -292,6 +333,8 @@ async def _trigger_run(
         script=runner_script,
         env_ciphertext=env_ciphertext,
         env_nonce=env_nonce,
+        # params_argv has no key/value pairs to expose as env vars; env export
+        # only makes sense for the params_json path.
         param_env=trigger_params_env_from_dict(params_json) if params_json else None,
         param_argv=param_argv,
     )
@@ -299,7 +342,7 @@ async def _trigger_run(
         id=run_id, script_id=script.id, script_name=script.name,
         schedule_id=None, trigger_kind="manual",
         started_at=started, ended_at=None, exit_code=None, status="running",
-        retry_group=retry_group, params_json=params_json,
+        retry_group=retry_group, params_json=persisted_payload,
     )
 
 

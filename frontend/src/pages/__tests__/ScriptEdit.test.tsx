@@ -241,7 +241,7 @@ describe("ScriptEdit", () => {
 
     await user.click(await screen.findByRole("button", { name: /run/i }));
 
-    await waitFor(() => expect(triggerRun).toHaveBeenCalledWith(1, undefined));
+    await waitFor(() => expect(triggerRun).toHaveBeenCalledWith(1));
     expect(await screen.findByText("Run #5")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole("tab", { name: /logs/i })).toHaveAttribute("aria-selected", "true"));
   });
@@ -325,22 +325,34 @@ describe("ScriptEdit", () => {
     expect(screen.getByLabelText("Cancel run 50")).toBeInTheDocument();
   });
 
-  it("toggles a params textarea via the chevron next to Run", async () => {
+  it("toggles the Run-args input via the chevron next to Run", async () => {
     const user = userEvent.setup();
     renderEditor();
 
-    // Chevron labelled "Show params" should be present; textarea should not.
+    // Chevron labelled "Show params" should be present; input should not.
     const chevron = await screen.findByLabelText("Show params");
-    expect(screen.queryByTestId("run-params-textarea")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("run-args-input")).not.toBeInTheDocument();
     await user.click(chevron);
-    expect(await screen.findByTestId("run-params-textarea")).toBeInTheDocument();
+    expect(await screen.findByTestId("run-args-input")).toBeInTheDocument();
     // Toggling again hides it.
     expect(screen.getByLabelText("Hide params")).toBeInTheDocument();
     await user.click(screen.getByLabelText("Hide params"));
-    expect(screen.queryByTestId("run-params-textarea")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("run-args-input")).not.toBeInTheDocument();
   });
 
-  it("blocks the run and shows a toast when params JSON is invalid", async () => {
+  it("renders a live command preview from typed args", async () => {
+    const user = userEvent.setup();
+    renderEditor();
+    await user.click(await screen.findByLabelText("Show params"));
+    fireEvent.change(await screen.findByTestId("run-args-input"), {
+      target: { value: "users -p 9000" },
+    });
+    expect(await screen.findByTestId("argv-preview")).toHaveTextContent(
+      "$ python main.py users -p 9000",
+    );
+  });
+
+  it("surfaces an error and blocks the run when args have an unterminated quote", async () => {
     const user = userEvent.setup();
     triggerRun.mockClear();
     const { toast } = await import("@/components/ui/sonner");
@@ -348,33 +360,37 @@ describe("ScriptEdit", () => {
     renderEditor();
 
     await user.click(await screen.findByLabelText("Show params"));
-    const textarea = await screen.findByTestId("run-params-textarea") as HTMLTextAreaElement;
-    fireEvent.change(textarea, { target: { value: "{not json" } });
+    fireEvent.change(await screen.findByTestId("run-args-input"), {
+      target: { value: 'users "unterminated' },
+    });
+    expect(await screen.findByTestId("argv-error")).toBeInTheDocument();
 
-    // Clicking Run with bad JSON must NOT start a run; toast.error fires.
+    // Run with bad args must NOT trigger; toast.error fires.
     await user.click(screen.getByRole("button", { name: /^run/i }));
     expect(triggerRun).not.toHaveBeenCalled();
     expect(toast.error).toHaveBeenCalledWith(
-      expect.stringMatching(/invalid params json/i),
+      expect.stringMatching(/invalid run args/i),
     );
   });
 
-  it("passes parsed params to triggerRun when Run is clicked with valid JSON", async () => {
+  it("passes shlex-parsed argv to triggerRun when Run is clicked with valid args", async () => {
     const user = userEvent.setup();
     triggerRun.mockClear();
     renderEditor();
 
     await user.click(await screen.findByLabelText("Show params"));
-    const textarea = await screen.findByTestId("run-params-textarea") as HTMLTextAreaElement;
-    fireEvent.change(textarea, { target: { value: '{"region":"us-east-1","shard":3}' } });
+    fireEvent.change(await screen.findByTestId("run-args-input"), {
+      target: { value: '--region us-east-1 shard=3' },
+    });
 
     await user.click(screen.getByRole("button", { name: /^run/i }));
 
     await waitFor(() =>
-      expect(triggerRun).toHaveBeenCalledWith(1, {
-        region: "us-east-1",
-        shard: 3,
-      }),
+      expect(triggerRun).toHaveBeenCalledWith(1, undefined, [
+        "--region",
+        "us-east-1",
+        "shard=3",
+      ]),
     );
   });
 
@@ -433,67 +449,42 @@ describe("ScriptEdit", () => {
     );
   });
 
-  it("uses a language-specific params placeholder for Python scripts", async () => {
+  it("uses a CLI-args placeholder hint for the Run-args input", async () => {
     const user = userEvent.setup();
     renderEditor();
     await user.click(await screen.findByLabelText("Show params"));
-    const textarea = (await screen.findByTestId(
-      "run-params-textarea",
-    )) as HTMLTextAreaElement;
-    expect(textarea.placeholder).toMatch(/positional/i);
-    expect(await screen.findByTestId("params-hint")).toHaveTextContent(/python/i);
+    const input = (await screen.findByTestId("run-args-input")) as HTMLInputElement;
+    // Placeholder is a short CLI example (positional, shell-quoted) — not JSON.
+    expect(input.placeholder).toMatch(/positional|--|\S+\s+\S+/);
   });
 
-  it("uses a --key value hint for Node scripts", async () => {
+  it("renders a live argv preview that reflects the entrypoint", async () => {
     apiMock.mockImplementation((path: string) => {
       if (path === "/scripts/1")
-        return Promise.resolve({ ...mockScript, language: "node" });
+        return Promise.resolve({ ...mockScript, entrypoint: "scripts/run.py" });
       return Promise.resolve({});
     });
     const user = userEvent.setup();
     renderEditor();
     await user.click(await screen.findByLabelText("Show params"));
-    const hint = await screen.findByTestId("params-hint");
-    expect(hint).toHaveTextContent(/--/);
-  });
-
-  it("renders a live argv preview for Python scripts", async () => {
-    const user = userEvent.setup();
-    renderEditor();
-    await user.click(await screen.findByLabelText("Show params"));
-    fireEvent.change(await screen.findByTestId("run-params-textarea"), {
-      target: { value: '{"name":"alice","count":3}' },
+    fireEvent.change(await screen.findByTestId("run-args-input"), {
+      target: { value: "alice 3" },
     });
     expect(await screen.findByTestId("argv-preview")).toHaveTextContent(
-      "$ python main.py alice 3",
+      "$ python scripts/run.py alice 3",
     );
   });
 
-  it("renders --key value argv for Node scripts with a boolean true flag", async () => {
-    apiMock.mockImplementation((path: string) => {
-      if (path === "/scripts/1")
-        return Promise.resolve({ ...mockScript, language: "node", entrypoint: "main.js" });
-      return Promise.resolve({});
-    });
+  it("omits the preview while the input is empty or syntactically invalid", async () => {
     const user = userEvent.setup();
     renderEditor();
     await user.click(await screen.findByLabelText("Show params"));
-    fireEvent.change(await screen.findByTestId("run-params-textarea"), {
-      target: { value: '{"region":"us-east-1","verbose":true}' },
-    });
-    expect(await screen.findByTestId("argv-preview")).toHaveTextContent(
-      "$ node main.js --region us-east-1 --verbose",
-    );
-  });
-
-  it("omits the preview while the textarea contains invalid JSON", async () => {
-    const user = userEvent.setup();
-    renderEditor();
-    await user.click(await screen.findByLabelText("Show params"));
-    fireEvent.change(await screen.findByTestId("run-params-textarea"), {
-      target: { value: "{not json" },
+    expect(screen.queryByTestId("argv-preview")).not.toBeInTheDocument();
+    fireEvent.change(await screen.findByTestId("run-args-input"), {
+      target: { value: "'unterminated" },
     });
     expect(screen.queryByTestId("argv-preview")).not.toBeInTheDocument();
+    expect(await screen.findByTestId("argv-error")).toBeInTheDocument();
   });
 
   it("blocks Save when the name is the Untitled-script placeholder", async () => {
