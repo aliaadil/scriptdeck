@@ -140,7 +140,7 @@ describe("ScriptEdit", () => {
   it("renders the three tabs once the script loads", async () => {
     renderEditor();
     expect(await screen.findByRole("tab", { name: /editor/i })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /config/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /triggers/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /logs/i })).toBeInTheDocument();
   });
 
@@ -173,12 +173,11 @@ describe("ScriptEdit", () => {
     await waitFor(() => expect(editor.value).toBe("# lib/util.py"));
   });
 
-  it("fires the entrypoint update when the select changes", async () => {
-    const user = userEvent.setup();
+  it("fires the entrypoint update when the FileTree select changes", async () => {
     renderEditor();
-    await user.click(await screen.findByRole("tab", { name: /config/i }));
+    await waitFor(() => expect(tree()).toBeInTheDocument());
 
-    const select = (await screen.findByTestId("entrypoint-select")) as HTMLSelectElement;
+    const select = (await within(tree()).findByTestId("entrypoint-select")) as HTMLSelectElement;
     await waitFor(() => expect(select.options.length).toBe(2));
     expect(select.value).toBe("main.py");
 
@@ -207,31 +206,19 @@ describe("ScriptEdit", () => {
     await waitFor(() => expect(deleteScriptFile).toHaveBeenCalledWith(1, "lib/util.py"));
   });
 
-  it("saves name and description from the Config tab", async () => {
+  it("saves name and description from the header", async () => {
     const user = userEvent.setup();
     renderEditor();
-    await user.click(await screen.findByRole("tab", { name: /config/i }));
 
-    const nameInput = (await screen.findByLabelText("Name")) as HTMLInputElement;
+    const nameInput = (await screen.findByTestId("name-input")) as HTMLInputElement;
     await waitFor(() => expect(nameInput.value).toBe("test"));
     await user.clear(nameInput);
     await user.type(nameInput, "renamed");
-    await user.click(screen.getByRole("button", { name: /^save$/i }));
+    await user.click(screen.getByTestId("save-meta"));
 
     await waitFor(() =>
       expect(updateScript).toHaveBeenCalledWith(1, { name: "renamed", description: "d" }),
     );
-  });
-
-  it("Config tab has no extra top padding beyond TabsContent", async () => {
-    const user = userEvent.setup();
-    renderEditor();
-    await user.click(await screen.findByRole("tab", { name: /config/i }));
-
-    const tabPanel = screen.getByRole("tabpanel", { name: /config/i });
-    const card = tabPanel.querySelector(".pt-6");
-    // The CardContent must not stack its own pt-6 on top of TabsContent p-4.
-    expect(card).toBeNull();
   });
 
   it("starts a run and switches to the Logs tab", async () => {

@@ -10,6 +10,12 @@ type Props = {
   onUpload: () => void;
   onDelete: (path: string) => void;
   language: "python" | "node" | "bash";
+  /** Path that the runner invokes. Used by the entrypoint selector. */
+  entrypoint: string;
+  /** All paths eligible as the entrypoint (extension-matched plus current). */
+  entrypointOptions: string[];
+  /** Called when the user picks a different entrypoint. */
+  onEntrypointChange: (path: string) => void;
 };
 
 function buildTree(files: FileEntry[]): Map<string, FileEntry[]> {
@@ -22,20 +28,45 @@ function buildTree(files: FileEntry[]): Map<string, FileEntry[]> {
   return groups;
 }
 
-export function FileTree({ files, active, onSelect, onAdd, onUpload, onDelete, language }: Props) {
+export function FileTree({
+  files,
+  active,
+  onSelect,
+  onAdd,
+  onUpload,
+  onDelete,
+  language,
+  entrypoint,
+  entrypointOptions,
+  onEntrypointChange,
+}: Props) {
   const groups = buildTree(files);
   return (
     <aside
       className="hidden md:flex h-full w-56 flex-col gap-2 border-r bg-muted/30 p-2"
       data-testid="file-tree"
     >
-      <div className="flex gap-1">
+      <div className="flex flex-wrap items-center gap-1">
         <Button size="sm" variant="outline" onClick={onAdd} title="Add file">
           <FilePlus2 className="h-3 w-3" />
         </Button>
         <Button size="sm" variant="outline" onClick={onUpload} title="Upload file">
           <Upload className="h-3 w-3" />
         </Button>
+        <select
+          aria-label="Entrypoint"
+          title="Entrypoint"
+          data-testid="entrypoint-select"
+          value={entrypoint}
+          onChange={(e) => onEntrypointChange(e.target.value)}
+          className="min-w-0 max-w-full truncate rounded-md border bg-background px-1.5 py-1 text-xs"
+        >
+          {entrypointOptions.map((path) => (
+            <option key={path} value={path}>
+              {path}
+            </option>
+          ))}
+        </select>
       </div>
       <ul className="flex-1 overflow-auto text-sm">
         {[...groups.entries()].map(([dir, items]) => (

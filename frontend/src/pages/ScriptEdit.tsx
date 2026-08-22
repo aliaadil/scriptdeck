@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/sonner";
 import { FileTree } from "@/components/editor/FileTree";
@@ -300,43 +299,82 @@ export function ScriptEdit() {
     .map((f) => f.path)
     .filter((p) => isEntrypointCandidate(p) || p === script.entrypoint);
 
+  // Dirty state for the header Save button: name or description differs
+  // from what the server last returned.
+  const trimmedName = name.trim();
+  const metaDirty =
+    trimmedName !== (script.name ?? "").trim() ||
+    description !== (script.description ?? "");
+  const canSaveMeta = metaDirty && trimmedName.length > 0 && !saveMeta.isPending;
+
   return (
     <AppShell>
       <div className="flex h-[calc(100vh-4rem)] flex-col">
-        <header className="flex shrink-0 items-center justify-between gap-3 border-b px-4 py-1.5">
-          <div className="min-w-0 space-y-0.5">
-            <h1 className="truncate text-base font-semibold leading-tight">{script.name}</h1>
-            <p className="truncate text-xs leading-tight text-muted-foreground">
-              {script.language} · entrypoint: {script.entrypoint}
-            </p>
+        <header className="flex shrink-0 flex-col gap-1 border-b px-4 py-1.5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <Input
+                aria-label="Name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Script name"
+                className="h-8 max-w-md font-semibold"
+                data-testid="name-input"
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => saveMeta.mutate()}
+                disabled={!canSaveMeta}
+                title={
+                  !trimmedName
+                    ? "Name cannot be empty"
+                    : !metaDirty
+                    ? "No changes to save"
+                    : undefined
+                }
+                data-testid="save-meta"
+              >
+                <Save className="mr-2 h-4 w-4" /> {saveMeta.isPending ? "Saving…" : "Save"}
+              </Button>
+              <span className="truncate text-xs text-muted-foreground">{script.language}</span>
+            </div>
+            <div className="flex shrink-0 gap-2">
+              <Button
+                variant="outline"
+                onClick={() => run.mutate()}
+                disabled={!script || run.isPending}
+                className="min-h-10"
+              >
+                <Play className="mr-2 h-4 w-4" /> {run.isPending ? "Starting…" : "Run"}
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  if (window.confirm(`Delete script "${script.name}"?`)) delScript.mutate();
+                }}
+                disabled={delScript.isPending}
+                title="Delete script"
+                className="min-h-10"
+              >
+                <Trash2 className="mr-2 h-4 w-4" /> Delete
+              </Button>
+            </div>
           </div>
-          <div className="flex shrink-0 gap-2">
-            <Button
-              variant="outline"
-              onClick={() => run.mutate()}
-              disabled={!script || run.isPending}
-              className="min-h-10"
-            >
-              <Play className="mr-2 h-4 w-4" /> {run.isPending ? "Starting…" : "Run"}
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                if (window.confirm(`Delete script "${script.name}"?`)) delScript.mutate();
-              }}
-              disabled={delScript.isPending}
-              title="Delete script"
-              className="min-h-10"
-            >
-              <Trash2 className="mr-2 h-4 w-4" /> Delete
-            </Button>
-          </div>
+          <Textarea
+            aria-label="Description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Optional description"
+            rows={1}
+            className="min-h-0 resize-none text-xs leading-tight"
+            data-testid="description-input"
+          />
         </header>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-0 flex-1 flex-col">
           <TabsList className="mx-4 self-start">
             <TabsTrigger value="editor">Editor</TabsTrigger>
-            <TabsTrigger value="config">Config</TabsTrigger>
             <TabsTrigger value="triggers">Triggers</TabsTrigger>
             <TabsTrigger value="logs">Logs</TabsTrigger>
           </TabsList>
@@ -378,6 +416,9 @@ export function ScriptEdit() {
                 if (window.confirm(`Delete ${p}?`)) del.mutate(p);
               }}
               language={script.language}
+              entrypoint={script.entrypoint}
+              entrypointOptions={entrypointOptions}
+              onEntrypointChange={(p) => updateEntrypoint.mutate(p)}
             />
             <div className="min-w-0 flex-1">
               {activePath ? (
@@ -395,54 +436,6 @@ export function ScriptEdit() {
                 </div>
               )}
             </div>
-          </TabsContent>
-
-          <TabsContent value="config" className="absolute inset-0 overflow-auto p-4 data-[state=inactive]:hidden">
-            <Card className="max-w-2xl">
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Name</Label>
-                  <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Language</Label>
-                  <p className="text-sm text-muted-foreground">{script.language}</p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="entrypoint">Entrypoint</Label>
-                  <select
-                    id="entrypoint"
-                    value={script.entrypoint}
-                    onChange={(e) => updateEntrypoint.mutate(e.target.value)}
-                    disabled={updateEntrypoint.isPending}
-                    className="block rounded-md border bg-background px-3 py-2 text-sm"
-                    data-testid="entrypoint-select"
-                  >
-                    {entrypointOptions.map((path) => (
-                      <option key={path} value={path}>
-                        {path}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="desc">Description</Label>
-                  <Textarea
-                    id="desc"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                  />
-                </div>
-                <Button
-                  onClick={() => saveMeta.mutate()}
-                  disabled={!name.trim() || saveMeta.isPending}
-                  title={!name.trim() ? "Name cannot be empty" : undefined}
-                  className="min-h-10"
-                >
-                  <Save className="mr-2 h-4 w-4" /> {saveMeta.isPending ? "Saving…" : "Save"}
-                </Button>
-              </CardContent>
-            </Card>
           </TabsContent>
 
           <TabsContent value="triggers" className="absolute inset-0 overflow-auto data-[state=inactive]:hidden">
