@@ -303,10 +303,10 @@ export function ScriptEdit() {
   return (
     <AppShell>
       <div className="flex h-[calc(100vh-4rem)] flex-col">
-        <header className="flex items-center justify-between gap-4 border-b px-4 py-2">
-          <div className="min-w-0 space-y-1">
-            <h1 className="truncate text-lg font-semibold">{script.name}</h1>
-            <p className="text-xs text-muted-foreground">
+        <header className="flex shrink-0 items-center justify-between gap-3 border-b px-4 py-1.5">
+          <div className="min-w-0 space-y-0.5">
+            <h1 className="truncate text-base font-semibold leading-tight">{script.name}</h1>
+            <p className="truncate text-xs leading-tight text-muted-foreground">
               {script.language} · entrypoint: {script.entrypoint}
             </p>
           </div>
