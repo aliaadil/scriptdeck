@@ -33,6 +33,7 @@ import {
   type FileEntry,
   type ScriptOut,
 } from "@/api/scripts";
+import { listRuns } from "@/api/runs";
 
 type RunInfo = {
   id: number;
@@ -211,6 +212,13 @@ export function ScriptEdit() {
   const run = useMutation<RunInfo, Error, void>({
     mutationFn: () => api<RunInfo>(`/scripts/${scriptId}/run`, { method: "POST" }),
     onError: (e: Error) => toast.error(e.message ?? "Run failed to start"),
+  });
+
+  const recentRuns = useQuery({
+    queryKey: ["runs", "by-script", scriptId],
+    queryFn: () => listRuns({ script_id: scriptId, limit: 20 }),
+    enabled: scriptIdValid,
+    refetchInterval: 5000,
   });
 
   const delScript = useMutation({
@@ -434,28 +442,74 @@ export function ScriptEdit() {
           </TabsContent>
 
           <TabsContent value="logs" className="overflow-auto p-4">
-            <Card>
-              <CardContent className="space-y-3 p-4">
-                {currentRunId == null ? (
-                  <p className="text-sm text-muted-foreground">Run the script to see logs.</p>
-                ) : (
-                  <>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">Run #{currentRunId}</span>
-                      <RunStatusBadge
-                        status={runStatus.data?.status ?? "running"}
-                        exitCode={runStatus.data?.exit_code ?? null}
-                      />
+            <div className="space-y-4">
+              <Card>
+                <CardContent className="space-y-2 p-4">
+                  <h3 className="text-sm font-medium">Recent runs</h3>
+                  {recentRuns.data && recentRuns.data.length > 0 ? (
+                    <div className="divide-y">
+                      {recentRuns.data.map((r) => (
+                        <button
+                          key={r.id}
+                          type="button"
+                          data-testid={`recent-run-${r.id}`}
+                          onClick={() => {
+                            setCurrentRunId(r.id);
+                            setRunLog("");
+                          }}
+                          className={`flex w-full items-center justify-between gap-2 py-2 text-left text-sm hover:bg-muted/50 ${
+                            currentRunId === r.id ? "bg-muted/40" : ""
+                          }`}
+                        >
+                          <span className="flex items-center gap-2">
+                            <span className="font-mono text-xs">#{r.id}</span>
+                            <RunStatusBadge status={r.status} exitCode={r.exit_code} />
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(r.started_at).toLocaleString()}
+                            </span>
+                            {r.schedule_id != null ? (
+                              <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px]">
+                                via schedule
+                              </span>
+                            ) : null}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            exit {r.exit_code ?? "—"}
+                          </span>
+                        </button>
+                      ))}
                     </div>
-                    <pre className="max-h-[60vh] overflow-auto rounded-md border bg-[#1e1e1e] p-3 font-mono text-[13px] leading-relaxed text-zinc-100">
-                      {runStatus.data?.status === "running" && !runLog
-                        ? "Waiting for output…"
-                        : runLog || "(no output)"}
-                    </pre>
-                  </>
-                )}
-              </CardContent>
-            </Card>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No runs yet.</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="space-y-3 p-4">
+                  {currentRunId == null ? (
+                    <p className="text-sm text-muted-foreground">
+                      Pick a run above, or hit Run in the header.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">Run #{currentRunId}</span>
+                        <RunStatusBadge
+                          status={runStatus.data?.status ?? "running"}
+                          exitCode={runStatus.data?.exit_code ?? null}
+                        />
+                      </div>
+                      <pre className="max-h-[60vh] overflow-auto rounded-md border bg-[#1e1e1e] p-3 font-mono text-[13px] leading-relaxed text-zinc-100">
+                        {runStatus.data?.status === "running" && !runLog
+                          ? "Waiting for output…"
+                          : runLog || "(no output)"}
+                      </pre>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
 

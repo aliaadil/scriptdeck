@@ -28,6 +28,21 @@ vi.mock("@/api/scripts", () => ({
   updateScript: (...a: unknown[]) => updateScript(...a),
 }));
 
+vi.mock("@/api/runs", () => ({
+  listRuns: (params?: { script_id?: number; status?: string; limit?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.script_id) q.set("script_id", String(params.script_id));
+    if (params?.status) q.set("status_filter", params.status);
+    if (params?.limit) q.set("limit", String(params.limit));
+    const qs = q.toString();
+    return apiMock(`/runs${qs ? `?${qs}` : ""}`);
+  },
+  getRun: vi.fn(),
+  triggerRun: vi.fn(),
+  cancelRun: vi.fn(),
+  listRunGroup: vi.fn(),
+}));
+
 vi.mock("@/components/ui/sonner", () => ({
   toast: {
     success: vi.fn(),
@@ -240,5 +255,42 @@ describe("ScriptEdit", () => {
     );
     expect(await screen.findByText("Run #5")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole("tab", { name: /logs/i })).toHaveAttribute("aria-selected", "true"));
+  });
+
+  it("Logs tab lists recent runs and clicking one loads its log", async () => {
+    const user = userEvent.setup();
+    const runsResp = [
+      { id: 99, script_id: 1, status: "success", exit_code: 0, started_at: "2026-08-21T00:00:00Z", ended_at: "2026-08-21T00:00:01Z", schedule_id: null, attempt: 0, retry_group: null },
+      { id: 98, script_id: 1, status: "failure", exit_code: 2, started_at: "2026-08-20T00:00:00Z", ended_at: "2026-08-20T00:00:01Z", schedule_id: 7, attempt: 0, retry_group: null },
+    ];
+    apiMock.mockImplementation((path: string) => {
+      if (path === "/scripts/1") return Promise.resolve(mockScript);
+      if (path.startsWith("/runs?script_id=1")) return Promise.resolve(runsResp);
+      if (path === "/runs/98") return Promise.resolve(runsResp[1]);
+      if (path === "/runs/98/log") return Promise.resolve({ content: "old log" });
+      return Promise.resolve({});
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : (input as Request).url;
+        if (url.endsWith("/runs/98/log")) {
+          return Promise.resolve(new Response("old log", { status: 200 }));
+        }
+        return Promise.resolve(new Response("", { status: 404 }));
+      }) as unknown as typeof fetch,
+    );
+
+    renderEditor();
+    await user.click(await screen.findByRole("tab", { name: /logs/i }));
+
+    // Both recent-run rows are rendered and the selected run header appears.
+    expect(await screen.findByTestId("recent-run-99")).toBeInTheDocument();
+    expect(screen.getByTestId("recent-run-98")).toBeInTheDocument();
+
+    await user.click(screen.getByTestId("recent-run-98"));
+    await waitFor(() =>
+      expect(screen.getByText("Run #98")).toBeInTheDocument(),
+    );
   });
 });
