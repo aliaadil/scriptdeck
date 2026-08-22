@@ -188,11 +188,14 @@ async def fire_webhook(token: str, request: Request):
             )
         ).mappings().one_or_none()
         if existing_deps:
-            await s.execute(
-                update(_deps_tbl)
-                .where(_deps_tbl.c.script_id == script_id)
-                .values(deps_json=json.dumps(deps), source="auto", updated_at=now)
-            )
+            # Preserve a user-set manual entry; only auto-update rows that
+            # were themselves auto-detected previously.
+            if existing_deps["source"] != "manual":
+                await s.execute(
+                    update(_deps_tbl)
+                    .where(_deps_tbl.c.script_id == script_id)
+                    .values(deps_json=json.dumps(deps), source="auto", updated_at=now)
+                )
         else:
             await s.execute(
                 insert(_deps_tbl).values(

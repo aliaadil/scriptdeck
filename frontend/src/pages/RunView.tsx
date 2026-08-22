@@ -108,7 +108,10 @@ export function RunView() {
           <TabsContent value="output">
             <Card>
               <CardContent className="bg-muted p-4 font-mono text-xs">
-                <LogViewer text={output || "No output."} />
+                <LogViewer
+                  className="max-h-[60vh] overflow-auto"
+                  text={output || "No output."}
+                />
               </CardContent>
             </Card>
           </TabsContent>

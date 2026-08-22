@@ -178,3 +178,55 @@ async def test_webhook_creates_run_with_params_json(webhook_ctx, monkeypatch_aut
             select(schedules.c.params_json).where(schedules.c.id == sid)
         )).one()
     assert params_row[0] == '{"region":"us-east-1","shard":3}'
+
+
+@pytest.mark.asyncio
+async def test_webhook_auto_detects_deps(webhook_ctx):
+    """Parallel of test_run_auto_detects_deps for the /webhooks/{token} path:
+    firing a webhook against a script whose source imports ``requests`` should
+    populate the script_deps row."""
+    from kindling.db.models import script_deps
+    ac, app, storage = webhook_ctx
+    # Write the source file the webhook endpoint will read.
+    (storage / "x.py").write_text("import requests\n", encoding="utf-8")
+    raw, _sid = await _seed_webhook(app)
+    r = await ac.post(f"/api/kindling/webhooks/{raw}")
+    assert r.status_code == 200, r.text
+    async with app.state.session_factory() as s:
+        row = (await s.execute(
+            select(script_deps).where(script_deps.c.script_id == 10)
+        )).mappings().one_or_none()
+    assert row is not None, "script_deps row should exist after webhook fire"
+    assert "requests" in row["deps_json"]
+    assert row["source"] == "auto"
+
+
+@pytest.mark.asyncio
+async def test_webhook_preserves_manual_deps(webhook_ctx):
+    """M2 regression: a user-set source='manual' row must survive a subsequent
+    webhook trigger (which would otherwise unconditionally overwrite it with
+    source='auto')."""
+    from kindling.db.models import script_deps
+    ac, app, storage = webhook_ctx
+    # Seed a manual deps row first (mimics what PUT /deps does).
+    async with app.state.session_factory() as s:
+        await s.execute(insert(script_deps).values(
+            script_id=10,
+            deps_json='["my-pinned-lib==1.2.3"]',
+            source="manual",
+            updated_at=datetime.now(UTC).isoformat(),
+        ))
+        await s.commit()
+    # Now write a source file that WOULD auto-detect to a different dep, and
+    # fire the webhook.
+    (storage / "x.py").write_text("import requests\n", encoding="utf-8")
+    raw, _sid = await _seed_webhook(app)
+    r = await ac.post(f"/api/kindling/webhooks/{raw}")
+    assert r.status_code == 200, r.text
+    async with app.state.session_factory() as s:
+        row = (await s.execute(
+            select(script_deps).where(script_deps.c.script_id == 10)
+        )).mappings().one()
+    # Manual entry must be preserved verbatim.
+    assert row["source"] == "manual"
+    assert row["deps_json"] == '["my-pinned-lib==1.2.3"]'

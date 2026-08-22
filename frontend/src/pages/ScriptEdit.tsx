@@ -503,6 +503,7 @@ export function ScriptEdit() {
                         />
                       </div>
                       <LogViewer
+                        className="max-h-[60vh] overflow-auto rounded-md border bg-[#1e1e1e] p-3 font-mono text-[13px] leading-relaxed text-zinc-100"
                         text={
                           runStatus.data?.status === "running" && !runLog
                             ? "Waiting for output…"

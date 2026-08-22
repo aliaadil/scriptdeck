@@ -199,11 +199,14 @@ async def _trigger_run(app, script_id: int, user: User) -> RunOut:
             )
         ).mappings().one_or_none()
         if existing_deps:
-            await s.execute(
-                update(deps_tbl)
-                .where(deps_tbl.c.script_id == script.id)
-                .values(deps_json=json.dumps(deps), source="auto", updated_at=now)
-            )
+            # Preserve a user-set manual entry; only auto-update rows that
+            # were themselves auto-detected previously.
+            if existing_deps["source"] != "manual":
+                await s.execute(
+                    update(deps_tbl)
+                    .where(deps_tbl.c.script_id == script.id)
+                    .values(deps_json=json.dumps(deps), source="auto", updated_at=now)
+                )
         else:
             await s.execute(
                 insert(deps_tbl).values(
