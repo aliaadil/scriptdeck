@@ -208,6 +208,17 @@ describe("ScriptEdit", () => {
     );
   });
 
+  it("Config tab has no extra top padding beyond TabsContent", async () => {
+    const user = userEvent.setup();
+    renderEditor();
+    await user.click(await screen.findByRole("tab", { name: /config/i }));
+
+    const tabPanel = screen.getByRole("tabpanel", { name: /config/i });
+    const card = tabPanel.querySelector(".pt-6");
+    // The CardContent must not stack its own pt-6 on top of TabsContent p-4.
+    expect(card).toBeNull();
+  });
+
   it("starts a run and switches to the Logs tab", async () => {
     const user = userEvent.setup();
     apiMock.mockImplementation((path: string) => {

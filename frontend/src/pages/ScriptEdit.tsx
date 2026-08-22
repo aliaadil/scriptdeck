@@ -325,7 +325,7 @@ export function ScriptEdit() {
         </header>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-0 flex-1 flex-col">
-          <TabsList className="mx-4 mt-2 self-start">
+          <TabsList className="mx-4 self-start">
             <TabsTrigger value="editor">Editor</TabsTrigger>
             <TabsTrigger value="config">Config</TabsTrigger>
             <TabsTrigger value="triggers">Triggers</TabsTrigger>
@@ -383,7 +383,7 @@ export function ScriptEdit() {
 
           <TabsContent value="config" className="overflow-auto p-4">
             <Card className="max-w-2xl">
-              <CardContent className="space-y-4 pt-6">
+              <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Name</Label>
                   <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
