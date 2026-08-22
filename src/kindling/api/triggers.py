@@ -23,7 +23,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field, field_validator, model_validator
-from sqlalchemy import delete, insert, select, update
+from sqlalchemy import delete, func, insert, select, update
 
 from kindling.api.deps import require_script_owner
 from kindling.api.webhooks import hash_token
@@ -170,13 +170,21 @@ async def list_triggers(
         rows = (await s.execute(
             select(
                 t,
-                # count(runs.id) as run_count
-                select(r.c.id).where(r.c.schedule_id == t.c.id).correlate(t).scalar_subquery(),
+                # Count runs per trigger via correlated scalar subquery so the
+                # LEFT JOIN's GROUP BY isn't needed. Plain `select(r.c.id)` here
+                # would return the id of one matching row (looks like 0/1),
+                # not the number of matching rows — wrap in func.count and
+                # label so `_row_to_out` can find it on the row mapping.
+                select(func.count(r.c.id))
+                .where(r.c.schedule_id == t.c.id)
+                .correlate(t)
+                .scalar_subquery()
+                .label("run_count"),
             )
             .where(t.c.script_id == script_id)
             .order_by(t.c.kind, t.c.id)
         )).mappings().all()
-    return [_row_to_out(row) for row in rows]
+    return [_row_to_out(row, row["run_count"]) for row in rows]
 
 
 @router.post("/{script_id}/triggers", status_code=201)
