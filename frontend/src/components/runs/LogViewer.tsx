@@ -23,7 +23,14 @@ function extractEnvelope(v: unknown): string | null {
   return null;
 }
 
-function classify(text: string): Line {
+function classifyCoreText(text: string): Line {
+  if (TRACE_RE.test(text)) {
+    return { kind: "trace", lines: [text] };
+  }
+  return { kind: "text", spans: parseAnsi(text) };
+}
+
+function classify(text: string): Line | Line[] {
   const stripped = text.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "");
   const trimmed = stripped.trim();
   if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
@@ -31,19 +38,22 @@ function classify(text: string): Line {
       const v = JSON.parse(trimmed);
       const envelope = extractEnvelope(v);
       if (envelope !== null) {
-        // Unwrap: render the inner string as a text line so the user
-        // sees the actual content, not the JSON envelope.
-        return { kind: "text", spans: parseAnsi(envelope) };
+        // Unwrap and split the inner string on newlines so each line
+        // renders as its own block. Without this, an envelope that
+        // contains embedded \n collapses into a single visible row.
+        const out: Line[] = [];
+        for (const piece of envelope.split("\n")) {
+          if (piece === "") continue;
+          out.push(classifyCoreText(piece));
+        }
+        return out;
       }
       return { kind: "json", value: v, raw: text };
     } catch {
       /* fall through */
     }
   }
-  if (TRACE_RE.test(text)) {
-    return { kind: "trace", lines: [text] };
-  }
-  return { kind: "text", spans: parseAnsi(text) };
+  return classifyCoreText(text);
 }
 
 function mergeTrace(prev: Line | undefined, current: Line): Line {
@@ -80,7 +90,13 @@ export function LogViewer({ text, className }: { text: string; className?: strin
     for (const line of text.split("\n")) {
       if (line === "") continue;
       const next = classify(line);
-      out.push(mergeTrace(out[out.length - 1], next));
+      if (Array.isArray(next)) {
+        for (const piece of next) {
+          out.push(mergeTrace(out[out.length - 1], piece));
+        }
+      } else {
+        out.push(mergeTrace(out[out.length - 1], next));
+      }
     }
     return out;
   }, [text]);

@@ -47,4 +47,21 @@ describe("LogViewer", () => {
     expect(screen.getByText(/foo/)).toBeInTheDocument();
     expect(screen.getByText(/\[/)).toBeInTheDocument();
   });
+
+  it("splits embedded newlines inside an envelope string into separate rows", () => {
+    // Use String.raw so the input contains literal "\n" (backslash-n).
+    // JSON.parse turns the escape sequence inside the string into a real
+    // newline, which is what we want to split on after unwrapping.
+    const text = String.raw`{"content":"1234\nHello from Kindling (api_key length: 4)\n"}`;
+    const { container } = render(<LogViewer text={text} />);
+    const rowContainer = container.querySelector(".space-y-1.font-mono");
+    expect(rowContainer).not.toBeNull();
+    const rows = rowContainer!.querySelectorAll(":scope > div");
+    expect(rows.length).toBe(2);
+    expect(rows[0].textContent).toBe("1234");
+    expect(rows[1].textContent).toBe(
+      "Hello from Kindling (api_key length: 4)",
+    );
+    expect(screen.queryByText(/"content":/)).not.toBeInTheDocument();
+  });
 });
