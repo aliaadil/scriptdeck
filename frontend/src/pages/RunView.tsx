@@ -8,6 +8,7 @@ import { AppShell } from "@/components/AppShell";
 import { StatusBadge } from "@/components/StatusBadge";
 import { AttemptList } from "@/components/runs/AttemptList";
 import { LogViewer } from "@/components/runs/LogViewer";
+import { InstallForm } from "@/components/runs/InstallForm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,7 @@ export function RunView() {
   const runId = Number(id);
   const { user } = useAuth();
 
-  const { data: run } = useQuery({
+  const { data: run, refetch: refetchRun } = useQuery({
     queryKey: ["run", runId],
     queryFn: () => getRun(runId),
     refetchInterval: 5000,
@@ -126,6 +127,28 @@ export function RunView() {
                     {run?.command ?? "(not recorded for this run)"}
                   </pre>
                 </div>
+                {run && run.script_id != null && user?.role !== "viewer" && (
+                  <div>
+                    <div className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">
+                      Install package
+                    </div>
+                    <p className="mb-2 text-[11px] text-muted-foreground">
+                      Run <code>uv pip install</code> / <code>npm install</code> into
+                      this script's environment. Use after a run fails with
+                      <code> ModuleNotFoundError</code> or <code>Cannot find module</code>.
+                    </p>
+                    <InstallForm
+                      scriptId={run.script_id}
+                      output={output}
+                      onInstalled={() => {
+                        // Trigger a refetch so the next manual run sees
+                        // the freshly installed package without a full
+                        // page reload.
+                        void refetchRun();
+                      }}
+                    />
+                  </div>
+                )}
                 <div>
                   <div className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">
                     References

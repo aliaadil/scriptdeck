@@ -12,6 +12,7 @@ from kindling.api.auth import router as auth_router
 from kindling.api.deps import router as deps_router
 from kindling.api.envs import router as envs_router
 from kindling.api.health import router as health_router
+from kindling.api.install import router as install_router
 from kindling.api.presets import router as presets_router
 from kindling.api.runs import router as runs_router
 from kindling.api.schedules import router as schedules_router
@@ -125,6 +126,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(admin_router, prefix="/api/kindling")
     app.include_router(triggers_router, prefix="/api/kindling")
     app.include_router(webhooks_router, prefix="/api/kindling")
+    app.include_router(install_router, prefix="/api/kindling")
 
     # Apply migrations eagerly so tests (which don't trigger lifespan) see the
     # schema. `run_migrations_sync` is idempotent. In production the lifespan

@@ -1,10 +1,91 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 160" role="img" aria-label="Kindling">
-  <g transform="translate(20,20)">
-    <rect width="120" height="120" rx="20" fill="#0c0a09"/>
-    <circle cx="42" cy="68" r="22" fill="#dc2626"/>
-    <circle cx="72" cy="50" r="26" fill="#fb923c"/>
-    <circle cx="68" cy="76" r="18" fill="#facc15"/>
-    <circle cx="56" cy="60" r="30" fill="#fb923c" fill-opacity="0.5"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 200" role="img" aria-label="Kindling — open-source script runner">
+  <defs>
+    <radialGradient id="glow" cx="0.5" cy="0.45" r="0.5">
+      <stop offset="0%" stop-color="#fb923c" stop-opacity="0.55"/>
+      <stop offset="60%" stop-color="#dc2626" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#0c0a09" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="flameOuter" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#dc2626"/>
+      <stop offset="100%" stop-color="#f97316"/>
+    </linearGradient>
+    <linearGradient id="flameMid" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#f97316"/>
+      <stop offset="100%" stop-color="#fbbf24"/>
+    </linearGradient>
+    <linearGradient id="flameInner" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#fef3c7"/>
+    </linearGradient>
+    <linearGradient id="log" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#b45309"/>
+      <stop offset="50%" stop-color="#92400e"/>
+      <stop offset="100%" stop-color="#78350f"/>
+    </linearGradient>
+    <linearGradient id="logHi" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fbbf24" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#fbbf24" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="wordmark" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#fde68a"/>
+      <stop offset="50%" stop-color="#fb923c"/>
+      <stop offset="100%" stop-color="#dc2626"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ===== Mark card (200x200 on left) ===== -->
+  <g transform="translate(10 10)">
+    <rect width="180" height="180" rx="32" fill="#0c0a09"/>
+    <circle cx="90" cy="62" r="62" fill="url(#glow)"/>
+
+    <!-- Log 1: \ diagonal -->
+    <g transform="translate(90 106) rotate(-32)">
+      <rect x="-46" y="-10" width="92" height="20" rx="10" fill="url(#log)"/>
+      <rect x="-46" y="-10" width="92" height="6" rx="2" fill="url(#logHi)"/>
+      <circle cx="-46" cy="0" r="10" fill="#78350f"/>
+      <circle cx="-46" cy="0" r="7" fill="none" stroke="#b45309" stroke-width="1.5"/>
+      <circle cx="-46" cy="0" r="3.6" fill="none" stroke="#b45309" stroke-width="1.5"/>
+      <circle cx="46" cy="0" r="10" fill="#78350f"/>
+      <circle cx="46" cy="0" r="7" fill="none" stroke="#b45309" stroke-width="1.5"/>
+      <circle cx="46" cy="0" r="3.6" fill="none" stroke="#b45309" stroke-width="1.5"/>
+    </g>
+
+    <!-- Log 2: / diagonal -->
+    <g transform="translate(90 106) rotate(32)">
+      <rect x="-46" y="-10" width="92" height="20" rx="10" fill="url(#log)"/>
+      <rect x="-46" y="-10" width="92" height="6" rx="2" fill="url(#logHi)"/>
+      <circle cx="-46" cy="0" r="10" fill="#78350f"/>
+      <circle cx="-46" cy="0" r="7" fill="none" stroke="#b45309" stroke-width="1.5"/>
+      <circle cx="-46" cy="0" r="3.6" fill="none" stroke="#b45309" stroke-width="1.5"/>
+      <circle cx="46" cy="0" r="10" fill="#78350f"/>
+      <circle cx="46" cy="0" r="7" fill="none" stroke="#b45309" stroke-width="1.5"/>
+      <circle cx="46" cy="0" r="3.6" fill="none" stroke="#b45309" stroke-width="1.5"/>
+    </g>
+
+    <!-- Flame -->
+    <path d="M90 18 C108 40 114 64 90 86 C66 64 72 40 90 18 Z" fill="url(#flameOuter)"/>
+    <path d="M90 30 C102 46 108 64 90 80 C72 64 78 46 90 30 Z" fill="url(#flameMid)"/>
+    <path d="M90 42 C98 54 102 64 90 76 C78 64 82 54 90 42 Z" fill="url(#flameInner)"/>
+
+    <!-- Code runes around base -->
+    <g fill="#fb923c" fill-opacity="0.75" font-family="ui-monospace, 'JetBrains Mono', Menlo, Consolas, monospace" font-size="16" font-weight="600" text-anchor="middle">
+      <text x="28" y="158">&lt;/&gt;</text>
+      <text x="90" y="162">{}</text>
+      <text x="152" y="158">&gt;_</text>
+    </g>
   </g>
-  <text x="170" y="100" font-family="ui-monospace, 'JetBrains Mono', Menlo, Consolas, monospace" font-size="64" font-weight="600" fill="#0c0a09">kindling</text>
+
+  <!-- ===== Wordmark + tagline (right of mark) ===== -->
+  <!-- Wordmark "KINDLING" — uppercase sans-serif, gradient amber→red, wide tracking.
+       fill on the <text> uses url(#wordmark). Tagline uses currentColor so the host
+       CSS color property controls ink (dark on light surfaces, light on dark). -->
+  <text x="220" y="120"
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, ui-sans-serif, system-ui, sans-serif"
+        font-size="96" font-weight="800" letter-spacing="6"
+        fill="url(#wordmark)">KINDLING</text>
+
+  <text x="222" y="158"
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, ui-sans-serif, system-ui, sans-serif"
+        font-size="20" font-weight="600" letter-spacing="6"
+        fill="currentColor" fill-opacity="0.65">OPEN-SOURCE SCRIPT RUNNER</text>
 </svg>
