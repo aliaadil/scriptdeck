@@ -8,6 +8,7 @@ const run = vi.hoisted(() => ({
   id: 42,
   script_id: 7,
   schedule_id: null,
+  trigger_kind: "manual",
   started_at: "2026-01-01T00:00:00Z",
   ended_at: "2026-01-01T00:00:03Z",
   exit_code: 0,

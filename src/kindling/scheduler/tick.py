@@ -141,6 +141,7 @@ async def _tick(
                     s,
                     script_id=sid,
                     schedule_id=row["id"],
+                    trigger_kind=row["kind"],
                     status="skipped",
                     skip_reason="overlap",
                 )
@@ -156,6 +157,7 @@ async def _tick(
                         s,
                         script_id=sid,
                         schedule_id=row["id"],
+                        trigger_kind=row["kind"],
                         status="skipped",
                         skip_reason="queue_full",
                     )
@@ -175,13 +177,16 @@ async def _tick(
                     s,
                     script_id=sid,
                     schedule_id=row["id"],
+                    trigger_kind=row["kind"],
                     status="pending",
                 )
                 await s.commit()
                 continue
 
             # No overlap OR overlap_policy='parallel' (best-effort dispatch).
-            run_id, _, _ = await create_run(s, script_id=sid, schedule_id=row["id"])
+            run_id, _, _ = await create_run(
+                s, script_id=sid, schedule_id=row["id"], trigger_kind=row["kind"]
+            )
             await s.commit()
 
             script = Script(

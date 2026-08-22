@@ -58,6 +58,8 @@ class RunOut(BaseModel):
     script_name: str
     schedule_id: int | None
     schedule_timezone: str | None = None
+    # 'manual' / 'cron' / 'interval' / 'webhook' / None (legacy rows).
+    trigger_kind: str | None = None
     started_at: str
     ended_at: str | None
     exit_code: int | None
@@ -181,7 +183,7 @@ async def _trigger_run(app, script_id: int, user: User) -> RunOut:
                 status.HTTP_409_CONFLICT, detail="another run is in progress"
             )
         run_id, started, retry_group = await run_service.create_run(
-            s, script_id=script.id, schedule_id=None
+            s, script_id=script.id, schedule_id=None, trigger_kind="manual"
         )
         # Always re-detect from source. The script_deps table is updated
         # so /deps reflects what's currently in use.
@@ -238,7 +240,7 @@ async def _trigger_run(app, script_id: int, user: User) -> RunOut:
         env_nonce=env_nonce,
     )
     return RunOut(id=run_id, script_id=script.id, script_name=script.name,
-                  schedule_id=None,
+                  schedule_id=None, trigger_kind="manual",
                   started_at=started, ended_at=None, exit_code=None, status="running",
                   retry_group=retry_group)
 
@@ -281,6 +283,7 @@ async def _execute_and_finalize(
     app,
     env_ciphertext: str | None = None,
     env_nonce: str | None = None,
+    param_env: dict[str, str] | None = None,
 ):
     try:
         result = await run_script(
@@ -293,6 +296,7 @@ async def _execute_and_finalize(
             env_ciphertext=env_ciphertext,
             env_nonce=env_nonce,
             active_procs=app.state.active_procs,
+            param_env=param_env,
         )
         status = "success" if result.exit_code == 0 else "failure"
     except Exception as exc:

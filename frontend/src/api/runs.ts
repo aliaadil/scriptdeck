@@ -2,6 +2,8 @@ import { api } from "./client";
 
 export type Run = {
   id: number; script_id: number; schedule_id: number | null;
+  // 'manual' / 'cron' / 'interval' / 'webhook' / null (legacy rows).
+  trigger_kind: string | null;
   started_at: string; ended_at: string | null; exit_code: number | null; status: string;
   attempt: number; retry_group: string | null;
 };

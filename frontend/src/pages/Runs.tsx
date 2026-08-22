@@ -105,6 +105,7 @@ type RunRow = {
   script_name: string;
   schedule_id: number | null;
   schedule_timezone?: string | null;
+  trigger_kind?: string | null;
   started_at: string;
   ended_at: string | null;
   exit_code: number | null;

@@ -247,8 +247,8 @@ describe("ScriptEdit", () => {
   it("Logs tab lists recent runs and clicking one loads its log", async () => {
     const user = userEvent.setup();
     const runsResp = [
-      { id: 99, script_id: 1, status: "success", exit_code: 0, started_at: "2026-08-21T00:00:00Z", ended_at: "2026-08-21T00:00:01Z", schedule_id: null, attempt: 0, retry_group: null },
-      { id: 98, script_id: 1, status: "failure", exit_code: 2, started_at: "2026-08-20T00:00:00Z", ended_at: "2026-08-20T00:00:01Z", schedule_id: 7, attempt: 0, retry_group: null },
+      { id: 99, script_id: 1, status: "success", exit_code: 0, started_at: "2026-08-21T00:00:00Z", ended_at: "2026-08-21T00:00:01Z", schedule_id: null, trigger_kind: "manual", attempt: 0, retry_group: null },
+      { id: 98, script_id: 1, status: "failure", exit_code: 2, started_at: "2026-08-20T00:00:00Z", ended_at: "2026-08-20T00:00:01Z", schedule_id: 7, trigger_kind: "cron", attempt: 0, retry_group: null },
     ];
     apiMock.mockImplementation((path: string) => {
       if (path === "/scripts/1") return Promise.resolve(mockScript);

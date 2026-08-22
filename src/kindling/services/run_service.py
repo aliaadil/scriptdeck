@@ -41,11 +41,17 @@ async def create_run(
     *,
     script_id: int,
     schedule_id: int | None,
+    trigger_kind: str | None = None,
     status: str = "running",
     skip_reason: str | None = None,
     retry_group: str | None = None,
 ) -> tuple[int, str, str]:
     """Insert a new run row and return (run_id, started_at, retry_group).
+
+    ``trigger_kind`` labels the source of the run ('manual', 'cron',
+    'interval', 'webhook'). ``schedule_id`` is the FK to the schedules
+    table (which holds both cron/interval AND webhook trigger rows), so
+    the UI needs trigger_kind to render an accurate badge.
 
     ``retry_group`` is the chain identity used by GET /api/runs?group=.
     If ``None``, a new ULID is generated so the row has a chain identity
@@ -62,6 +68,7 @@ async def create_run(
         .values(
             script_id=script_id,
             schedule_id=schedule_id,
+            trigger_kind=trigger_kind,
             status=status,
             skip_reason=skip_reason,
             retry_group=rg,

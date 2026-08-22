@@ -170,6 +170,7 @@ async def fire_webhook(token: str, request: Request):
             )
         run_id, started_at, retry_group = await run_service.create_run(
             s, script_id=script_id, schedule_id=schedule_id,
+            trigger_kind="webhook",
         )
         # Always re-detect from source. The script_deps table is updated
         # so /deps reflects what's currently in use.
@@ -243,19 +244,16 @@ def _schedule_execution(
     import asyncio
 
     async def _run() -> None:
-        try:
-            await run_script(
-                run_id=run_id,
-                script=script,
-                env_service=app.state.env_service,
-                log_broker=app.state.log_broker,
-                concurrency=app.state.runner_sem,
-                storage_dir=Path(app.state.settings.storage_dir),
-                active_procs=app.state.active_procs,
-                param_env=params_env,
-            )
-        except Exception as exc:
-            log.exception("webhook run_script raised for run_id=%s: %s", run_id, exc)
+        # Reuse the manual-trigger finalize wrapper so webhook runs land
+        # their terminal status (success/failure/error) and ended_at in
+        # the runs table — without this the row stays "running" forever.
+        from kindling.api.runs import _execute_and_finalize
+        await _execute_and_finalize(
+            run_id=run_id,
+            script=script,
+            app=app,
+            param_env=params_env,
+        )
 
     task = asyncio.create_task(_run())
     app.state.background_tasks.add(task)

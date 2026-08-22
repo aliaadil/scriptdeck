@@ -42,6 +42,7 @@ type RunInfo = {
   exit_code: number | null;
   started_at: string;
   ended_at: string | null;
+  trigger_kind?: string | null;
 };
 
 type EditorLanguage = "python" | "node" | "bash";
@@ -66,6 +67,25 @@ function languageForPath(path: string | null): EditorLanguage {
     return "node";
   }
   return "python";
+}
+
+function RunTriggerBadge({ kind }: { kind: string | null }) {
+  if (!kind) return null;
+  const label =
+    kind === "cron"
+      ? "via cron"
+      : kind === "interval"
+      ? "via interval"
+      : kind === "webhook"
+      ? "via webhook"
+      : kind === "manual"
+      ? "manual"
+      : `via ${kind}`;
+  return (
+    <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px]" data-testid="run-trigger-badge">
+      {label}
+    </span>
+  );
 }
 
 function RunStatusBadge({ status, exitCode }: { status: string; exitCode: number | null }) {
@@ -468,11 +488,7 @@ export function ScriptEdit() {
                             <span className="text-xs text-muted-foreground">
                               {new Date(r.started_at).toLocaleString()}
                             </span>
-                            {r.schedule_id != null ? (
-                              <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px]">
-                                via schedule
-                              </span>
-                            ) : null}
+                            {r.trigger_kind ? <RunTriggerBadge kind={r.trigger_kind} /> : null}
                           </span>
                           <span className="text-xs text-muted-foreground">
                             exit {r.exit_code ?? "—"}

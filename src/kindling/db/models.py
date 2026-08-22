@@ -164,6 +164,13 @@ runs = Table(
     Column("parent_run_id", Integer, ForeignKey("runs.id", ondelete="SET NULL")),
     Column("next_attempt_at", String),
     Column("skip_reason", String),
+    # Migration 016: how this run was triggered. 'manual' / 'cron' /
+    # 'interval' / 'webhook'. The schedule_id FK alone can't tell webhook
+    # runs apart from schedule runs (webhook rows reuse the schedules
+    # table with schedule_id pointing at the webhook trigger row), so the
+    # UI needs an explicit field. Nullable for rows written before this
+    # migration.
+    Column("trigger_kind", String),
     CheckConstraint(
         "status IN ('running', 'success', 'failure', 'error', 'cancelled', "
         "'skipped', 'pending', 'pending_retry')",
