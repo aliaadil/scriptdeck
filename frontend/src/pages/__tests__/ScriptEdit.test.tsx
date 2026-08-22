@@ -18,6 +18,7 @@ const createScriptFile = vi.fn();
 const updateScriptEntrypoint = vi.fn();
 const updateScript = vi.fn();
 
+const triggerRun = vi.fn();
 vi.mock("@/api/scripts", () => ({
   listScriptsFiles: (...a: unknown[]) => listScriptsFiles(...a),
   getScriptFile: (...a: unknown[]) => getScriptFile(...a),
@@ -26,6 +27,7 @@ vi.mock("@/api/scripts", () => ({
   createScriptFile: (...a: unknown[]) => createScriptFile(...a),
   updateScriptEntrypoint: (...a: unknown[]) => updateScriptEntrypoint(...a),
   updateScript: (...a: unknown[]) => updateScript(...a),
+  triggerRun: (...a: unknown[]) => triggerRun(...a),
 }));
 
 vi.mock("@/api/runs", () => ({
@@ -225,21 +227,18 @@ describe("ScriptEdit", () => {
     const user = userEvent.setup();
     apiMock.mockImplementation((path: string) => {
       if (path === "/scripts/1") return Promise.resolve(mockScript);
-      if (path === "/scripts/1/run") {
-        return Promise.resolve({ id: 5, script_id: 1, status: "running", exit_code: null });
-      }
       if (path === "/runs/5") {
         return Promise.resolve({ id: 5, script_id: 1, status: "success", exit_code: 0 });
       }
       return Promise.resolve({});
     });
+    triggerRun.mockReset();
+    triggerRun.mockResolvedValue({ id: 5, script_id: 1, status: "running", exit_code: null, params_json: null });
     renderEditor();
 
     await user.click(await screen.findByRole("button", { name: /run/i }));
 
-    await waitFor(() =>
-      expect(apiMock).toHaveBeenCalledWith("/scripts/1/run", { method: "POST" }),
-    );
+    await waitFor(() => expect(triggerRun).toHaveBeenCalledWith(1, undefined));
     expect(await screen.findByText("Run #5")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole("tab", { name: /logs/i })).toHaveAttribute("aria-selected", "true"));
   });
@@ -300,5 +299,58 @@ describe("ScriptEdit", () => {
     // The X icon button for stopping a stuck run is present and labelled.
     expect(await screen.findByTestId("cancel-run-50")).toBeInTheDocument();
     expect(screen.getByLabelText("Cancel run 50")).toBeInTheDocument();
+  });
+
+  it("toggles a params textarea via the chevron next to Run", async () => {
+    const user = userEvent.setup();
+    renderEditor();
+
+    // Chevron labelled "Show params" should be present; textarea should not.
+    const chevron = await screen.findByLabelText("Show params");
+    expect(screen.queryByTestId("run-params-textarea")).not.toBeInTheDocument();
+    await user.click(chevron);
+    expect(await screen.findByTestId("run-params-textarea")).toBeInTheDocument();
+    // Toggling again hides it.
+    expect(screen.getByLabelText("Hide params")).toBeInTheDocument();
+    await user.click(screen.getByLabelText("Hide params"));
+    expect(screen.queryByTestId("run-params-textarea")).not.toBeInTheDocument();
+  });
+
+  it("blocks the run and shows a toast when params JSON is invalid", async () => {
+    const user = userEvent.setup();
+    triggerRun.mockClear();
+    const { toast } = await import("@/components/ui/sonner");
+    (toast.error as ReturnType<typeof vi.fn>).mockClear();
+    renderEditor();
+
+    await user.click(await screen.findByLabelText("Show params"));
+    const textarea = await screen.findByTestId("run-params-textarea") as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: "{not json" } });
+
+    // Clicking Run with bad JSON must NOT start a run; toast.error fires.
+    await user.click(screen.getByRole("button", { name: /^run/i }));
+    expect(triggerRun).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith(
+      expect.stringMatching(/invalid params json/i),
+    );
+  });
+
+  it("passes parsed params to triggerRun when Run is clicked with valid JSON", async () => {
+    const user = userEvent.setup();
+    triggerRun.mockClear();
+    renderEditor();
+
+    await user.click(await screen.findByLabelText("Show params"));
+    const textarea = await screen.findByTestId("run-params-textarea") as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: '{"region":"us-east-1","shard":3}' } });
+
+    await user.click(screen.getByRole("button", { name: /^run/i }));
+
+    await waitFor(() =>
+      expect(triggerRun).toHaveBeenCalledWith(1, {
+        region: "us-east-1",
+        shard: 3,
+      }),
+    );
   });
 });

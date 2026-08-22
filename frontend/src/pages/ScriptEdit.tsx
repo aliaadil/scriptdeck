@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Save, Play, Trash2, X } from "lucide-react";
+import { Save, Play, Trash2, X, ChevronDown, ChevronUp } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { api } from "@/lib/api";
 import { API_BASE, getToken } from "@/api/client";
@@ -31,6 +31,7 @@ import {
   createScriptFile,
   updateScriptEntrypoint,
   updateScript,
+  triggerRun,
   type FileEntry,
   type ScriptOut,
 } from "@/api/scripts";
@@ -232,8 +233,38 @@ export function ScriptEdit() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const [showParams, setShowParams] = useState(false);
+  const [paramsText, setParamsText] = useState("");
+
   const run = useMutation<RunInfo, Error, void>({
-    mutationFn: () => api<RunInfo>(`/scripts/${scriptId}/run`, { method: "POST" }),
+    mutationFn: () => {
+      // Manual-run params: parse the textarea on click. Empty text means
+      // "no params", matching the no-body POST behaviour. Invalid JSON
+      // is surfaced as a toast and the mutation short-circuits so no
+      // run is started — better than kicking off a run with junk.
+      let parsed: Record<string, string | number | boolean> | undefined;
+      const trimmed = paramsText.trim();
+      if (trimmed) {
+        try {
+          const v = JSON.parse(trimmed);
+          if (
+            typeof v !== "object" ||
+            v === null ||
+            Array.isArray(v)
+          ) {
+            throw new Error("params must be a JSON object");
+          }
+          parsed = v as Record<string, string | number | boolean>;
+        } catch (e) {
+          toast.error(`Invalid params JSON: ${(e as Error).message}`);
+          // Return a never-resolving promise so the mutation stays in
+          // pending state (button stays disabled) until the user fixes
+          // the JSON. onError won't fire because mutationFn threw.
+          return new Promise<RunInfo>(() => {});
+        }
+      }
+      return triggerRun(scriptId, parsed) as Promise<RunInfo>;
+    },
     onError: (e: Error) => toast.error(e.message ?? "Run failed to start"),
   });
 
@@ -381,6 +412,21 @@ export function ScriptEdit() {
             </div>
             <div className="flex shrink-0 gap-2">
               <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowParams((v) => !v)}
+                aria-label={showParams ? "Hide params" : "Show params"}
+                aria-expanded={showParams}
+                className="min-h-10"
+                title={showParams ? "Hide params" : "Show params"}
+              >
+                {showParams ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+              </Button>
+              <Button
                 variant="outline"
                 onClick={() => run.mutate()}
                 disabled={!script || run.isPending}
@@ -410,6 +456,17 @@ export function ScriptEdit() {
             className="min-h-0 resize-none text-xs leading-tight"
             data-testid="description-input"
           />
+          {showParams && (
+            <Textarea
+              data-testid="run-params-textarea"
+              aria-label="Run params"
+              value={paramsText}
+              onChange={(e) => setParamsText(e.target.value)}
+              placeholder={'{"region":"us-east-1","shard":3}'}
+              rows={2}
+              className="mt-2 font-mono text-xs"
+            />
+          )}
         </header>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-0 flex-1 flex-col">
