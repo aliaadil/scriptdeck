@@ -109,6 +109,52 @@ curl -s http://127.0.0.1:8765/api/kindling/schedules
 
 > **Note:** the runner is not built yet, so no `runs` rows will appear on their own until the scheduler-tick Kanban task lands. Until then, you can manually insert a run row via `POST /api/kindling/runs` for testing.
 
+## Triggers (schedules + webhooks)
+
+A single Kindling script can have many **triggers** of three kinds:
+
+| Kind       | Fires when                                                 |
+|------------|------------------------------------------------------------|
+| `cron`     | A cron expression matches (5-field, with timezone + blackout support). |
+| `interval` | A duration like `15m` / `2h` elapses since the last fire.  |
+| `webhook`  | An external caller POSTs to `/api/kindling/webhooks/<token>`. |
+
+The `/api/kindling/triggers` endpoints (and `/api/kindling/scripts/<id>/triggers`)
+own the trigger lifecycle. The legacy `/api/kindling/schedules` endpoints
+remain unchanged for backward compatibility — both write to the same `schedules`
+table.
+
+### Webhook auth + security
+
+- Token-only. **No JWT required.**
+- The DB stores only the **SHA-256 hex digest** of the token (column
+  `webhook_token_hash`). The raw token is never persisted.
+- The token is returned **once** in the `POST /triggers` response (and again
+  when you PUT with `rotate_token: true`). After that, only the hash remains.
+- Bad or disabled tokens return **404** (not 401) — no information disclosure.
+- Rate limit: **60 requests / 60 seconds per token**, in-memory token bucket.
+
+### `KINDLING_PARAM_<KEY>` env contract
+
+Every trigger (cron, interval, **or** webhook) may carry a `params_json` JSON
+object. On enqueue, each `(key, value)` is exported into the script's
+environment as `KINDLING_PARAM_<KEY>=<value>`. Values are stringified; nested
+objects are not allowed.
+
+Precedence: the user's encrypted `.env` always wins on conflict. A webhook
+cannot overwrite a script owner's secret. Example:
+
+```json
+{"region": "us-east-1", "shard": 3}
+```
+
+becomes:
+
+```
+KINDLING_PARAM_region=us-east-1
+KINDLING_PARAM_shard=3
+```
+
 ## Configuration
 
 | Variable | Default | Purpose |

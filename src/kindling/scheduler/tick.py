@@ -8,6 +8,7 @@ from pathlib import Path
 
 from sqlalchemy import update
 
+from kindling.api.webhooks import trigger_params_env_from_dict
 from kindling.runner.executor import Script, run_script
 from kindling.services.log_broker import LogBroker
 from kindling.services.run_service import (
@@ -18,6 +19,7 @@ from kindling.services.run_service import (
     mark_pending_retry,
     pick_due_retries,
     promote_oldest_pending,
+    update_run_command,
 )
 from kindling.services.schedule_service import (
     ComputeError,
@@ -33,6 +35,26 @@ log = logging.getLogger(__name__)
 def _table():
     from kindling.db.models import runs as _runs
     return _runs
+
+
+def _split_trigger_params(raw: str | None) -> tuple[dict[str, str] | None, list[str] | None]:
+    """Decide whether the stored params_json column is a JSON object (legacy
+    env-var path) or a JSON array (argv path). Returns ``(param_env,
+    param_argv)`` — exactly one will be non-None for any stored row, both
+    None when the column is empty.
+    """
+    if not raw:
+        return (None, None)
+    try:
+        parsed = json.loads(raw)
+    except (ValueError, TypeError):
+        return (None, None)
+    if isinstance(parsed, list):
+        argv = [str(t) for t in parsed if isinstance(t, str)]
+        return (None, argv)
+    if isinstance(parsed, dict):
+        return (trigger_params_env_from_dict(parsed), None)
+    return (None, None)
 
 
 def _parse_json_list(raw: str | None) -> list[str] | None:
@@ -107,6 +129,9 @@ async def _tick(
             # for cron schedules so the timezone / blackout_dates / include_days
             # columns are honored; fall back to advance_next_run for interval
             # schedules (which only support time-delta semantics).
+            #
+            # Webhook rows have next_run_at NULL and never appear in list_due,
+            # so this branch never sees kind='webhook' in practice.
             if row["kind"] == "cron":
                 try:
                     prev = datetime.fromisoformat(row["next_run_at"])
@@ -137,6 +162,7 @@ async def _tick(
                     s,
                     script_id=sid,
                     schedule_id=row["id"],
+                    trigger_kind=row["kind"],
                     status="skipped",
                     skip_reason="overlap",
                 )
@@ -152,6 +178,7 @@ async def _tick(
                         s,
                         script_id=sid,
                         schedule_id=row["id"],
+                        trigger_kind=row["kind"],
                         status="skipped",
                         skip_reason="queue_full",
                     )
@@ -171,13 +198,16 @@ async def _tick(
                     s,
                     script_id=sid,
                     schedule_id=row["id"],
+                    trigger_kind=row["kind"],
                     status="pending",
                 )
                 await s.commit()
                 continue
 
             # No overlap OR overlap_policy='parallel' (best-effort dispatch).
-            run_id, _, _ = await create_run(s, script_id=sid, schedule_id=row["id"])
+            run_id, _, _ = await create_run(
+                s, script_id=sid, schedule_id=row["id"], trigger_kind=row["kind"]
+            )
             await s.commit()
 
             script = Script(
@@ -190,6 +220,11 @@ async def _tick(
                 scripts_dir=storage_dir / "scripts" / str(sid),
                 requirements=[],
             )
+            # Per-trigger params: a stored JSON object becomes
+            # KINDLING_PARAM_<KEY>=<value> env vars (legacy path);
+            # a stored JSON array becomes raw argv appended after the
+            # entrypoint — same on-wire payload as the Manual Run button.
+            param_env, param_argv = _split_trigger_params(row.get("params_json"))
             _schedule(
                 app=app,
                 run_id=run_id,
@@ -199,6 +234,8 @@ async def _tick(
                 concurrency=concurrency,
                 storage_dir=storage_dir,
                 session_factory=session_factory,
+                param_env=param_env,
+                param_argv=param_argv,
             )
 
         # ---- Phase 2: due retries (pending_retry -> running) ----
@@ -224,6 +261,10 @@ async def _tick(
                 scripts_dir=storage_dir / "scripts" / str(sid),
                 requirements=[],
             )
+            # Retries reuse the original run's params (no new dispatch
+            # happened; the trigger's params_json is already recorded on the
+            # schedules row and the trigger_params_env path is exercised in
+            # the Phase 1 dispatch above).
             _schedule(
                 app=app,
                 run_id=run_id,
@@ -233,6 +274,7 @@ async def _tick(
                 concurrency=concurrency,
                 storage_dir=storage_dir,
                 session_factory=session_factory,
+                param_env=None,
             )
 
         # ---- Phase 3: retention GC (idempotent; cheap when nothing to do) ----
@@ -266,6 +308,8 @@ def _schedule(
     concurrency: asyncio.Semaphore,
     storage_dir: Path,
     session_factory,
+    param_env: dict[str, str] | None = None,
+    param_argv: list[str] | None = None,
 ) -> None:
     """Create and register the background run task so its outcome isn't lost."""
     task = asyncio.create_task(
@@ -278,6 +322,8 @@ def _schedule(
             storage_dir=storage_dir,
             session_factory=session_factory,
             active_procs=(app.state.active_procs if app is not None else None),
+            param_env=param_env,
+            param_argv=param_argv,
         )
     )
     if app is not None:
@@ -304,6 +350,8 @@ async def _execute_and_finalize(
     storage_dir,
     session_factory,
     active_procs=None,
+    param_env: dict[str, str] | None = None,
+    param_argv: list[str] | None = None,
 ):
     try:
         result = await run_script(
@@ -314,6 +362,8 @@ async def _execute_and_finalize(
             concurrency=concurrency,
             storage_dir=storage_dir,
             active_procs=active_procs,
+            param_env=param_env,
+            param_argv=param_argv,
         )
         status = "success" if result.exit_code == 0 else "failure"
     except Exception as exc:
@@ -325,6 +375,12 @@ async def _execute_and_finalize(
         status = "error"
         result = type("R", (), {"exit_code": -1})()
     async with session_factory() as s:
+        # Persist the resolved argv so RunView can show "what command
+        # produced these logs?". Skipped on the except branch where
+        # `result` is a stub without a command.
+        cmd = getattr(result, "command", None)
+        if cmd is not None:
+            await update_run_command(s, run_id, cmd)
         if status == "failure":
             from sqlalchemy import select as _select
 

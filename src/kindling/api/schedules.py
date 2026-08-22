@@ -3,9 +3,10 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from datetime import date as _date
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import delete, func, insert, select, update
 
 from kindling.api.deps import require_script_owner
@@ -37,16 +38,21 @@ def _runs_table():
 
 class ScheduleCreate(BaseModel):
     script_id: int
-    kind: str = Field(pattern="^(cron|interval)$")
-    expression: str = Field(min_length=1)
+    kind: str = Field(pattern="^(cron|interval|webhook)$")
+    # expression is required for cron/interval (validated below) but meaningless
+    # for webhook — webhook rows store NULL in the expression column.
+    expression: str | None = Field(default=None, min_length=1)
     enabled: bool = True
     retry_max: int = Field(default=0, ge=0)
     retry_backoff: int = Field(default=0, ge=0)
+    # cron/interval-specific fields; rejected for webhook (model validator).
     timezone: str | None = None
     blackout_dates: list[str] | None = None
     include_days: list[int] | None = None
     overlap_policy: str = "skip"
     queue_max: int = Field(default=10, ge=1, le=100)
+    # webhook-specific fields; rejected for cron/interval (model validator).
+    params_json: dict[str, Any] | None = None
 
     @field_validator("blackout_dates")
     @classmethod
@@ -76,14 +82,54 @@ class ScheduleCreate(BaseModel):
             raise ValueError(f"bad overlap_policy: {v!r}")
         return v
 
+    @field_validator("params_json")
+    @classmethod
+    def _check_params(cls, v: dict[str, Any] | None) -> dict[str, Any] | None:
+        if v is None:
+            return v
+        # JSON object only — keys must be non-empty strings, values must be
+        # primitives or short strings (we pass them through as env vars).
+        for k, val in v.items():
+            if not isinstance(k, str) or not k:
+                raise ValueError("params_json keys must be non-empty strings")
+            if not isinstance(val, (str, int, float, bool)):
+                raise ValueError(
+                    f"params_json[{k!r}] must be a primitive "
+                    f"(str/int/float/bool), got {type(val).__name__}"
+                )
+        return v
+
+    @model_validator(mode="after")
+    def _kind_appropriate_fields(self) -> ScheduleCreate:
+        if self.kind == "webhook":
+            # cron/interval-specific fields must NOT be set
+            if self.timezone is not None:
+                raise ValueError("timezone not allowed for kind='webhook'")
+            if self.blackout_dates is not None:
+                raise ValueError("blackout_dates not allowed for kind='webhook'")
+            if self.include_days is not None:
+                raise ValueError("include_days not allowed for kind='webhook'")
+            # webhook rows have no expression — store NULL
+            self.expression = None
+        else:
+            # cron/interval: webhook-specific fields must NOT be set
+            if self.params_json is not None:
+                raise ValueError("params_json only allowed for kind='webhook'")
+            # expression must be a non-empty string for cron/interval
+            if not self.expression:
+                raise ValueError(
+                    f"expression is required for kind='{self.kind}'"
+                )
+        return self
+
 
 class ScheduleOut(BaseModel):
     id: int
     script_id: int
     kind: str
-    expression: str
+    expression: str | None
     enabled: bool
-    next_run_at: str
+    next_run_at: str | None
     retry_max: int
     retry_backoff: int
     timezone: str | None
@@ -92,6 +138,7 @@ class ScheduleOut(BaseModel):
     overlap_policy: str
     queue_max: int
     queue_dropped: int
+    params_json: dict[str, Any] | None = None
     run_count: int = 0
 
 
@@ -103,6 +150,7 @@ def _require(user: User) -> None:
 def _row_to_out(row, run_count: int = 0) -> ScheduleOut:
     bo = json.loads(row["blackout_dates"]) if row["blackout_dates"] else None
     inc = json.loads(row["include_days"]) if row["include_days"] else None
+    params = json.loads(row["params_json"]) if row.get("params_json") else None
     return ScheduleOut(
         id=row["id"], script_id=row["script_id"], kind=row["kind"],
         expression=row["expression"], enabled=bool(row["enabled"]),
@@ -111,6 +159,7 @@ def _row_to_out(row, run_count: int = 0) -> ScheduleOut:
         timezone=row["timezone"], blackout_dates=bo, include_days=inc,
         overlap_policy=row["overlap_policy"], queue_max=row["queue_max"],
         queue_dropped=row["queue_dropped"],
+        params_json=params,
         run_count=int(run_count),
     )
 
@@ -200,12 +249,20 @@ async def create(body: ScheduleCreate, request: Request,
     sf = request.app.state.session_factory
     t = _table()
     now = datetime.now(UTC).isoformat()
-    initial_next = advance_next_run(body.kind, body.expression, now)
+    # Webhook rows have no schedule cursor — they're only fired on HTTP hit.
+    if body.kind == "webhook":
+        initial_next = None
+        expr_value: str | None = None
+    else:
+        # model validator guarantees body.expression is a non-empty str here
+        assert body.expression is not None
+        initial_next = advance_next_run(body.kind, body.expression, now)
+        expr_value = body.expression
     async with sf() as s:
         await require_script_owner(s, body.script_id, user)
         stmt = (
             insert(t).values(
-                script_id=body.script_id, kind=body.kind, expression=body.expression,
+                script_id=body.script_id, kind=body.kind, expression=expr_value,
                 enabled=1 if body.enabled else 0, next_run_at=initial_next,
                 retry_max=body.retry_max, retry_backoff=body.retry_backoff,
                 timezone=body.timezone,
@@ -213,6 +270,7 @@ async def create(body: ScheduleCreate, request: Request,
                 include_days=json.dumps(body.include_days) if body.include_days else None,
                 overlap_policy=body.overlap_policy,
                 queue_max=body.queue_max,
+                params_json=json.dumps(body.params_json) if body.params_json else None,
             ).returning(*t.c)
         )
         row = (await s.execute(stmt)).mappings().one()
@@ -227,7 +285,14 @@ async def update_schedule(schedule_id: int, body: ScheduleCreate, request: Reque
     sf = request.app.state.session_factory
     t = _table()
     now = datetime.now(UTC).isoformat()
-    new_next = advance_next_run(body.kind, body.expression, now)
+    # Same logic as create — webhook rows have no schedule cursor.
+    if body.kind == "webhook":
+        new_next = None
+        expr_value: str | None = None
+    else:
+        assert body.expression is not None
+        new_next = advance_next_run(body.kind, body.expression, now)
+        expr_value = body.expression
     async with sf() as s:
         # Load the existing schedule to find its script_id before mutating;
         # verify ownership before we change any data.
@@ -240,7 +305,7 @@ async def update_schedule(schedule_id: int, body: ScheduleCreate, request: Reque
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="schedule not found")
         await require_script_owner(s, int(existing["script_id"]), user)
         await s.execute(update(t).where(t.c.id == schedule_id).values(
-            kind=body.kind, expression=body.expression,
+            kind=body.kind, expression=expr_value,
             enabled=1 if body.enabled else 0, next_run_at=new_next,
             retry_max=body.retry_max, retry_backoff=body.retry_backoff,
             timezone=body.timezone,
@@ -248,6 +313,7 @@ async def update_schedule(schedule_id: int, body: ScheduleCreate, request: Reque
             include_days=json.dumps(body.include_days) if body.include_days else None,
             overlap_policy=body.overlap_policy,
             queue_max=body.queue_max,
+            params_json=json.dumps(body.params_json) if body.params_json else None,
         ))
         await s.commit()
         row = (await s.execute(select(t).where(t.c.id == schedule_id))).mappings().one()

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Save, Play, Trash2 } from "lucide-react";
+import { Save, Play, Trash2, X, ChevronDown, ChevronUp, Pencil, Check } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { api } from "@/lib/api";
 import { API_BASE, getToken } from "@/api/client";
@@ -9,12 +9,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/sonner";
 import { FileTree } from "@/components/editor/FileTree";
 import { EditorPanel } from "@/components/editor/EditorPanel";
 import { FileDialog } from "@/components/editor/FileDialog";
+import { useAuth } from "@/auth/AuthProvider";
+import { TriggersTab } from "@/components/schedules/TriggersTab";
+import { LogViewer } from "@/components/runs/LogViewer";
 import {
   Select,
   SelectContent,
@@ -29,9 +30,16 @@ import {
   createScriptFile,
   updateScriptEntrypoint,
   updateScript,
+  triggerRun,
   type FileEntry,
   type ScriptOut,
 } from "@/api/scripts";
+import { listRuns, cancelRun } from "@/api/runs";
+import type { Run } from "@/api/runs";
+import { ApiError } from "@/api/client";
+import { commandPreviewFor } from "@/lib/argv";
+import { shlex } from "@/lib/shell";
+import { isPlaceholderName } from "@/lib/placeholder";
 
 type RunInfo = {
   id: number;
@@ -40,6 +48,8 @@ type RunInfo = {
   exit_code: number | null;
   started_at: string;
   ended_at: string | null;
+  trigger_kind?: string | null;
+  params_json?: Record<string, unknown> | null;
 };
 
 type EditorLanguage = "python" | "node" | "bash";
@@ -64,6 +74,31 @@ function languageForPath(path: string | null): EditorLanguage {
     return "node";
   }
   return "python";
+}
+
+/** Placeholder + hint reflect how JSON params map to argv per language.
+ *  Same JSON shape is accepted; only the invocation form differs. */
+function runArgsPlaceholder(): string {
+  return "users -p 9000";
+}
+
+function RunTriggerBadge({ kind }: { kind: string | null }) {
+  if (!kind) return null;
+  const label =
+    kind === "cron"
+      ? "via cron"
+      : kind === "interval"
+      ? "via interval"
+      : kind === "webhook"
+      ? "via webhook"
+      : kind === "manual"
+      ? "manual"
+      : `via ${kind}`;
+  return (
+    <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px]" data-testid="run-trigger-badge">
+      {label}
+    </span>
+  );
 }
 
 function RunStatusBadge({ status, exitCode }: { status: string; exitCode: number | null }) {
@@ -97,6 +132,7 @@ export function ScriptEdit() {
   const { id } = useParams();
   const nav = useNavigate();
   const qc = useQueryClient();
+  const { user } = useAuth();
 
   // Creating a script now lives on its own page; bounce any stale /scripts/new
   // links that still resolve to this route.
@@ -207,9 +243,53 @@ export function ScriptEdit() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const run = useMutation<RunInfo, Error, void>({
-    mutationFn: () => api<RunInfo>(`/scripts/${scriptId}/run`, { method: "POST" }),
+  const [showParams, setShowParams] = useState(false);
+  const [runArgs, setRunArgs] = useState("");
+  const [editingDescription, setEditingDescription] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+
+  const run = useMutation<Run, Error, void>({
+    mutationFn: () => {
+      // Manual-run args: shlex-parse the input, send raw argv to backend.
+      // Empty text == no-args run (no body POST); invalid syntax is
+      // surfaced via toast and the mutation short-circuits so no run is
+      // started.
+      const trimmed = runArgs.trim();
+      if (trimmed) {
+        const r = shlex(trimmed);
+        if (r.error || !r.tokens) {
+          toast.error(`Invalid run args: ${r.error ?? "could not parse"}`);
+          return new Promise<Run>(() => {});
+        }
+        return triggerRun(scriptId, undefined, r.tokens);
+      }
+      return triggerRun(scriptId);
+    },
     onError: (e: Error) => toast.error(e.message ?? "Run failed to start"),
+  });
+
+  const recentRuns = useQuery({
+    queryKey: ["runs", "by-script", scriptId],
+    queryFn: () => listRuns({ script_id: scriptId, limit: 20 }),
+    enabled: scriptIdValid,
+    refetchInterval: 5000,
+  });
+
+  // Force-stop a stuck running row. The backend kills the live subprocess
+  // (if any) and marks status='cancelled' even when the runner died without
+  // finalizing, so the user never has to edit the DB by hand.
+  const cancelRecent = useMutation({
+    mutationFn: (id: number) => cancelRun(id),
+    onSuccess: () => {
+      toast.success("Run cancelled");
+      qc.invalidateQueries({ queryKey: ["runs", "by-script", scriptId] });
+      qc.invalidateQueries({ queryKey: ["run", currentRunId] });
+    },
+    onError: (e: Error) => {
+      if (e instanceof ApiError && e.status === 404) toast.error("Already finished");
+      else toast.error(e.message);
+      qc.invalidateQueries({ queryKey: ["runs", "by-script", scriptId] });
+    },
   });
 
   const delScript = useMutation({
@@ -290,47 +370,222 @@ export function ScriptEdit() {
     .map((f) => f.path)
     .filter((p) => isEntrypointCandidate(p) || p === script.entrypoint);
 
+  // Dirty state for the header Save button: name or description differs
+  // from what the server last returned.
+  const trimmedName = name.trim();
+  const metaDirty =
+    trimmedName !== (script.name ?? "").trim() ||
+    description !== (script.description ?? "");
+  const nameIsPlaceholder = isPlaceholderName(trimmedName);
+  const canSaveMeta =
+    metaDirty && trimmedName.length > 0 && !nameIsPlaceholder && !saveMeta.isPending;
+
   return (
     <AppShell>
       <div className="flex h-[calc(100vh-4rem)] flex-col">
-        <header className="flex items-center justify-between gap-4 border-b px-4 py-2">
-          <div className="min-w-0 space-y-1">
-            <h1 className="truncate text-lg font-semibold">{script.name}</h1>
-            <p className="text-xs text-muted-foreground">
-              {script.language} · entrypoint: {script.entrypoint}
-            </p>
+        <header className="flex shrink-0 flex-col gap-2 border-b px-4 py-2">
+          <div className="flex items-center gap-2">
+            {editingName ? (
+              <Input
+                autoFocus
+                aria-label="Name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onBlur={() => setEditingName(false)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === "Escape") {
+                    e.preventDefault();
+                    setEditingName(false);
+                  }
+                }}
+                placeholder="Script name"
+                className="h-9 max-w-md font-semibold"
+                data-testid="name-input"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setEditingName(true)}
+                aria-label="Edit name"
+                title="Edit name"
+                className="flex max-w-md items-center truncate rounded px-2 py-1 text-left text-lg font-semibold hover:bg-muted/50 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                data-testid="name-display"
+              >
+                {name || "Untitled script"}
+              </button>
+            )}
+            {metaDirty && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => saveMeta.mutate()}
+                disabled={!canSaveMeta}
+                title={
+                  !trimmedName
+                    ? "Name cannot be empty"
+                    : nameIsPlaceholder
+                    ? 'Pick a unique name — "Untitled script" is a placeholder.'
+                    : "Save name and description"
+                }
+                data-testid="save-meta"
+              >
+                <Save className="mr-2 h-4 w-4" /> {saveMeta.isPending ? "Saving…" : "Save"}
+              </Button>
+            )}
+            {metaDirty && nameIsPlaceholder && (
+              <span
+                className="text-xs text-destructive"
+                role="alert"
+                data-testid="name-prompt"
+              >
+                Pick a unique name — &ldquo;Untitled script&rdquo; is just a placeholder.
+              </span>
+            )}
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+              <div className="flex">
+                <Button
+                  variant="outline"
+                  onClick={() => run.mutate()}
+                  disabled={!script || run.isPending}
+                  className="min-h-10 rounded-r-none border-r-0"
+                >
+                  <Play className="mr-2 h-4 w-4" /> {run.isPending ? "Starting…" : "Run"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setShowParams((v) => !v)}
+                  aria-label={showParams ? "Hide params" : "Show params"}
+                  aria-expanded={showParams}
+                  className="min-h-10 rounded-l-none px-2"
+                  title={showParams ? "Hide params" : "Show params"}
+                >
+                  {showParams ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  if (window.confirm(`Delete script "${script.name}"?`)) delScript.mutate();
+                }}
+                disabled={delScript.isPending}
+                title="Delete script"
+                className="min-h-10"
+              >
+                <Trash2 className="mr-2 h-4 w-4" /> Delete
+              </Button>
+            </div>
           </div>
-          <div className="flex shrink-0 gap-2">
-            <Button
-              variant="outline"
-              onClick={() => run.mutate()}
-              disabled={!script || run.isPending}
-              className="min-h-10"
-            >
-              <Play className="mr-2 h-4 w-4" /> {run.isPending ? "Starting…" : "Run"}
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                if (window.confirm(`Delete script "${script.name}"?`)) delScript.mutate();
-              }}
-              disabled={delScript.isPending}
-              title="Delete script"
-              className="min-h-10"
-            >
-              <Trash2 className="mr-2 h-4 w-4" /> Delete
-            </Button>
+          <div className="flex items-center gap-2" data-testid="description-row">
+            {editingDescription ? (
+              <Input
+                autoFocus
+                aria-label="Description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                onBlur={() => setEditingDescription(false)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === "Escape") {
+                    e.preventDefault();
+                    setEditingDescription(false);
+                  }
+                }}
+                placeholder="Optional description"
+                className="h-7 text-xs"
+                data-testid="description-input"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setEditingDescription(true)}
+                className={`flex-1 truncate rounded px-1 py-0.5 text-left text-xs hover:bg-muted/50 ${
+                  description ? "text-foreground" : "text-muted-foreground italic"
+                }`}
+                aria-label={description ? "Edit description" : "Add description"}
+                title="Edit description"
+                data-testid="description-display"
+              >
+                {description || "Add description"}
+              </button>
+            )}
+            {!editingDescription && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setEditingDescription(true)}
+                aria-label="Edit description"
+                title="Edit description"
+                className="h-7 w-7 shrink-0"
+                data-testid="edit-description"
+              >
+                <Pencil className="h-3 w-3" />
+              </Button>
+            )}
+            {!metaDirty && (
+              <span
+                className="flex shrink-0 items-center gap-1 self-center text-[10px] text-muted-foreground"
+                data-testid="saved-indicator"
+              >
+                <Check className="h-3 w-3" /> Saved
+              </span>
+            )}
           </div>
+          {showParams && (() => {
+            const preview = shlex(runArgs.trim());
+            const argv = preview.tokens ?? null;
+            const previewError = preview.error ?? null;
+            return (
+              <div className="space-y-1">
+                <Input
+                  data-testid="run-args-input"
+                  aria-label="Run args"
+                  aria-invalid={previewError != null}
+                  value={runArgs}
+                  onChange={(e) => setRunArgs(e.target.value)}
+                  placeholder={runArgsPlaceholder()}
+                  className="h-8 font-mono text-xs"
+                />
+                {argv && argv.length > 0 && (
+                  <p
+                    className="truncate font-mono text-[11px] text-muted-foreground"
+                    data-testid="argv-preview"
+                    title={commandPreviewFor(script.language, script.entrypoint, argv)}
+                  >
+                    {commandPreviewFor(script.language, script.entrypoint, argv)}
+                  </p>
+                )}
+                {previewError && (
+                  <p
+                    className="text-[10px] text-destructive"
+                    role="alert"
+                    data-testid="argv-error"
+                  >
+                    {previewError}
+                  </p>
+                )}
+              </div>
+            );
+          })()}
         </header>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-0 flex-1 flex-col">
-          <TabsList className="mx-4 mt-2 self-start">
+          <TabsList className="mx-4 mt-3 self-start">
             <TabsTrigger value="editor">Editor</TabsTrigger>
-            <TabsTrigger value="config">Config</TabsTrigger>
+            <TabsTrigger value="triggers">Triggers</TabsTrigger>
             <TabsTrigger value="logs">Logs</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="editor" className="mt-2 flex min-h-0 flex-1 overflow-hidden">
+          {/* Absolute-position the active panel so all tabs render from the
+              top of the available area. Without this, the Editor tabpanel's
+              `flex-1` soaks the leftover flex space even when inactive
+              (Radix keeps the wrapper mounted), pushing the active form
+              panel below the fold. */}
+          <div className="relative min-h-0 flex-1">
+            <TabsContent value="editor" forceMount className="absolute inset-0 mt-2 flex overflow-hidden data-[state=inactive]:hidden">
             <div className="md:hidden px-4 pb-2">
               {activePath !== null && (
                 <Select
@@ -360,6 +615,10 @@ export function ScriptEdit() {
               onDelete={(p) => {
                 if (window.confirm(`Delete ${p}?`)) del.mutate(p);
               }}
+              language={script.language}
+              entrypoint={script.entrypoint}
+              entrypointOptions={entrypointOptions}
+              onEntrypointChange={(p) => updateEntrypoint.mutate(p)}
             />
             <div className="min-w-0 flex-1">
               {activePath ? (
@@ -379,78 +638,96 @@ export function ScriptEdit() {
             </div>
           </TabsContent>
 
-          <TabsContent value="config" className="overflow-auto p-4">
-            <Card className="max-w-2xl">
-              <CardContent className="space-y-4 pt-6">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Name</Label>
-                  <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Language</Label>
-                  <p className="text-sm text-muted-foreground">{script.language}</p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="entrypoint">Entrypoint</Label>
-                  <select
-                    id="entrypoint"
-                    value={script.entrypoint}
-                    onChange={(e) => updateEntrypoint.mutate(e.target.value)}
-                    disabled={updateEntrypoint.isPending}
-                    className="block rounded-md border bg-background px-3 py-2 text-sm"
-                    data-testid="entrypoint-select"
-                  >
-                    {entrypointOptions.map((path) => (
-                      <option key={path} value={path}>
-                        {path}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="desc">Description</Label>
-                  <Textarea
-                    id="desc"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                  />
-                </div>
-                <Button
-                  onClick={() => saveMeta.mutate()}
-                  disabled={!name.trim() || saveMeta.isPending}
-                  title={!name.trim() ? "Name cannot be empty" : undefined}
-                  className="min-h-10"
-                >
-                  <Save className="mr-2 h-4 w-4" /> {saveMeta.isPending ? "Saving…" : "Save"}
-                </Button>
-              </CardContent>
-            </Card>
+          <TabsContent value="triggers" forceMount className="absolute inset-0 overflow-auto data-[state=inactive]:hidden">
+            {scriptIdValid ? <TriggersTab scriptId={scriptId} /> : null}
           </TabsContent>
 
-          <TabsContent value="logs" className="overflow-auto p-4">
-            <Card>
-              <CardContent className="space-y-3 p-4">
-                {currentRunId == null ? (
-                  <p className="text-sm text-muted-foreground">Run the script to see logs.</p>
-                ) : (
-                  <>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">Run #{currentRunId}</span>
-                      <RunStatusBadge
-                        status={runStatus.data?.status ?? "running"}
-                        exitCode={runStatus.data?.exit_code ?? null}
-                      />
+          <TabsContent value="logs" forceMount className="absolute inset-0 overflow-auto p-4 data-[state=inactive]:hidden">
+            <div className="space-y-4">
+              <Card>
+                <CardContent className="space-y-2 p-4">
+                  <h3 className="text-sm font-medium">Recent runs</h3>
+                  {recentRuns.data && recentRuns.data.length > 0 ? (
+                    <div className="divide-y">
+                      {recentRuns.data.map((r) => (
+                        <div
+                          key={r.id}
+                          data-testid={`recent-run-${r.id}`}
+                          onClick={() => {
+                            setCurrentRunId(r.id);
+                            setRunLog("");
+                          }}
+                          className={`flex w-full cursor-pointer items-center justify-between gap-2 py-1 hover:bg-muted/50 ${
+                            currentRunId === r.id ? "bg-muted/40" : ""
+                          }`}
+                        >
+                          <span className="flex items-center gap-2">
+                            <span className="font-mono text-xs">#{r.id}</span>
+                            <RunStatusBadge status={r.status} exitCode={r.exit_code} />
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(r.started_at).toLocaleString()}
+                            </span>
+                            {r.trigger_kind ? <RunTriggerBadge kind={r.trigger_kind} /> : null}
+                          </span>
+                          <span className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">
+                              exit {r.exit_code ?? "—"}
+                            </span>
+                            {r.status === "running" && user?.role !== "viewer" && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                aria-label={`Cancel run ${r.id}`}
+                                data-testid={`cancel-run-${r.id}`}
+                                disabled={cancelRecent.isPending}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  cancelRecent.mutate(r.id);
+                                }}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </span>
+                        </div>
+                      ))}
                     </div>
-                    <pre className="max-h-[60vh] overflow-auto rounded-md border bg-[#1e1e1e] p-3 font-mono text-[13px] leading-relaxed text-zinc-100">
-                      {runStatus.data?.status === "running" && !runLog
-                        ? "Waiting for output…"
-                        : runLog || "(no output)"}
-                    </pre>
-                  </>
-                )}
-              </CardContent>
-            </Card>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No runs yet.</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="space-y-3 p-4">
+                  {currentRunId == null ? (
+                    <p className="text-sm text-muted-foreground">
+                      Pick a run above, or hit Run in the header.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">Run #{currentRunId}</span>
+                        <RunStatusBadge
+                          status={runStatus.data?.status ?? "running"}
+                          exitCode={runStatus.data?.exit_code ?? null}
+                        />
+                      </div>
+                      <LogViewer
+                        className="max-h-[60vh] overflow-auto rounded-md border bg-[#1e1e1e] p-3 font-mono text-[13px] leading-relaxed text-zinc-100"
+                        text={
+                          runStatus.data?.status === "running" && !runLog
+                            ? "Waiting for output…"
+                            : runLog || "(no output)"
+                        }
+                      />
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
+          </div>
         </Tabs>
 
         {dialog === "add" && (

@@ -1,7 +1,75 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Kindling mark">
-  <rect width="64" height="64" rx="12" fill="#0c0a09"/>
-  <circle cx="22" cy="36" r="11" fill="#dc2626"/>
-  <circle cx="38" cy="26" r="14" fill="#fb923c"/>
-  <circle cx="36" cy="40" r="9" fill="#facc15"/>
-  <circle cx="30" cy="32" r="16" fill="#fb923c" fill-opacity="0.5"/>
+  <defs>
+    <radialGradient id="glow" cx="0.5" cy="0.45" r="0.5">
+      <stop offset="0%" stop-color="#fb923c" stop-opacity="0.55"/>
+      <stop offset="60%" stop-color="#dc2626" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#0c0a09" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="flameOuter" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#dc2626"/>
+      <stop offset="100%" stop-color="#f97316"/>
+    </linearGradient>
+    <linearGradient id="flameMid" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#f97316"/>
+      <stop offset="100%" stop-color="#fbbf24"/>
+    </linearGradient>
+    <linearGradient id="flameInner" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#fef3c7"/>
+    </linearGradient>
+    <linearGradient id="log" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#b45309"/>
+      <stop offset="50%" stop-color="#92400e"/>
+      <stop offset="100%" stop-color="#78350f"/>
+    </linearGradient>
+    <linearGradient id="logHi" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fbbf24" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#fbbf24" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Card background -->
+  <rect width="64" height="64" rx="14" fill="#0c0a09"/>
+  <!-- Warm glow halo behind flame -->
+  <circle cx="32" cy="22" r="22" fill="url(#glow)"/>
+
+  <!-- Crossed kindling logs: two diagonal beams forming an X -->
+  <!-- Log 1: \ diagonal (top-left to bottom-right) -->
+  <g transform="translate(32 38) rotate(-32)">
+    <!-- body -->
+    <rect x="-16" y="-3.6" width="32" height="7.2" rx="3.6" fill="url(#log)"/>
+    <!-- top highlight -->
+    <rect x="-16" y="-3.6" width="32" height="2" rx="1" fill="url(#logHi)"/>
+    <!-- end grain: rings -->
+    <circle cx="-16" cy="0" r="3.6" fill="#78350f"/>
+    <circle cx="-16" cy="0" r="2.6" fill="none" stroke="#b45309" stroke-width="0.6"/>
+    <circle cx="-16" cy="0" r="1.4" fill="none" stroke="#b45309" stroke-width="0.6"/>
+    <circle cx="16" cy="0" r="3.6" fill="#78350f"/>
+    <circle cx="16" cy="0" r="2.6" fill="none" stroke="#b45309" stroke-width="0.6"/>
+    <circle cx="16" cy="0" r="1.4" fill="none" stroke="#b45309" stroke-width="0.6"/>
+  </g>
+
+  <!-- Log 2: / diagonal (top-right to bottom-left), drawn over Log 1 -->
+  <g transform="translate(32 38) rotate(32)">
+    <rect x="-16" y="-3.6" width="32" height="7.2" rx="3.6" fill="url(#log)"/>
+    <rect x="-16" y="-3.6" width="32" height="2" rx="1" fill="url(#logHi)"/>
+    <circle cx="-16" cy="0" r="3.6" fill="#78350f"/>
+    <circle cx="-16" cy="0" r="2.6" fill="none" stroke="#b45309" stroke-width="0.6"/>
+    <circle cx="-16" cy="0" r="1.4" fill="none" stroke="#b45309" stroke-width="0.6"/>
+    <circle cx="16" cy="0" r="3.6" fill="#78350f"/>
+    <circle cx="16" cy="0" r="2.6" fill="none" stroke="#b45309" stroke-width="0.6"/>
+    <circle cx="16" cy="0" r="1.4" fill="none" stroke="#b45309" stroke-width="0.6"/>
+  </g>
+
+  <!-- Flame above the crossed logs, layered -->
+  <path d="M32 6 C38 14 40 22 32 30 C24 22 26 14 32 6 Z" fill="url(#flameOuter)"/>
+  <path d="M32 10 C36 16 38 22 32 28 C26 22 28 16 32 10 Z" fill="url(#flameMid)"/>
+  <path d="M32 14 C34 18 36 22 32 26 C28 22 30 18 32 14 Z" fill="url(#flameInner)"/>
+
+  <!-- Code runes around the base: <code>, prompt, <run> -->
+  <g fill="#fb923c" fill-opacity="0.75" font-family="ui-monospace, 'JetBrains Mono', Menlo, Consolas, monospace" font-size="6" font-weight="600" text-anchor="middle">
+    <text x="10" y="56">&lt;/&gt;</text>
+    <text x="32" y="58">{}</text>
+    <text x="54" y="56">&gt;_</text>
+  </g>
 </svg>

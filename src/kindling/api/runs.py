@@ -3,18 +3,22 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
-from sqlalchemy import select, update
+from pydantic import BaseModel, field_validator
+from sqlalchemy import insert, select, update
 
+from kindling.api._params import check_params_argv, check_params_exclusive, check_params_json
 from kindling.api.deps import require_run_owner, require_script_owner
 from kindling.auth.deps import current_user
 from kindling.auth.users import User
 from kindling.runner.executor import Script, run_script
 from kindling.services import run_service, script_service
+from kindling.services.dep_detect import detect_deps_for_language
 
 log = logging.getLogger(__name__)
 
@@ -48,6 +52,27 @@ def _envs_table():
 
 class RunTrigger(BaseModel):
     script_id: int
+    params_json: dict[str, Any] | None = None
+    params_argv: list[str] | None = None
+
+    @field_validator("params_json")
+    @classmethod
+    def _check_params(cls, v: dict[str, Any] | None) -> dict[str, Any] | None:
+        # Mirror TriggerCreate.params_json rules so the manual endpoint
+        # accepts exactly the same shape schedules and webhooks do.
+        return check_params_json(v)
+
+    @field_validator("params_argv")
+    @classmethod
+    def _check_argv(cls, v: list[Any] | None) -> list[str] | None:
+        return check_params_argv(v)
+
+    @field_validator("params_argv", mode="after")
+    @classmethod
+    def _check_exclusive(cls, v: list[str] | None, info) -> None:
+        # mode='after' lets us see the sibling field's value via info.data
+        check_params_exclusive(info.data.get("params_json"), v)
+        return v
 
 
 class RunOut(BaseModel):
@@ -56,6 +81,8 @@ class RunOut(BaseModel):
     script_name: str
     schedule_id: int | None
     schedule_timezone: str | None = None
+    # 'manual' / 'cron' / 'interval' / 'webhook' / None (legacy rows).
+    trigger_kind: str | None = None
     started_at: str
     ended_at: str | None
     exit_code: int | None
@@ -66,6 +93,35 @@ class RunOut(BaseModel):
     # _trigger_run builds RunOut by hand for a fresh (attempt 0) run.
     attempt: int = 0
     retry_group: str | None = None
+    # Migration 017: the JSON payload (parsed) the manual run was started
+    # with, or null when this run wasn't started from /scripts/{id}/run
+    # with a params body (or pre-feature). Holds a dict for the
+    # params_json path and a list[str] for the params_argv path — both
+    # shapes round-trip through the same TEXT column.
+    params_json: dict[str, Any] | list[Any] | None = None
+    # Migration 018: the space-joined argv actually handed to the
+    # subprocess at run time (interpreter + source path + any resolved
+    # param_argv). Nullable for legacy rows and for runs that failed
+    # before the runner resolved a command.
+    command: str | None = None
+
+    @field_validator("params_json", mode="before")
+    @classmethod
+    def _coerce_params_json(cls, v: Any) -> Any:
+        # The DB column stores a JSON-encoded payload as TEXT; both the
+        # list and detail endpoints construct RunOut directly from a
+        # SQLAlchemy RowMapping, so we parse the string back here.
+        # Corrupt legacy rows surface as None rather than 500ing the
+        # endpoint.
+        if v is None or isinstance(v, (dict, list)):
+            return v
+        if isinstance(v, str):
+            try:
+                parsed = json.loads(v)
+            except (ValueError, TypeError):
+                return None
+            return parsed if isinstance(parsed, (dict, list)) else None
+        return None
 
 
 @router.get("")
@@ -159,15 +215,38 @@ async def trigger(body: RunTrigger, request: Request,
                   user: User = Depends(current_user)) -> RunOut:
     if user.role == "viewer":
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="viewer cannot trigger")
-    return await _trigger_run(request.app, body.script_id, user)
+    return await _trigger_run(request.app, body.script_id, user,
+                              params_json=body.params_json)
 
 
-async def _trigger_run(app, script_id: int, user: User) -> RunOut:
-    """Shared trigger flow used by /runs and /scripts/{id}/run."""
+async def _trigger_run(
+    app, script_id: int, user: User,
+    *,
+    params_json: dict[str, Any] | None = None,
+    params_argv: list[str] | None = None,
+) -> RunOut:
+    """Shared trigger flow used by /runs and /scripts/{id}/run.
+
+    Exactly one of ``params_json`` (object) or ``params_argv`` (list) may
+    be provided:
+    - ``params_json``: dict → exported as KINDLING_PARAM_<KEY>=<value> env
+      vars (same as the schedule/webhook paths) and converted to
+      language-appropriate argv via argv_for() so the runner sees them as
+      sys.argv / --flags.
+    - ``params_argv``: list of strings → used verbatim as the argv
+      appended after the entrypoint. No env-var export. Lets manual
+      runners type CLI args the way they'd pass them on a shell.
+    """
+    from kindling.api.webhooks import trigger_params_env_from_dict
+    from kindling.params import argv_for
+
     sf = app.state.session_factory
     storage = Path(app.state.settings.storage_dir)
     env_ciphertext: str | None = None
     env_nonce: str | None = None
+    param_argv: list[str] = []
+    # Reflected back on RunOut — list shape for argv path, dict for json path.
+    persisted_payload: dict[str, Any] | list[str] | None = None
     async with sf() as s:
         await require_script_owner(s, script_id, user)
         script = await script_service.get_script(s, script_id)
@@ -178,13 +257,66 @@ async def _trigger_run(app, script_id: int, user: User) -> RunOut:
             raise HTTPException(
                 status.HTTP_409_CONFLICT, detail="another run is in progress"
             )
+        # Defense-in-depth: model_validators should have caught this, but a
+        # future caller path could bypass them.
+        if params_json is not None and params_argv is not None:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Provide either params_json or params_argv, not both.",
+            )
+        params_json_str: str | None
+        if params_argv is not None:
+            # User provided raw argv — use verbatim; no language transform.
+            param_argv = list(params_argv)
+            persisted_payload = param_argv
+            params_json_str = json.dumps(param_argv) if param_argv else None
+        elif params_json:
+            # Compute argv up-front so an invalid language raises 422 here
+            # rather than mid-background-task (which would leave the run
+            # row stuck in 'running').
+            param_argv = argv_for(script.language, params_json)
+            persisted_payload = params_json
+            params_json_str = json.dumps(params_json)
+        else:
+            param_argv = []
+            params_json_str = None
         run_id, started, retry_group = await run_service.create_run(
-            s, script_id=script.id, schedule_id=None
+            s, script_id=script.id, schedule_id=None, trigger_kind="manual",
+            params_json=params_json_str,
         )
-        deps_row = (await s.execute(
-            select(_deps_table()).where(_deps_table().c.script_id == script.id)
-        )).mappings().one_or_none()
-        deps = json.loads(deps_row["deps_json"]) if deps_row else []
+        # Always re-detect from source. The script_deps table is updated
+        # so /deps reflects what's currently in use.
+        source_path = storage / script.source_path
+        try:
+            source_text = source_path.read_text(encoding="utf-8", errors="replace")
+        except FileNotFoundError:
+            source_text = ""
+        deps = detect_deps_for_language(script.language, source_text)
+        now = datetime.now(UTC).isoformat()
+        deps_tbl = _deps_table()
+        existing_deps = (
+            await s.execute(
+                select(deps_tbl).where(deps_tbl.c.script_id == script.id)
+            )
+        ).mappings().one_or_none()
+        if existing_deps:
+            # Preserve a user-set manual entry; only auto-update rows that
+            # were themselves auto-detected previously.
+            if existing_deps["source"] != "manual":
+                await s.execute(
+                    update(deps_tbl)
+                    .where(deps_tbl.c.script_id == script.id)
+                    .values(deps_json=json.dumps(deps), source="auto", updated_at=now)
+                )
+        else:
+            await s.execute(
+                insert(deps_tbl).values(
+                    script_id=script.id,
+                    deps_json=json.dumps(deps),
+                    source="auto",
+                    updated_at=now,
+                )
+            )
         env_row = (await s.execute(
             select(_envs_table()).where(_envs_table().c.script_id == script.id)
         )).mappings().one_or_none()
@@ -205,11 +337,17 @@ async def _trigger_run(app, script_id: int, user: User) -> RunOut:
         script=runner_script,
         env_ciphertext=env_ciphertext,
         env_nonce=env_nonce,
+        # params_argv has no key/value pairs to expose as env vars; env export
+        # only makes sense for the params_json path.
+        param_env=trigger_params_env_from_dict(params_json) if params_json else None,
+        param_argv=param_argv,
     )
-    return RunOut(id=run_id, script_id=script.id, script_name=script.name,
-                  schedule_id=None,
-                  started_at=started, ended_at=None, exit_code=None, status="running",
-                  retry_group=retry_group)
+    return RunOut(
+        id=run_id, script_id=script.id, script_name=script.name,
+        schedule_id=None, trigger_kind="manual",
+        started_at=started, ended_at=None, exit_code=None, status="running",
+        retry_group=retry_group, params_json=persisted_payload,
+    )
 
 
 def _schedule_execution(
@@ -219,8 +357,16 @@ def _schedule_execution(
     script: Script,
     env_ciphertext: str | None = None,
     env_nonce: str | None = None,
+    param_env: dict[str, str] | None = None,
+    param_argv: list[str] | None = None,
 ) -> None:
-    """Create and register the background run task so its outcome isn't lost."""
+    """Create and register the background run task so its outcome isn't lost.
+
+    ``param_env`` exports KINDLING_PARAM_<KEY>=<value> into the run env.
+    ``param_argv`` is the language-mapped argv appended after the
+    entrypoint (positional for python/bash, --key value for node).
+    Both may be set, neither, or either.
+    """
     task = asyncio.create_task(
         _execute_and_finalize(
             run_id=run_id,
@@ -228,6 +374,8 @@ def _schedule_execution(
             app=app,
             env_ciphertext=env_ciphertext,
             env_nonce=env_nonce,
+            param_env=param_env,
+            param_argv=param_argv,
         )
     )
     app.state.background_tasks.add(task)
@@ -250,6 +398,8 @@ async def _execute_and_finalize(
     app,
     env_ciphertext: str | None = None,
     env_nonce: str | None = None,
+    param_env: dict[str, str] | None = None,
+    param_argv: list[str] | None = None,
 ):
     try:
         result = await run_script(
@@ -262,6 +412,8 @@ async def _execute_and_finalize(
             env_ciphertext=env_ciphertext,
             env_nonce=env_nonce,
             active_procs=app.state.active_procs,
+            param_env=param_env,
+            param_argv=param_argv,
         )
         status = "success" if result.exit_code == 0 else "failure"
     except Exception as exc:
@@ -273,6 +425,13 @@ async def _execute_and_finalize(
         status = "error"
         result = type("R", (), {"exit_code": -1})()
     async with app.state.session_factory() as s:
+        # Persist the actual command that ran — interpreter + source +
+        # param_argv, joined by spaces — so RunView can answer "which
+        # command produced these logs?" without re-resolving trigger
+        # params. Skipped on the except branch where `result` is a stub.
+        cmd = getattr(result, "command", None)
+        if cmd is not None:
+            await run_service.update_run_command(s, run_id, cmd)
         await run_service.finalize_run(s, run_id=run_id,
                                         exit_code=result.exit_code, status=status)
         await s.commit()
@@ -357,7 +516,11 @@ async def cancel(run_id: int, request: Request,
     async with sf() as s:
         if row["status"] != "running":
             return {"ok": True, "status": row["status"]}
-        await s.execute(update(t).where(t.c.id == run_id).values(status="cancelled"))
+        await s.execute(update(t).where(t.c.id == run_id).values(
+            status="cancelled",
+            ended_at=datetime.now(UTC).isoformat(),
+            exit_code=-1,
+        ))
         await s.commit()
     await request.app.state.log_broker.close(run_id, "cancelled", -1)
     return {"ok": True, "status": "cancelled"}

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from kindling.runner.sandbox_view import SandboxView
+
+if TYPE_CHECKING:
+    from kindling.services.log_broker import LogBroker
 
 
 @runtime_checkable
@@ -14,7 +17,14 @@ class LanguageRunner(Protocol):
 
     def resolve_artifact_path(self) -> str: ...
 
-    async def provision(self, work_dir: Path, deps: list[str]) -> Path: ...
+    async def provision(
+        self,
+        work_dir: Path,
+        deps: list[str],
+        artifact_path: Path | None = None,
+        log_broker: LogBroker | None = None,
+        run_id: int | None = None,
+    ) -> Path: ...
 
     def build_command(
         self, interpreter: Path, source_path: Path, env: dict[str, str]

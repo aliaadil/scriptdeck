@@ -2,6 +2,8 @@ import { Card, CardContent } from "@/components/ui/card";
 
 type Props = {
   onPick: (language: "python" | "node" | "bash") => void;
+  /** Disables every card; the click is short-circuited in the parent. */
+  disabled?: boolean;
 };
 
 const CARDS = [
@@ -10,14 +12,15 @@ const CARDS = [
   { lang: "bash" as const, emoji: "➜", label: "Bash", seed: "main.sh + .env" },
 ];
 
-export function QuickStartCards({ onPick }: Props) {
+export function QuickStartCards({ onPick, disabled = false }: Props) {
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-3" data-testid="quick-start-cards">
       {CARDS.map((c) => (
         <Card
           key={c.lang}
-          className="cursor-pointer transition-colors hover:border-primary"
-          onClick={() => onPick(c.lang)}
+          aria-disabled={disabled}
+          className={`transition-colors ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:border-primary"}`}
+          onClick={() => { if (!disabled) onPick(c.lang); }}
           data-testid={`card-${c.lang}`}
         >
           <CardContent className="flex flex-col items-center gap-2 p-6 text-center">

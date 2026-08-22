@@ -1,4 +1,5 @@
 import { api } from "./client";
+import type { Run } from "./runs";
 
 export type FileEntry = {
   path: string;
@@ -70,3 +71,27 @@ export const updateScript = (
 
 export const updateScriptEntrypoint = (id: number, entrypoint: string) =>
   updateScript(id, { entrypoint });
+
+/**
+ * POST /scripts/{id}/run. Exactly one of ``params_json`` (object) or
+ * ``params_argv`` (list of strings) may be provided:
+ *   - params_json: backend exports KINDLING_PARAM_<KEY>=<value> env vars
+ *     (same as schedule/webhook triggers) and appends language-appropriate
+ *     argv via argv_for.
+ *   - params_argv: backend appends the list verbatim after the entrypoint.
+ *     No env-var export. Lets the manual runner type CLI args the way
+ *     they'd pass them on a shell — what you type is what runs.
+ */
+export const triggerRun = (
+  script_id: number,
+  params_json?: Record<string, string | number | boolean>,
+  params_argv?: string[],
+): Promise<Run> => {
+  const body: Record<string, unknown> = {};
+  if (params_json !== undefined) body.params_json = params_json;
+  if (params_argv !== undefined) body.params_argv = params_argv;
+  return api<Run>(`/scripts/${script_id}/run`, {
+    method: "POST",
+    body: Object.keys(body).length > 0 ? JSON.stringify(body) : undefined,
+  });
+};

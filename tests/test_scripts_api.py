@@ -32,6 +32,19 @@ async def app_and_token(tmp_path):
     return app, token
 
 
+@pytest.fixture(autouse=True)
+def _stub_finalize(monkeypatch):
+    """No-op the background ``_execute_and_finalize`` so manual-run tests
+    don't leave a pending ``asyncio.Task`` holding an aiosqlite connection
+    across pytest teardown — otherwise pytest-asyncio hangs cancelling it
+    on Python 3.11/3.12.
+    """
+    async def _noop(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr("kindling.api.runs._execute_and_finalize", _noop)
+
+
 @pytest.mark.asyncio
 async def test_create_get_script(app_and_token):
     app, token = app_and_token
@@ -170,3 +183,28 @@ async def test_scripts_run_shim(app_and_token):
         )
         assert r2.status_code == 201, r2.text
         assert r2.json()["script_id"] == sid
+
+
+@pytest.mark.asyncio
+async def test_run_auto_detects_deps(app_and_token):
+    app, token = app_and_token
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as ac:
+        r = await ac.post(
+            "/api/kindling/scripts",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"name": "auto", "language": "python", "source": "import requests\n"},
+        )
+        assert r.status_code == 201, r.text
+        sid = r.json()["id"]
+        r2 = await ac.post(
+            f"/api/kindling/scripts/{sid}/run",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert r2.status_code == 201, r2.text
+        # After the trigger, the script_deps table should hold the detected list.
+        r3 = await ac.get(
+            f"/api/kindling/scripts/{sid}/deps",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert r3.status_code == 200
+        assert "requests" in r3.json()["deps"]

@@ -110,9 +110,9 @@ schedules = Table(
         nullable=False,
     ),
     Column("kind", String, nullable=False),
-    Column("expression", String, nullable=False),
+    Column("expression", String),  # nullable: webhook rows have no expression
     Column("enabled", Integer, nullable=False, default=1),
-    Column("next_run_at", String, nullable=False),
+    Column("next_run_at", String),  # nullable: webhook rows have no next_run_at
     Column("retry_max", Integer, nullable=False, default=0),
     Column("retry_backoff", Integer, nullable=False, default=0),
     Column("last_status", String),
@@ -123,7 +123,14 @@ schedules = Table(
     Column("overlap_policy", String, nullable=False, default="skip"),
     Column("queue_max", Integer, nullable=False, default=10),
     Column("queue_dropped", Integer, nullable=False, default=0),
-    CheckConstraint("kind IN ('cron', 'interval')", name="schedules_kind_check"),
+    # Migration 015: per-trigger params + webhook token hash. Both nullable;
+    # webhook rows have next_run_at NULL and expression NULL.
+    Column("params_json", Text),
+    Column("webhook_token_hash", String),
+    CheckConstraint(
+        "kind IN ('cron', 'interval', 'webhook')",
+        name="schedules_kind_check",
+    ),
     Index("idx_schedules_script", "script_id"),
     Index("idx_schedules_due", "enabled", "next_run_at"),
 )
@@ -157,6 +164,23 @@ runs = Table(
     Column("parent_run_id", Integer, ForeignKey("runs.id", ondelete="SET NULL")),
     Column("next_attempt_at", String),
     Column("skip_reason", String),
+    # Migration 016: how this run was triggered. 'manual' / 'cron' /
+    # 'interval' / 'webhook'. The schedule_id FK alone can't tell webhook
+    # runs apart from schedule runs (webhook rows reuse the schedules
+    # table with schedule_id pointing at the webhook trigger row), so the
+    # UI needs an explicit field. Nullable for rows written before this
+    # migration.
+    Column("trigger_kind", String),
+    # Migration 017: params supplied to a manual run, stored as a JSON
+    # string. Nullable — schedule/webhook runs and pre-feature manual
+    # runs have no value.
+    Column("params_json", Text),
+    # Migration 018: the exact command that was handed to the subprocess
+    # at run time — interpreter, source path, and any resolved
+    # param_argv — joined by spaces for human-readability. Lets the UI
+    # answer "what command produced these logs?" without re-resolving
+    # trigger params by hand. Nullable for legacy rows.
+    Column("command", Text),
     CheckConstraint(
         "status IN ('running', 'success', 'failure', 'error', 'cancelled', "
         "'skipped', 'pending', 'pending_retry')",

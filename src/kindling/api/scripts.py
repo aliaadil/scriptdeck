@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
+from kindling.api._params import check_params_argv, check_params_exclusive, check_params_json
 from kindling.api.deps import require_script_owner
 from kindling.api.runs import RunOut, _trigger_run
 from kindling.auth.deps import current_user
@@ -25,6 +28,9 @@ router = APIRouter(prefix="/scripts")
 
 SUPPORTED_LANGUAGES = r"^(python|node|bash)$"
 
+# Mirrors the ScriptNew default — must match verbatim (case-insensitive).
+UNTITLED_PLACEHOLDER = "untitled script"
+
 
 class ScriptCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
@@ -32,6 +38,23 @@ class ScriptCreate(BaseModel):
     source: str | None = Field(default=None, min_length=1)
     template: str | None = Field(default=None, pattern=SUPPORTED_LANGUAGES)
     description: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def _no_placeholder_name(cls, v: str) -> str:
+        """Reject the frontend default so scripts land in the DB named.
+
+        The ScriptNew page pre-fills the name input with "Untitled script".
+        Saving that placeholder pollutes the list and clashes with the
+        existing-untitled row on second attempt. Force a real name at the
+        boundary so both layers (UI button + DB) reject it.
+        """
+        if v.strip().lower() == UNTITLED_PLACEHOLDER:
+            raise ValueError(
+                'Name "Untitled script" is a placeholder — pick a unique '
+                "name before saving."
+            )
+        return v
 
 
 class ScriptOut(BaseModel):
@@ -61,6 +84,32 @@ class FileContentIn(BaseModel):
 class FileCreateIn(BaseModel):
     path: str
     content: str = ""
+
+
+class _ManualRunBody(BaseModel):
+    """Optional body for POST /scripts/{id}/run.
+
+    Defined at module scope so it isn't recreated on every request, and
+    so the same params_json rules used by RunTrigger stay in sync.
+    """
+    params_json: dict[str, Any] | None = None
+    params_argv: list[str] | None = None
+
+    @field_validator("params_json")
+    @classmethod
+    def _check_params(cls, v: dict[str, Any] | None) -> dict[str, Any] | None:
+        return check_params_json(v)
+
+    @field_validator("params_argv")
+    @classmethod
+    def _check_argv(cls, v: list[Any] | None) -> list[str] | None:
+        return check_params_argv(v)
+
+    @field_validator("params_argv", mode="after")
+    @classmethod
+    def _check_exclusive(cls, v: list[str] | None, info) -> None:
+        check_params_exclusive(info.data.get("params_json"), v)
+        return v
 
 
 def _require(user: User) -> None:
@@ -215,7 +264,40 @@ async def run_script(script_id: int, request: Request,
                     user: User = Depends(current_user)) -> RunOut:
     if user.role == "viewer":
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="viewer cannot trigger")
-    return await _trigger_run(request.app, script_id, user)
+    # Body is optional — a manual trigger without params sends no body at
+    # all. Read it manually so we accept missing/empty/{} without 422,
+    # but still let the Pydantic validator surface invalid params_json
+    # values as 422.
+    try:
+        raw = await request.json()
+    except json.JSONDecodeError:
+        # Starlette's Request.json() raises json.JSONDecodeError when the
+        # body isn't valid JSON. Tolerate it here so empty/garbage bodies
+        # behave the same as no body at all (params_json stays None);
+        # downstream consumers shouldn't see non-JSON as a 500.
+        raw = None
+    if raw is None or raw == {}:
+        body = _ManualRunBody(params_json=None, params_argv=None)
+    else:
+        try:
+            body = _ManualRunBody.model_validate(raw)
+        except ValidationError as exc:
+            # exc.errors() may contain non-JSON-serializable ctx (e.g. the
+            # raw ValueError instance); FastAPI normally strips those when
+            # raising 422 from a declared body model, but since we validate
+            # manually we have to do it ourselves.
+            safe = [
+                {k: v for k, v in err.items() if k != "ctx"}
+                for err in exc.errors()
+            ]
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY, detail=safe
+            )
+    return await _trigger_run(
+        request.app, script_id, user,
+        params_json=body.params_json,
+        params_argv=body.params_argv,
+    )
 
 
 @router.get("/{script_id}/files")

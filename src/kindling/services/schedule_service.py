@@ -95,6 +95,10 @@ def advance_next_run(kind: str, expression: str, prev_next_run: str) -> str:
 
 
 async def list_due(session: AsyncSession, now: datetime) -> list[dict[str, Any]]:
+    """Return enabled rows with ``kind IN ('cron', 'interval')`` whose
+    ``next_run_at`` is in the past. Webhook rows have ``next_run_at = NULL``
+    and are only fired on HTTP hit — the scheduler tick never picks them up.
+    """
     t = _table()
     s = _scripts()
     stmt = (
@@ -102,8 +106,13 @@ async def list_due(session: AsyncSession, now: datetime) -> list[dict[str, Any]]
             t, s.c.language, s.c.name, s.c.source_path, s.c.user_id, s.c.entrypoint,
             t.c.overlap_policy, t.c.queue_max,
             t.c.timezone, t.c.blackout_dates, t.c.include_days,
+            t.c.params_json,
         )
-        .where(t.c.enabled == 1, t.c.next_run_at <= now.isoformat())
+        .where(
+            t.c.enabled == 1,
+            t.c.next_run_at <= now.isoformat(),
+            t.c.kind.in_(("cron", "interval")),
+        )
         .join(s, t.c.script_id == s.c.id)
     )
     rows = (await session.execute(stmt)).mappings().all()

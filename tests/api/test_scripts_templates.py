@@ -238,3 +238,22 @@ def test_bash_template_runs_in_bash(tmp_path):
     )
     assert r.returncode == 0, f"bash failed (with API_KEY): {r.stderr}"
     assert r.stdout.strip() == "Hello from Kindling (api_key length: 3)"
+
+
+@pytest.mark.asyncio
+async def test_create_rejects_placeholder_name(app_ctx, monkeypatch_auth):
+    """Frontend pre-fills 'Untitled script'; backend must reject so a row
+    with that placeholder can never land in the DB (case-insensitive)."""
+    ac, app = app_ctx
+    monkeypatch_auth(user_id=1, role="admin", app=app)
+    for bad in ("Untitled script", "untitled script", "  UNTITLED SCRIPT  "):
+        r = await ac.post(
+            "/api/kindling/scripts",
+            json={"name": bad, "language": "python", "template": "python"},
+        )
+        assert r.status_code == 422, f"{bad!r} should be rejected: {r.text}"
+        # Pydantic field-validator surfaces the message in `detail`.
+        assert any(
+            "untitled script" in (m.get("msg") or "").lower()
+            for m in r.json().get("detail", [])
+        ) or "untitled script" in r.text.lower()
