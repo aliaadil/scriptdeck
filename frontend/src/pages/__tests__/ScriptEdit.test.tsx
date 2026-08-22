@@ -211,6 +211,10 @@ describe("ScriptEdit", () => {
     const user = userEvent.setup();
     renderEditor();
 
+    // Name renders as inline text by default; click it to enter edit mode.
+    const display = await screen.findByTestId("name-display");
+    expect(display).toHaveTextContent("test");
+    await user.click(display);
     const nameInput = (await screen.findByTestId("name-input")) as HTMLInputElement;
     await waitFor(() => expect(nameInput.value).toBe("test"));
     await user.clear(nameInput);
@@ -360,6 +364,23 @@ describe("ScriptEdit", () => {
     expect(screen.getByTestId("edit-description")).toBeInTheDocument();
   });
 
+  it("renders the name as inline text by default", async () => {
+    renderEditor();
+    const display = await screen.findByTestId("name-display");
+    expect(display).toHaveTextContent("test");
+    expect(screen.queryByTestId("name-input")).not.toBeInTheDocument();
+  });
+
+  it("falls back to an Untitled-script prompt when the name is empty", async () => {
+    apiMock.mockImplementation((path: string) => {
+      if (path === "/scripts/1") return Promise.resolve({ ...mockScript, name: "" });
+      return Promise.resolve({});
+    });
+    renderEditor();
+    const display = await screen.findByTestId("name-display");
+    expect(display).toHaveTextContent(/untitled script/i);
+  });
+
   it("hides the description input until the pencil toggles edit mode", async () => {
     const user = userEvent.setup();
     renderEditor();
@@ -383,6 +404,7 @@ describe("ScriptEdit", () => {
     const user = userEvent.setup();
     renderEditor();
     expect(await screen.findByTestId("saved-indicator")).toBeInTheDocument();
+    await user.click(await screen.findByTestId("name-display"));
     const nameInput = (await screen.findByTestId("name-input")) as HTMLInputElement;
     await user.type(nameInput, "x");
     await waitFor(() =>

@@ -259,6 +259,7 @@ export function ScriptEdit() {
   const [showParams, setShowParams] = useState(false);
   const [paramsText, setParamsText] = useState("");
   const [editingDescription, setEditingDescription] = useState(false);
+  const [editingName, setEditingName] = useState(false);
 
   const run = useMutation<Run, Error, void>({
     mutationFn: () => {
@@ -407,14 +408,35 @@ export function ScriptEdit() {
       <div className="flex h-[calc(100vh-4rem)] flex-col">
         <header className="flex shrink-0 flex-col gap-2 border-b px-4 py-2">
           <div className="flex items-center gap-2">
-            <Input
-              aria-label="Name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Script name"
-              className="h-9 max-w-md font-semibold"
-              data-testid="name-input"
-            />
+            {editingName ? (
+              <Input
+                autoFocus
+                aria-label="Name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onBlur={() => setEditingName(false)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === "Escape") {
+                    e.preventDefault();
+                    setEditingName(false);
+                  }
+                }}
+                placeholder="Script name"
+                className="h-9 max-w-md font-semibold"
+                data-testid="name-input"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setEditingName(true)}
+                aria-label="Edit name"
+                title="Edit name"
+                className="flex max-w-md items-center truncate rounded px-2 py-1 text-left text-lg font-semibold hover:bg-muted/50 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                data-testid="name-display"
+              >
+                {name || "Untitled script"}
+              </button>
+            )}
             {metaDirty && (
               <Button
                 size="sm"
