@@ -6,6 +6,7 @@ export type Run = {
   trigger_kind: string | null;
   started_at: string; ended_at: string | null; exit_code: number | null; status: string;
   attempt: number; retry_group: string | null;
+  params_json: Record<string, unknown> | null;
 };
 
 export const listRunGroup = (group: string) =>
