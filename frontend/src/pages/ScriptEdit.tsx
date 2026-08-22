@@ -413,29 +413,31 @@ export function ScriptEdit() {
               <span className="truncate text-xs text-muted-foreground">{script.language}</span>
             </div>
             <div className="flex shrink-0 gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setShowParams((v) => !v)}
-                aria-label={showParams ? "Hide params" : "Show params"}
-                aria-expanded={showParams}
-                className="min-h-10"
-                title={showParams ? "Hide params" : "Show params"}
-              >
-                {showParams ? (
-                  <ChevronUp className="h-4 w-4" />
-                ) : (
-                  <ChevronDown className="h-4 w-4" />
-                )}
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => run.mutate()}
-                disabled={!script || run.isPending}
-                className="min-h-10"
-              >
-                <Play className="mr-2 h-4 w-4" /> {run.isPending ? "Starting…" : "Run"}
-              </Button>
+              <div className="flex">
+                <Button
+                  variant="outline"
+                  onClick={() => run.mutate()}
+                  disabled={!script || run.isPending}
+                  className="min-h-10 rounded-r-none border-r-0"
+                >
+                  <Play className="mr-2 h-4 w-4" /> {run.isPending ? "Starting…" : "Run"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setShowParams((v) => !v)}
+                  aria-label={showParams ? "Hide params" : "Show params"}
+                  aria-expanded={showParams}
+                  className="min-h-10 rounded-l-none px-2"
+                  title={showParams ? "Hide params" : "Show params"}
+                >
+                  {showParams ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
               <Button
                 variant="destructive"
                 onClick={() => {
