@@ -383,17 +383,17 @@ export function ScriptEdit() {
   return (
     <AppShell>
       <div className="flex h-[calc(100vh-4rem)] flex-col">
-        <header className="flex shrink-0 flex-col gap-1 border-b px-4 py-1.5">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex min-w-0 flex-1 items-center gap-2">
-              <Input
-                aria-label="Name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Script name"
-                className="h-8 max-w-md font-semibold"
-                data-testid="name-input"
-              />
+        <header className="flex shrink-0 flex-col gap-2 border-b px-4 py-2">
+          <div className="flex items-center gap-2">
+            <Input
+              aria-label="Name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Script name"
+              className="h-9 max-w-md font-semibold"
+              data-testid="name-input"
+            />
+            {metaDirty ? (
               <Button
                 size="sm"
                 variant="outline"
@@ -402,17 +402,18 @@ export function ScriptEdit() {
                 title={
                   !trimmedName
                     ? "Name cannot be empty"
-                    : !metaDirty
-                    ? "No changes to save"
-                    : undefined
+                    : "Save name and description"
                 }
                 data-testid="save-meta"
               >
                 <Save className="mr-2 h-4 w-4" /> {saveMeta.isPending ? "Saving…" : "Save"}
               </Button>
-              <span className="truncate text-xs text-muted-foreground">{script.language}</span>
-            </div>
-            <div className="flex shrink-0 gap-2">
+            ) : (
+              <span className="text-xs text-muted-foreground" data-testid="saved-indicator">
+                Saved
+              </span>
+            )}
+            <div className="ml-auto flex shrink-0 items-center gap-2">
               <div className="flex">
                 <Button
                   variant="outline"
@@ -451,13 +452,12 @@ export function ScriptEdit() {
               </Button>
             </div>
           </div>
-          <Textarea
+          <Input
             aria-label="Description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Optional description"
-            rows={1}
-            className="min-h-0 resize-none text-xs leading-tight"
+            className="h-7 text-xs"
             data-testid="description-input"
           />
           {showParams && (
