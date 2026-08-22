@@ -30,13 +30,15 @@ import json
 import logging
 import time
 from collections import defaultdict, deque
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request, status
-from sqlalchemy import select
+from sqlalchemy import insert, select, update
 
 from kindling.runner.executor import Script, run_script
 from kindling.services import run_service
+from kindling.services.dep_detect import detect_deps_for_language
 
 log = logging.getLogger(__name__)
 
@@ -169,8 +171,38 @@ async def fire_webhook(token: str, request: Request):
         run_id, started_at, retry_group = await run_service.create_run(
             s, script_id=script_id, schedule_id=schedule_id,
         )
+        # Always re-detect from source. The script_deps table is updated
+        # so /deps reflects what's currently in use.
+        storage = Path(request.app.state.settings.storage_dir)
+        source_path = storage / script_row["source_path"]
+        try:
+            source_text = source_path.read_text(encoding="utf-8", errors="replace")
+        except FileNotFoundError:
+            source_text = ""
+        deps = detect_deps_for_language(script_row["language"], source_text)
+        now = datetime.now(UTC).isoformat()
+        from kindling.db.models import script_deps as _deps_tbl
+        existing_deps = (
+            await s.execute(
+                select(_deps_tbl).where(_deps_tbl.c.script_id == script_id)
+            )
+        ).mappings().one_or_none()
+        if existing_deps:
+            await s.execute(
+                update(_deps_tbl)
+                .where(_deps_tbl.c.script_id == script_id)
+                .values(deps_json=json.dumps(deps), source="auto", updated_at=now)
+            )
+        else:
+            await s.execute(
+                insert(_deps_tbl).values(
+                    script_id=script_id,
+                    deps_json=json.dumps(deps),
+                    source="auto",
+                    updated_at=now,
+                )
+            )
         await s.commit()
-    storage = Path(request.app.state.settings.storage_dir)
     # Schedule the background execution. We pass params_env via the env
     # ciphertext/none path? No — those are AES-encrypted blobs. The simplest
     # extension is to add a new kwarg to run_script. (See executor.py.)
@@ -180,7 +212,7 @@ async def fire_webhook(token: str, request: Request):
         source_path=(storage / script_row["source_path"]).resolve(),
         entrypoint=script_row["entrypoint"],
         scripts_dir=storage / "scripts" / str(script_row["id"]),
-        requirements=[],
+        requirements=deps,
     )
     _schedule_execution(
         request.app,

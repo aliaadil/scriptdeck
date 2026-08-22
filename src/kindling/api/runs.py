@@ -3,18 +3,20 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy import select, update
+from sqlalchemy import insert, select, update
 
 from kindling.api.deps import require_run_owner, require_script_owner
 from kindling.auth.deps import current_user
 from kindling.auth.users import User
 from kindling.runner.executor import Script, run_script
 from kindling.services import run_service, script_service
+from kindling.services.dep_detect import detect_deps_for_language
 
 log = logging.getLogger(__name__)
 
@@ -181,10 +183,36 @@ async def _trigger_run(app, script_id: int, user: User) -> RunOut:
         run_id, started, retry_group = await run_service.create_run(
             s, script_id=script.id, schedule_id=None
         )
-        deps_row = (await s.execute(
-            select(_deps_table()).where(_deps_table().c.script_id == script.id)
-        )).mappings().one_or_none()
-        deps = json.loads(deps_row["deps_json"]) if deps_row else []
+        # Always re-detect from source. The script_deps table is updated
+        # so /deps reflects what's currently in use.
+        source_path = storage / script.source_path
+        try:
+            source_text = source_path.read_text(encoding="utf-8", errors="replace")
+        except FileNotFoundError:
+            source_text = ""
+        deps = detect_deps_for_language(script.language, source_text)
+        now = datetime.now(UTC).isoformat()
+        deps_tbl = _deps_table()
+        existing_deps = (
+            await s.execute(
+                select(deps_tbl).where(deps_tbl.c.script_id == script.id)
+            )
+        ).mappings().one_or_none()
+        if existing_deps:
+            await s.execute(
+                update(deps_tbl)
+                .where(deps_tbl.c.script_id == script.id)
+                .values(deps_json=json.dumps(deps), source="auto", updated_at=now)
+            )
+        else:
+            await s.execute(
+                insert(deps_tbl).values(
+                    script_id=script.id,
+                    deps_json=json.dumps(deps),
+                    source="auto",
+                    updated_at=now,
+                )
+            )
         env_row = (await s.execute(
             select(_envs_table()).where(_envs_table().c.script_id == script.id)
         )).mappings().one_or_none()
