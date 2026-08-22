@@ -9,10 +9,15 @@ export type Run = {
 export const listRunGroup = (group: string) =>
   api<Run[]>(`/runs?group=${encodeURIComponent(group)}`);
 
-export const listRuns = (params?: { script_id?: number; status?: string }) => {
+export const listRuns = (params?: {
+  script_id?: number;
+  status?: string;
+  limit?: number;
+}) => {
   const q = new URLSearchParams();
   if (params?.script_id) q.set("script_id", String(params.script_id));
   if (params?.status) q.set("status_filter", params.status);
+  if (params?.limit) q.set("limit", String(params.limit));
   const qs = q.toString();
   return api<Run[]>(`/runs${qs ? `?${qs}` : ""}`);
 };
