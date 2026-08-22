@@ -16,6 +16,7 @@ import { FileTree } from "@/components/editor/FileTree";
 import { EditorPanel } from "@/components/editor/EditorPanel";
 import { FileDialog } from "@/components/editor/FileDialog";
 import { TriggersTab } from "@/components/schedules/TriggersTab";
+import { LogViewer } from "@/components/runs/LogViewer";
 import {
   Select,
   SelectContent,
@@ -501,11 +502,13 @@ export function ScriptEdit() {
                           exitCode={runStatus.data?.exit_code ?? null}
                         />
                       </div>
-                      <pre className="max-h-[60vh] overflow-auto rounded-md border bg-[#1e1e1e] p-3 font-mono text-[13px] leading-relaxed text-zinc-100">
-                        {runStatus.data?.status === "running" && !runLog
-                          ? "Waiting for output…"
-                          : runLog || "(no output)"}
-                      </pre>
+                      <LogViewer
+                        text={
+                          runStatus.data?.status === "running" && !runLog
+                            ? "Waiting for output…"
+                            : runLog || "(no output)"
+                        }
+                      />
                     </>
                   )}
                 </CardContent>

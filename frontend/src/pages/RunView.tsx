@@ -7,6 +7,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import { AppShell } from "@/components/AppShell";
 import { StatusBadge } from "@/components/StatusBadge";
 import { AttemptList } from "@/components/runs/AttemptList";
+import { LogViewer } from "@/components/runs/LogViewer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -107,9 +108,7 @@ export function RunView() {
           <TabsContent value="output">
             <Card>
               <CardContent className="bg-muted p-4 font-mono text-xs">
-                <pre className="whitespace-pre-wrap leading-relaxed">
-                  {output || "No output."}
-                </pre>
+                <LogViewer text={output || "No output."} />
               </CardContent>
             </Card>
           </TabsContent>
