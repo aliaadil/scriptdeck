@@ -175,6 +175,12 @@ runs = Table(
     # string. Nullable — schedule/webhook runs and pre-feature manual
     # runs have no value.
     Column("params_json", Text),
+    # Migration 018: the exact command that was handed to the subprocess
+    # at run time — interpreter, source path, and any resolved
+    # param_argv — joined by spaces for human-readability. Lets the UI
+    # answer "what command produced these logs?" without re-resolving
+    # trigger params by hand. Nullable for legacy rows.
+    Column("command", Text),
     CheckConstraint(
         "status IN ('running', 'success', 'failure', 'error', 'cancelled', "
         "'skipped', 'pending', 'pending_retry')",

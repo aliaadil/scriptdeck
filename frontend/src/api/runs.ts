@@ -8,6 +8,10 @@ export type Run = {
   attempt: number; retry_group: string | null;
   // Either an object (params_json path) or a list (params_argv path).
   params_json: Record<string, unknown> | unknown[] | null;
+  // Space-joined argv the runner actually handed to the subprocess
+  // (interpreter + source + resolved param_argv). Null for legacy
+  // rows and for runs that failed before the runner resolved a command.
+  command: string | null;
 };
 
 export const listRunGroup = (group: string) =>

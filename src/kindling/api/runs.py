@@ -99,6 +99,11 @@ class RunOut(BaseModel):
     # params_json path and a list[str] for the params_argv path — both
     # shapes round-trip through the same TEXT column.
     params_json: dict[str, Any] | list[Any] | None = None
+    # Migration 018: the space-joined argv actually handed to the
+    # subprocess at run time (interpreter + source path + any resolved
+    # param_argv). Nullable for legacy rows and for runs that failed
+    # before the runner resolved a command.
+    command: str | None = None
 
     @field_validator("params_json", mode="before")
     @classmethod
@@ -420,6 +425,13 @@ async def _execute_and_finalize(
         status = "error"
         result = type("R", (), {"exit_code": -1})()
     async with app.state.session_factory() as s:
+        # Persist the actual command that ran — interpreter + source +
+        # param_argv, joined by spaces — so RunView can answer "which
+        # command produced these logs?" without re-resolving trigger
+        # params. Skipped on the except branch where `result` is a stub.
+        cmd = getattr(result, "command", None)
+        if cmd is not None:
+            await run_service.update_run_command(s, run_id, cmd)
         await run_service.finalize_run(s, run_id=run_id,
                                         exit_code=result.exit_code, status=status)
         await s.commit()

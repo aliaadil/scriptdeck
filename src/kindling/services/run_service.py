@@ -74,6 +74,22 @@ async def create_run(
     return int(row[0]), row[1], row[2]
 
 
+async def update_run_command(
+    session: AsyncSession, run_id: int, command: str | None,
+) -> None:
+    """Persist the exact command the runner handed to the subprocess.
+
+    Called once ``run_script`` has resolved the interpreter + source +
+    param_argv tuple. ``None`` clears the column (for callers that
+    intentionally want to remove a previously-stored value — not used
+    today but mirrors how ``command`` is treated elsewhere).
+    """
+    t = _table()
+    await session.execute(
+        update(t).where(t.c.id == run_id).values(command=command),
+    )
+
+
 async def has_active_run(session: AsyncSession, script_id: int) -> bool:
     t = _table()
     stmt = select(t.c.id).where(t.c.script_id == script_id, t.c.status == "running")

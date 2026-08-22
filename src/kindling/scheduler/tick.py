@@ -19,6 +19,7 @@ from kindling.services.run_service import (
     mark_pending_retry,
     pick_due_retries,
     promote_oldest_pending,
+    update_run_command,
 )
 from kindling.services.schedule_service import (
     ComputeError,
@@ -374,6 +375,12 @@ async def _execute_and_finalize(
         status = "error"
         result = type("R", (), {"exit_code": -1})()
     async with session_factory() as s:
+        # Persist the resolved argv so RunView can show "what command
+        # produced these logs?". Skipped on the except branch where
+        # `result` is a stub without a command.
+        cmd = getattr(result, "command", None)
+        if cmd is not None:
+            await update_run_command(s, run_id, cmd)
         if status == "failure":
             from sqlalchemy import select as _select
 

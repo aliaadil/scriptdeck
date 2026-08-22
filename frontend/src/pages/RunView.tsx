@@ -117,14 +117,27 @@ export function RunView() {
           </TabsContent>
           <TabsContent value="config">
             <Card>
-              <CardContent className="p-4 font-mono text-xs">
-                <pre className="whitespace-pre-wrap">
-                  {JSON.stringify(
-                    { script_id: run?.script_id ?? null, schedule_id: run?.schedule_id ?? null },
-                    null,
-                    2,
-                  )}
-                </pre>
+              <CardContent className="space-y-4 p-4 font-mono text-xs">
+                <div>
+                  <div className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">
+                    Command
+                  </div>
+                  <pre className="overflow-x-auto whitespace-pre-wrap rounded bg-muted/40 p-2 text-xs">
+                    {run?.command ?? "(not recorded for this run)"}
+                  </pre>
+                </div>
+                <div>
+                  <div className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">
+                    References
+                  </div>
+                  <pre className="whitespace-pre-wrap">
+                    {JSON.stringify(
+                      { script_id: run?.script_id ?? null, schedule_id: run?.schedule_id ?? null },
+                      null,
+                      2,
+                    )}
+                  </pre>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

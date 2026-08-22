@@ -107,6 +107,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.scheduler_running = False
     app.state.background_tasks = set()
     app.state.active_procs = {}
+    # Same reasoning as the eager init above: ASGITransport-driven tests
+    # bypass the lifespan, so anything the runner reads from app.state
+    # has to be primed here. The lifespan handler re-installs the real
+    # semaphore on boot; this is a fallback for test consumers.
+    app.state.runner_sem = asyncio.Semaphore(settings.runner_concurrency)
     app.include_router(health_router, prefix="/api/kindling")
     app.include_router(auth_router, prefix="/api/kindling")
     app.include_router(users_router, prefix="/api/kindling")
