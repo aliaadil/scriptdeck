@@ -341,7 +341,13 @@ export function ScriptEdit() {
             <TabsTrigger value="logs">Logs</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="editor" className="mt-2 flex min-h-0 flex-1 overflow-hidden">
+          {/* Absolute-position the active panel so all tabs render from the
+              top of the available area. Without this, the Editor tabpanel's
+              `flex-1` soaks the leftover flex space even when inactive
+              (Radix keeps the wrapper mounted), pushing the active form
+              panel below the fold. */}
+          <div className="relative min-h-0 flex-1">
+            <TabsContent value="editor" className="absolute inset-0 mt-2 flex overflow-hidden data-[state=inactive]:hidden">
             <div className="md:hidden px-4 pb-2">
               {activePath !== null && (
                 <Select
@@ -391,7 +397,7 @@ export function ScriptEdit() {
             </div>
           </TabsContent>
 
-          <TabsContent value="config" className="overflow-auto p-4">
+          <TabsContent value="config" className="absolute inset-0 overflow-auto p-4 data-[state=inactive]:hidden">
             <Card className="max-w-2xl">
               <CardContent className="space-y-4">
                 <div className="space-y-2">
@@ -439,11 +445,11 @@ export function ScriptEdit() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="triggers" className="overflow-auto">
+          <TabsContent value="triggers" className="absolute inset-0 overflow-auto data-[state=inactive]:hidden">
             {scriptIdValid ? <TriggersTab scriptId={scriptId} /> : null}
           </TabsContent>
 
-          <TabsContent value="logs" className="overflow-auto p-4">
+          <TabsContent value="logs" className="absolute inset-0 overflow-auto p-4 data-[state=inactive]:hidden">
             <div className="space-y-4">
               <Card>
                 <CardContent className="space-y-2 p-4">
@@ -516,6 +522,7 @@ export function ScriptEdit() {
               </Card>
             </div>
           </TabsContent>
+          </div>
         </Tabs>
 
         {dialog === "add" && (
