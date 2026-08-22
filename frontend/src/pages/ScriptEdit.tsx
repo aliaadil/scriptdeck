@@ -36,6 +36,7 @@ import {
   type ScriptOut,
 } from "@/api/scripts";
 import { listRuns, cancelRun } from "@/api/runs";
+import type { Run } from "@/api/runs";
 import { ApiError } from "@/api/client";
 
 type RunInfo = {
@@ -46,6 +47,7 @@ type RunInfo = {
   started_at: string;
   ended_at: string | null;
   trigger_kind?: string | null;
+  params_json?: Record<string, unknown> | null;
 };
 
 type EditorLanguage = "python" | "node" | "bash";
@@ -236,7 +238,7 @@ export function ScriptEdit() {
   const [showParams, setShowParams] = useState(false);
   const [paramsText, setParamsText] = useState("");
 
-  const run = useMutation<RunInfo, Error, void>({
+  const run = useMutation<Run, Error, void>({
     mutationFn: () => {
       // Manual-run params: parse the textarea on click. Empty text means
       // "no params", matching the no-body POST behaviour. Invalid JSON
@@ -260,10 +262,10 @@ export function ScriptEdit() {
           // Return a never-resolving promise so the mutation stays in
           // pending state (button stays disabled) until the user fixes
           // the JSON. onError won't fire because mutationFn threw.
-          return new Promise<RunInfo>(() => {});
+          return new Promise<Run>(() => {});
         }
       }
-      return triggerRun(scriptId, parsed) as Promise<RunInfo>;
+      return triggerRun(scriptId, parsed);
     },
     onError: (e: Error) => toast.error(e.message ?? "Run failed to start"),
   });

@@ -40,7 +40,6 @@ vi.mock("@/api/runs", () => ({
     return apiMock(`/runs${qs ? `?${qs}` : ""}`);
   },
   getRun: vi.fn(),
-  triggerRun: vi.fn(),
   cancelRun: vi.fn(),
   listRunGroup: vi.fn(),
 }));

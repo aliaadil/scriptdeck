@@ -25,7 +25,5 @@ export const listRuns = (params?: {
   return api<Run[]>(`/runs${qs ? `?${qs}` : ""}`);
 };
 export const getRun = (id: number) => api<Run>(`/runs/${id}`);
-export const triggerRun = (script_id: number) =>
-  api<Run>("/runs", { method: "POST", body: JSON.stringify({ script_id }) });
 export const cancelRun = (id: number) =>
   api(`/runs/${id}/cancel`, { method: "POST" });

@@ -112,8 +112,18 @@ def trigger_params_env(params_json: str | None) -> dict[str, str]:
         return {}
     if not isinstance(parsed, dict):
         return {}
+    return trigger_params_env_from_dict(parsed)
+
+
+def trigger_params_env_from_dict(params: dict | None) -> dict[str, str]:
+    """Same mapping as :func:`trigger_params_env` but takes an already-parsed
+    dict, avoiding the JSON round-trip callers that already hold a dict
+    (e.g. the manual-run trigger path) would otherwise have to perform.
+    """
+    if not params:
+        return {}
     out: dict[str, str] = {}
-    for k, v in parsed.items():
+    for k, v in params.items():
         if not isinstance(k, str) or not k:
             continue
         out[f"KINDLING_PARAM_{k}"] = str(v)

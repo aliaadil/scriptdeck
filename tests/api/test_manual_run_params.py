@@ -62,6 +62,17 @@ async def test_manual_run_with_params_returns_parsed_body(app_ctx, monkeypatch_a
     assert body["params_json"] == {"region": "us-east-1", "shard": 3}
     assert body["trigger_kind"] == "manual"
 
+    # Round-trip through the list endpoint: the column is stored as a
+    # JSON string, so the validator on RunOut.params_json must decode it
+    # back to a dict. Without that, every list/detail call after a manual
+    # run with params would 500 with a Pydantic ValidationError.
+    listed = await ac.get("/api/kindling/runs?script_id=1")
+    assert listed.status_code == 200, listed.text
+    rows = listed.json()
+    assert len(rows) == 1
+    assert isinstance(rows[0]["params_json"], dict)
+    assert rows[0]["params_json"] == {"region": "us-east-1", "shard": 3}
+
 
 @pytest.mark.asyncio
 async def test_manual_run_invalid_params_422(app_ctx, monkeypatch_auth):

@@ -1,4 +1,5 @@
 import { api } from "./client";
+import type { Run } from "./runs";
 
 export type FileEntry = {
   path: string;
@@ -80,8 +81,8 @@ export const updateScriptEntrypoint = (id: number, entrypoint: string) =>
 export const triggerRun = (
   script_id: number,
   params_json?: Record<string, string | number | boolean>,
-) =>
-  api<unknown>(`/scripts/${script_id}/run`, {
+): Promise<Run> =>
+  api<Run>(`/scripts/${script_id}/run`, {
     method: "POST",
     body: params_json ? JSON.stringify({ params_json }) : undefined,
   });

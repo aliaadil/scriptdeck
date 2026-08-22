@@ -86,6 +86,23 @@ class RunOut(BaseModel):
     # with a params body (or pre-feature).
     params_json: dict[str, Any] | None = None
 
+    @field_validator("params_json", mode="before")
+    @classmethod
+    def _coerce_params_json(cls, v: Any) -> Any:
+        # The DB column stores a JSON object string; both the list and detail
+        # endpoints construct RunOut directly from a SQLAlchemy RowMapping,
+        # so we parse the string back to a dict here. Corrupt legacy rows
+        # surface as None rather than 500ing the endpoint.
+        if v is None or isinstance(v, dict):
+            return v
+        if isinstance(v, str):
+            try:
+                parsed = json.loads(v)
+            except (ValueError, TypeError):
+                return None
+            return parsed if isinstance(parsed, dict) else None
+        return None
+
 
 @router.get("")
 async def list_endpoint(
@@ -194,7 +211,7 @@ async def _trigger_run(
     schedule/webhook paths), and converted to language-appropriate
     argv via argv_for() so the runner sees them as sys.argv / --flags.
     """
-    from kindling.api.webhooks import trigger_params_env
+    from kindling.api.webhooks import trigger_params_env_from_dict
     from kindling.params import argv_for
 
     sf = app.state.session_factory
@@ -275,7 +292,7 @@ async def _trigger_run(
         script=runner_script,
         env_ciphertext=env_ciphertext,
         env_nonce=env_nonce,
-        param_env=trigger_params_env(json.dumps(params_json)) if params_json else None,
+        param_env=trigger_params_env_from_dict(params_json) if params_json else None,
         param_argv=param_argv,
     )
     return RunOut(
