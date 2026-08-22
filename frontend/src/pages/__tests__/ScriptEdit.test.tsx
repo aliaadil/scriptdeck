@@ -474,4 +474,17 @@ describe("ScriptEdit", () => {
     });
     expect(screen.queryByTestId("argv-preview")).not.toBeInTheDocument();
   });
+
+  it("blocks Save when the name is the Untitled-script placeholder", async () => {
+    const user = userEvent.setup();
+    renderEditor();
+    await user.click(await screen.findByTestId("name-display"));
+    const nameInput = (await screen.findByTestId("name-input")) as HTMLInputElement;
+    await user.clear(nameInput);
+    await user.type(nameInput, "Untitled script");
+    const saveBtn = await screen.findByTestId("save-meta");
+    expect(saveBtn).toBeDisabled();
+    expect(await screen.findByTestId("name-prompt")).toBeInTheDocument();
+    expect(updateScript).not.toHaveBeenCalled();
+  });
 });

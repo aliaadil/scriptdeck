@@ -39,6 +39,7 @@ import { listRuns, cancelRun } from "@/api/runs";
 import type { Run } from "@/api/runs";
 import { ApiError } from "@/api/client";
 import { argvFor, commandPreviewFor } from "@/lib/argv";
+import { isPlaceholderName } from "@/lib/placeholder";
 
 type RunInfo = {
   id: number;
@@ -421,7 +422,9 @@ export function ScriptEdit() {
   const metaDirty =
     trimmedName !== (script.name ?? "").trim() ||
     description !== (script.description ?? "");
-  const canSaveMeta = metaDirty && trimmedName.length > 0 && !saveMeta.isPending;
+  const nameIsPlaceholder = isPlaceholderName(trimmedName);
+  const canSaveMeta =
+    metaDirty && trimmedName.length > 0 && !nameIsPlaceholder && !saveMeta.isPending;
 
   return (
     <AppShell>
@@ -466,12 +469,23 @@ export function ScriptEdit() {
                 title={
                   !trimmedName
                     ? "Name cannot be empty"
+                    : nameIsPlaceholder
+                    ? 'Pick a unique name — "Untitled script" is a placeholder.'
                     : "Save name and description"
                 }
                 data-testid="save-meta"
               >
                 <Save className="mr-2 h-4 w-4" /> {saveMeta.isPending ? "Saving…" : "Save"}
               </Button>
+            )}
+            {metaDirty && nameIsPlaceholder && (
+              <span
+                className="text-xs text-destructive"
+                role="alert"
+                data-testid="name-prompt"
+              >
+                Pick a unique name — &ldquo;Untitled script&rdquo; is just a placeholder.
+              </span>
             )}
             <div className="ml-auto flex shrink-0 items-center gap-2">
               <div className="flex">

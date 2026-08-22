@@ -28,6 +28,9 @@ router = APIRouter(prefix="/scripts")
 
 SUPPORTED_LANGUAGES = r"^(python|node|bash)$"
 
+# Mirrors the ScriptNew default — must match verbatim (case-insensitive).
+UNTITLED_PLACEHOLDER = "untitled script"
+
 
 class ScriptCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
@@ -35,6 +38,23 @@ class ScriptCreate(BaseModel):
     source: str | None = Field(default=None, min_length=1)
     template: str | None = Field(default=None, pattern=SUPPORTED_LANGUAGES)
     description: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def _no_placeholder_name(cls, v: str) -> str:
+        """Reject the frontend default so scripts land in the DB named.
+
+        The ScriptNew page pre-fills the name input with "Untitled script".
+        Saving that placeholder pollutes the list and clashes with the
+        existing-untitled row on second attempt. Force a real name at the
+        boundary so both layers (UI button + DB) reject it.
+        """
+        if v.strip().lower() == UNTITLED_PLACEHOLDER:
+            raise ValueError(
+                'Name "Untitled script" is a placeholder — pick a unique '
+                "name before saving."
+            )
+        return v
 
 
 class ScriptOut(BaseModel):
