@@ -6,7 +6,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -24,6 +23,8 @@ import {
   type Trigger,
   type TriggerKind,
 } from "@/api/triggers";
+import { shlex } from "@/lib/shell";
+import { argsToJson } from "@/lib/argsToJson";
 
 type Draft = {
   kind: TriggerKind;
@@ -42,30 +43,40 @@ function defaultDraft(kind: TriggerKind): Draft {
 }
 
 type ParamsParseResult =
-  | { ok: true; value: Record<string, unknown> | null }
-  | { ok: false };
+  | { ok: true; value: Record<string, string> | null }
+  | { ok: false; error: string };
 
 function parseParamsText(text: string): ParamsParseResult {
   const trimmed = text.trim();
   if (!trimmed) return { ok: true, value: null };
-  try {
-    const parsed = JSON.parse(trimmed);
-    if (
-      typeof parsed === "object" &&
-      parsed !== null &&
-      !Array.isArray(parsed)
-    ) {
-      return { ok: true, value: parsed as Record<string, unknown> };
-    }
-    return { ok: false };
-  } catch {
-    return { ok: false };
-  }
+  const r = shlex(trimmed);
+  if (r.error) return { ok: false, error: r.error };
+  return argsToJson(r.tokens ?? []);
 }
 
 function paramsToText(p: Trigger["params_json"]): string {
-  if (!p) return "";
-  return JSON.stringify(p, null, 2);
+  // Stored as JSON object (params_json path) — render as a single shell-style
+  // line so the row matches the input format. Falls back to JSON.stringify
+  // only if a future caller hands us an unexpected shape.
+  if (!p || typeof p !== "object" || Array.isArray(p)) return "";
+  const parts: string[] = [];
+  for (const [k, v] of Object.entries(p as Record<string, unknown>)) {
+    if (typeof v === "string") {
+      parts.push(v === "true" ? `--${k}` : `--${k} ${v}`);
+    } else if (typeof v === "number" || typeof v === "boolean") {
+      parts.push(`--${k} ${String(v)}`);
+    } else {
+      parts.push(`--${k} ${JSON.stringify(v)}`);
+    }
+  }
+  return parts.join(" ");
+}
+
+function paramsPreview(value: Record<string, string> | null): string | null {
+  if (!value) return null;
+  return Object.entries(value)
+    .map(([k, v]) => `KINDLING_PARAM_${k.toUpperCase()}=${v}`)
+    .join("  ");
 }
 
 export function TriggersTab({ scriptId }: { scriptId: number }) {
@@ -163,7 +174,10 @@ function NewTriggerCard({
     },
   });
 
-  const paramsError = !parseParamsText(draft.paramsText).ok;
+  const parsedParams = parseParamsText(draft.paramsText);
+  const paramsError = !parsedParams.ok ? parsedParams.error : null;
+  const paramsValue = parsedParams.ok ? parsedParams.value : null;
+  const paramsPreviewText = paramsPreview(paramsValue);
 
   return (
     <Card>
@@ -204,17 +218,31 @@ function NewTriggerCard({
           )}
         </div>
         <div className="space-y-1">
-          <Label>Params (JSON object, optional)</Label>
-          <Textarea
+          <Label>Params (optional)</Label>
+          <Input
+            data-testid="trigger-params-input"
             value={draft.paramsText}
             onChange={(e) => setDraft({ ...draft, paramsText: e.target.value })}
-            placeholder='{"region": "us-east-1", "shard": 3}'
-            rows={3}
-            className="font-mono text-xs"
+            placeholder="--region us-east-1 --shard 3 --verbose"
+            aria-invalid={paramsError != null}
+            className="min-h-10 font-mono text-xs"
           />
+          {paramsPreviewText && !paramsError ? (
+            <p
+              className="truncate font-mono text-[11px] text-muted-foreground"
+              data-testid="trigger-params-preview"
+              title={paramsPreviewText}
+            >
+              {paramsPreviewText}
+            </p>
+          ) : null}
           {paramsError ? (
-            <p className="text-xs text-destructive">
-              Params must be a valid JSON object.
+            <p
+              className="text-xs text-destructive"
+              role="alert"
+              data-testid="trigger-params-error"
+            >
+              {paramsError}
             </p>
           ) : null}
         </div>
@@ -226,7 +254,7 @@ function NewTriggerCard({
           <span className="text-sm">Enabled</span>
           <Button
             onClick={() => create.mutate()}
-            disabled={create.isPending || paramsError}
+            disabled={create.isPending || paramsError != null}
             className="ml-auto min-h-10"
           >
             {create.isPending ? "Creating…" : "Create trigger"}
@@ -374,7 +402,10 @@ function TriggerRow({
     },
   });
 
-  const paramsError = !parseParamsText(draft.paramsText).ok;
+  const parsedParams = parseParamsText(draft.paramsText);
+  const paramsError = !parsedParams.ok ? parsedParams.error : null;
+  const paramsValue = parsedParams.ok ? parsedParams.value : null;
+  const paramsPreviewText = paramsPreview(paramsValue);
 
   return (
     <div className="space-y-2 py-3">
@@ -406,8 +437,8 @@ function TriggerRow({
             </span>
           </div>
           {trigger.params_json ? (
-            <pre className="mt-1 rounded bg-muted/40 p-2 text-xs">
-              {JSON.stringify(trigger.params_json, null, 2)}
+            <pre className="mt-1 truncate rounded bg-muted/40 p-2 font-mono text-xs">
+              {paramsToText(trigger.params_json) || JSON.stringify(trigger.params_json, null, 2)}
             </pre>
           ) : null}
         </div>
@@ -446,16 +477,31 @@ function TriggerRow({
             </div>
           ) : null}
           <div className="space-y-1">
-            <Label>Params (JSON object, optional)</Label>
-            <Textarea
+            <Label>Params (optional)</Label>
+            <Input
+              data-testid="trigger-params-input"
               value={draft.paramsText}
               onChange={(e) => setDraft({ ...draft, paramsText: e.target.value })}
-              rows={3}
-              className="font-mono text-xs"
+              placeholder="--region us-east-1 --shard 3 --verbose"
+              aria-invalid={paramsError != null}
+              className="min-h-9 font-mono text-xs"
             />
+            {paramsPreviewText && !paramsError ? (
+              <p
+                className="truncate font-mono text-[11px] text-muted-foreground"
+                data-testid="trigger-params-preview"
+                title={paramsPreviewText}
+              >
+                {paramsPreviewText}
+              </p>
+            ) : null}
             {paramsError ? (
-              <p className="text-xs text-destructive">
-                Params must be a valid JSON object.
+              <p
+                className="text-xs text-destructive"
+                role="alert"
+                data-testid="trigger-params-error"
+              >
+                {paramsError}
               </p>
             ) : null}
           </div>
@@ -478,7 +524,7 @@ function TriggerRow({
             <Button
               size="sm"
               onClick={() => update.mutate()}
-              disabled={update.isPending || paramsError}
+              disabled={update.isPending || paramsError != null}
               className="ml-auto min-h-9"
             >
               {update.isPending ? "Saving…" : "Save"}
